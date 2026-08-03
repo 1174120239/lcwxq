@@ -1,8 +1,8 @@
 # LCXQY API 调用手册
 
-更新时间：2026-08-02
+更新时间：2026-08-04
 
-本手册面向前端、管理端、自动化脚本和后续维护 AI，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **133 个唯一 API 路径**，并区分已由 Spring Boot 重建的能力、已切换到公网新后端的能力和仍依赖旧 Java API 的能力。
+本手册面向前端、管理端、自动化脚本和集成开发，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **136 个唯一 API 路径**，并额外记录支付回调和内部兼容路径，区分新后端、公网切流、混合委托和旧端能力。
 
 这不是 OpenAPI 自动导出文件。历史接口参数并不完全统一，因此以当前前端和新后端兼容行为为准；对未重建旧接口，本文只记录已确认的参数，不伪造未知请求体。
 
@@ -453,9 +453,8 @@ curl -sS -X POST 'https://api.lcxqy.cn/upload/full' \
 
 | 文档 | 用途 |
 |---|---|
-| [AI_PROJECT_BRIEF.md](AI_PROJECT_BRIEF.md) | 架构、数据库、部署、接口总表和生产路由事实。 |
-| [backend__docs__REBUILD_STATUS.md](backend__docs__REBUILD_STATUS.md) | 后端重建进度和范围。 |
-| [backend__deploy__production__README.md](backend__deploy__production__README.md) | 生产部署与回滚说明。 |
-| [integrations__qqbot__ARTBOT_QQ_POST_SYNC_DESIGN.md](integrations__qqbot__ARTBOT_QQ_POST_SYNC_DESIGN.md) | AstrBot/QQ 帖子同步方案，调用发帖与读取接口时必须遵守本手册。 |
+| [AI_PROJECT_BRIEF.md](AI_PROJECT_BRIEF.md) | 架构、数据模型、功能边界、前端行为和已知风险。 |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 生产部署、切流、验收与回滚。 |
+| [QQBOT_INTEGRATION_GUIDE.md](QQBOT_INTEGRATION_GUIDE.md) | AstrBot/QQ 帖子同步方案。 |
 
 前端路径原始定义见 `../utils/api.js`，请求封装见 `../utils/net.js`，普通发帖的真实表单构造见 `../pages/user/post.vue`。

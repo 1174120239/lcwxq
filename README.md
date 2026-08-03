@@ -35,7 +35,8 @@ mvn spring-boot:run
 
 - [完整项目技术手册](markdown_docs/AI_PROJECT_BRIEF.md)
 - [接口使用手册](markdown_docs/API_USAGE_GUIDE.md)
-- [AstrBot QQ 发帖同步设计](markdown_docs/integrations__qqbot__ARTBOT_QQ_POST_SYNC_DESIGN.md)
+- [生产部署与回滚手册](markdown_docs/DEPLOYMENT_GUIDE.md)
+- [AstrBot QQ 发帖同步设计](markdown_docs/QQBOT_INTEGRATION_GUIDE.md)
 
 ## 安全说明
 
