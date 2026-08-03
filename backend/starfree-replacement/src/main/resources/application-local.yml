@@ -1,0 +1,6 @@
+server:
+  port: ${APP_PORT:18082}
+
+spring:
+  datasource:
+    password: ${DB_PASSWORD:}

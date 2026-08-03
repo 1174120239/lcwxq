@@ -1,0 +1,57 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.hbuilderx/
+.idea/
+.vscode/
+*.swp
+
+# Local AI-agent state
+.agents/
+.codex/
+
+# uni-app build output and dependencies
+unpackage/
+node_modules/
+
+# Java build output
+**/target/
+*.class
+hs_err_pid*
+
+# Bundled/local development toolchains and runtime state
+tools/
+backend/.local/
+
+# Temporary files and logs
+tmp/
+logs/
+*.log
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+**/application-secrets.yml
+**/application-secrets.yaml
+**/*-secrets.yml
+**/*-secrets.yaml
+markdown_docs/private/
+backend/database/snapshots/
+
+# Signing files and release packages
+*.apk
+*.aab
+*.ipa
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Reverse-engineering inputs and extracted binary content
+/BOOT-INF/
+backend/reference/legacy-java/StarFreeApi.jar
+backend/reference/legacy-admin/*.tar.gz

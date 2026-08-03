@@ -1,0 +1,29 @@
+server:
+  port: ${APP_PORT:8082}
+  error:
+    include-message: always
+
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:lcxqy_dev}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:lcxqy_dev}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+      minimum-idle: 1
+      connection-timeout: 10000
+  redis:
+    host: ${REDIS_HOST:127.0.0.1}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2s
+  jackson:
+    default-property-inclusion: non_null
+
+legacy:
+  api:
+    base-url: ${LEGACY_API_BASE_URL:https://api.lcxqy.cn}
+  redis:
+    enabled: ${LEGACY_REDIS_ENABLED:false}
+    prefix: ${LEGACY_REDIS_PREFIX:starfree}
+    session-ttl: ${LEGACY_REDIS_SESSION_TTL:86400}

@@ -1,0 +1,24 @@
+package cn.lcxqy.starfree.space;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import java.lang.reflect.Method;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class SpaceControllerCompatibilityTest {
+    @Test
+    void followEndpointKeepsLegacyAndFrontendAlias() throws Exception {
+        Method method = SpaceController.class.getMethod("followed", java.util.Map.class);
+        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+
+        assertThat(mapping.value()).containsExactlyInAnyOrder("/followSpace", "/myFollowSpace");
+    }
+
+    @Test
+    void controllerKeepsLegacyBasePath() {
+        RequestMapping mapping = SpaceController.class.getAnnotation(RequestMapping.class);
+        assertThat(mapping.value()).containsExactly("/SFreeSpace");
+    }
+}

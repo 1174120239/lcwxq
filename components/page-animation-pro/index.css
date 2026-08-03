@@ -1,0 +1,114 @@
+/* #ifdef H5 */
+uni-page{
+	opacity: 0;
+	background-color: inherit;
+}
+uni-page.page-animation-enter {
+	will-change: transform, opacity;
+	transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease-out;
+}
+uni-page.page-animation-leave {
+	will-change: transform, opacity;
+	transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1), opacity 150ms ease-in;
+}
+uni-page.page-show {
+	opacity: 1;
+}
+uni-page.no-animation {
+	transition:none !important;
+}
+/* slide-in-right */
+uni-page.slide-in-right-enter {
+	transform: translate3d(18px, 0, 0);
+}
+uni-page.slide-in-right-leave {
+	/* 在页面上使用 transform 会导致页面内的 fixed 定位渲染为 absolute，需要在动画完成后移除 */
+	transform: translate3d(0, 0, 0);
+}
+uni-page.slide-in-right-back-enter { 
+	transform: translate3d(-12px, 0, 0);
+}
+uni-page.slide-in-right-back-leave{
+	transform: translate3d(0, 0, 0);
+}
+
+/* slide-in-left */
+uni-page.slide-in-left-enter {
+	transform: translate3d(-18px, 0, 0);
+}
+uni-page.slide-in-left-leave {
+	transform: translate3d(0, 0, 0);
+}
+uni-page.slide-in-left-back-enter { 
+	transform: translate3d(12px, 0, 0);
+}
+uni-page.slide-in-left-back-leave{
+	transform: translate3d(0, 0, 0);
+}
+
+/* slide-in-top */
+uni-page.slide-in-top-enter {
+	transform: translate3d(0, -18px, 0);
+}
+uni-page.slide-in-top-leave {
+	transform: translate3d(0, 0, 0);
+}
+uni-page.slide-in-top-back-enter { 
+	transform: translate3d(0, 12px, 0);
+}
+uni-page.slide-in-top-back-leave{
+	transform: translate3d(0, 0, 0);
+}
+
+/* slide-in-bottom */
+uni-page.slide-in-bottom-enter {
+	transform: translate3d(0, 18px, 0);
+}
+uni-page.slide-in-bottom-leave {
+	transform: translate3d(0, 0, 0);
+}
+uni-page.slide-in-bottom-back-enter { 
+	transform: translate3d(0, -12px, 0);
+}
+uni-page.slide-in-bottom-back-leave{
+	transform: translate3d(0, 0, 0);
+}
+
+/* fade-in */
+uni-page.fade-in-enter {
+	opacity: 0;
+}
+uni-page.fade-in-leave {
+	opacity: 1;
+}
+uni-page.fade-in-back-enter { 
+	opacity: 1;
+}
+uni-page.fade-in-back-leave{
+	opacity: 0;
+}
+
+/* zoom-fade-in */
+uni-page.zoom-fade-in-enter {
+	transform:scale3d(1,1,1);
+}
+uni-page.zoom-fade-in-leave {
+	transform:scale3d(.1,.1,.1);
+}
+uni-page.zoom-fade-in-back-enter {
+	transform:scale3d(.1,.1,.1);
+}
+uni-page.zoom-fade-in-back-leave{
+	transform:scale3d(1,1,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	uni-page,
+	uni-page.page-animation-enter,
+	uni-page.page-animation-leave {
+		transition: none !important;
+		transform: none !important;
+	}
+}
+
+/* #endif */
