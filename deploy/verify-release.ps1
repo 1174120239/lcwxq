@@ -9,6 +9,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$ServerHost = if ($ServerHost) { $ServerHost } else { [Environment]::GetEnvironmentVariable('LCXQY_SSH_HOST', 'User') }
+$ServerUser = if ($ServerUser) { $ServerUser } else { [Environment]::GetEnvironmentVariable('LCXQY_SSH_USER', 'User') }
+$IdentityFile = if ($IdentityFile) { $IdentityFile } else { [Environment]::GetEnvironmentVariable('LCXQY_SSH_KEY', 'User') }
 if (-not $ServerHost -or -not $ServerUser) {
     throw 'Set LCXQY_SSH_HOST and LCXQY_SSH_USER first.'
 }

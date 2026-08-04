@@ -13,7 +13,7 @@ on:
           - admin
           - all
       ref:
-        description: Commit, tag, or branch to build
+        description: Commit, tag, or branch to validate
         required: true
         default: main
         type: string
@@ -32,9 +32,10 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: production
+    outputs:
+      release_commit: ${{ steps.release.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,10 +74,12 @@ jobs:
         run: sha256sum -c backend/legacy-api/SHA256SUMS
 
       - name: Prepare release archive
+        id: release
         shell: bash
         run: |
           set -euo pipefail
           commit=$(git rev-parse HEAD)
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
           mkdir -p release
           printf 'COMPONENT=%s\nCOMMIT=%s\n' '${{ inputs.component }}' "$commit" > release/manifest.env
           if [[ '${{ inputs.component }}' == replacement-backend || '${{ inputs.component }}' == all ]]; then
@@ -89,7 +92,16 @@ jobs:
             tar -czf release/admin.tar.gz -C admin starfree-admin
           fi
           tar -czf release.tgz -C release .
-          sha256sum release.tgz
+          sha256sum release.tgz | tee release.tgz.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.release.outputs.commit }}
+          path: |
+            release.tgz
+            release.tgz.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Dry-run summary
         if: inputs.dry_run
@@ -97,8 +109,30 @@ jobs:
           echo 'dry_run=true'
           echo 'No server connection was made.'
 
+  deploy:
+    if: ${{ !inputs.dry_run }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Enforce exact main commit
+        env:
+          RELEASE_COMMIT: ${{ needs.build.outputs.release_commit }}
+        run: test "$RELEASE_COMMIT" = "$(git rev-parse HEAD)"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.build.outputs.release_commit }}
+
+      - name: Verify release checksum
+        run: sha256sum -c release.tgz.sha256
+
       - name: Configure SSH
-        if: ${{ !inputs.dry_run }}
         shell: bash
         run: |
           set -euo pipefail
@@ -107,17 +141,33 @@ jobs:
           chmod 600 ~/.ssh/lcxqy_deploy
           printf '%s\n' '${{ secrets.LCXQY_SSH_KNOWN_HOSTS }}' > ~/.ssh/known_hosts
 
-      - name: Upload and deploy
-        if: ${{ !inputs.dry_run }}
+      - name: Server preflight
         shell: bash
         env:
           SSH_HOST: ${{ secrets.LCXQY_SSH_HOST }}
           SSH_USER: ${{ secrets.LCXQY_SSH_USER }}
         run: |
           set -euo pipefail
-          commit=$(git rev-parse HEAD)
-          hash=$(sha256sum release.tgz | awk '{print $1}')
-          remote="/tmp/lcxqy-release-$commit.tgz"
+          checks='set -e; test -x /usr/local/sbin/lcxqy-deploy; test -x /usr/local/sbin/lcxqy-rollback; sudo -n /usr/local/sbin/lcxqy-deploy --help >/dev/null'
+          if [[ '${{ inputs.component }}' == replacement-backend || '${{ inputs.component }}' == all ]]; then
+            checks="$checks; systemctl cat starfree-replacement.service >/dev/null"
+          fi
+          if [[ '${{ inputs.component }}' == legacy-api || '${{ inputs.component }}' == all ]]; then
+            checks="$checks; systemctl cat starfree-legacy.service >/dev/null"
+          fi
+          ssh -i ~/.ssh/lcxqy_deploy -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$checks"
+
+      - name: Upload and deploy
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.LCXQY_SSH_HOST }}
+          SSH_USER: ${{ secrets.LCXQY_SSH_USER }}
+          RELEASE_COMMIT: ${{ needs.build.outputs.release_commit }}
+        run: |
+          set -euo pipefail
+          hash=$(awk '{print $1}' release.tgz.sha256)
+          remote="/tmp/lcxqy-release-$RELEASE_COMMIT.tgz"
           scp -i ~/.ssh/lcxqy_deploy -o BatchMode=yes release.tgz "$SSH_USER@$SSH_HOST:$remote"
           ssh -i ~/.ssh/lcxqy_deploy -o BatchMode=yes "$SSH_USER@$SSH_HOST" \
             "sudo /usr/local/sbin/lcxqy-deploy --archive $remote --expected-sha256 $hash"
+          ssh -i ~/.ssh/lcxqy_deploy -o BatchMode=yes "$SSH_USER@$SSH_HOST" "rm -f $remote"

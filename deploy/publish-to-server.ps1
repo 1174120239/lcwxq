@@ -3,6 +3,7 @@ param(
     [ValidateSet('replacement-backend', 'legacy-api', 'admin', 'all')]
     [string]$Component = 'replacement-backend',
     [string]$Ref = 'HEAD',
+    [string]$ReleaseBranch = 'main',
     [string]$ServerHost = $env:LCXQY_SSH_HOST,
     [string]$ServerUser = $env:LCXQY_SSH_USER,
     [int]$ServerPort = 22,
@@ -18,6 +19,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $serverEntrypoint = Join-Path $PSScriptRoot 'server/lcxqy-deploy.sh'
 $rollbackEntrypoint = Join-Path $PSScriptRoot 'server/lcxqy-rollback.sh'
+
+function Get-ConfiguredValue([string]$CurrentValue, [string]$Name) {
+    if ($CurrentValue) { return $CurrentValue }
+    return [Environment]::GetEnvironmentVariable($Name, 'User')
+}
 
 function Invoke-Git([string[]]$Arguments) {
     $result = & git -C $repoRoot @Arguments 2>&1
@@ -50,6 +56,10 @@ Assert-Tool tar
 Assert-Tool ssh
 Assert-Tool scp
 
+$ServerHost = Get-ConfiguredValue $ServerHost 'LCXQY_SSH_HOST'
+$ServerUser = Get-ConfiguredValue $ServerUser 'LCXQY_SSH_USER'
+$IdentityFile = Get-ConfiguredValue $IdentityFile 'LCXQY_SSH_KEY'
+
 $status = Invoke-Git @('status', '--porcelain')
 if ($status) { throw "The working tree is not clean. Commit or resolve these files first:`n$status" }
 $commit = Invoke-Git @('rev-parse', "$Ref^{commit}")
@@ -58,10 +68,6 @@ $head = Invoke-Git @('rev-parse', 'HEAD')
 if ($commit -ne $head) { throw "The checked-out HEAD must be the release commit. HEAD=$head, requested=$commit" }
 $branch = Invoke-Git @('branch', '--show-current')
 if (-not $branch) { throw 'Detached HEAD is not accepted. Check out the release branch first.' }
-$remoteCommit = Invoke-Git @('rev-parse', "origin/$branch^{commit}")
-if ($remoteCommit -ne $commit) {
-    throw "The release commit must already be pushed to origin/$branch. local=$commit, remote=$remoteCommit"
-}
 
 if ($RunMigrations) {
     throw 'Database migrations are not supported by the generic deploy. Follow DEPLOYMENT_GUIDE.md in a separate maintenance task.'
@@ -70,11 +76,47 @@ if (-not $DryRun -and -not $ConfirmProduction) {
     $DryRun = $true
     Write-Warning 'ConfirmProduction was not supplied. This invocation is now a dry-run.'
 }
+$expectedBranch = if ($DryRun) { $branch } else { $ReleaseBranch }
+if (-not $DryRun -and $branch -ne $ReleaseBranch) {
+    throw "Production deploys are allowed only from $ReleaseBranch. Current branch: $branch"
+}
+$remoteCommit = Invoke-Git @('rev-parse', "origin/$expectedBranch^{commit}")
+if ($remoteCommit -ne $commit) {
+    throw "The release commit must already be pushed to origin/$expectedBranch. local=$commit, remote=$remoteCommit"
+}
 if (-not $DryRun -and (-not $ServerHost -or -not $ServerUser)) {
     throw 'A real deploy requires ServerHost and ServerUser or the matching LCXQY environment variables.'
 }
 if ($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)) {
     throw "SSH private key does not exist: $IdentityFile"
+}
+
+$sshOptions = @('-p', "$ServerPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
+$scpOptions = @('-P', "$ServerPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
+if ($IdentityFile) {
+    $sshOptions += @('-i', $IdentityFile)
+    $scpOptions += @('-i', $IdentityFile)
+}
+
+if (-not $DryRun) {
+    $remote = "$ServerUser@$ServerHost"
+    $serviceChecks = @()
+    if ($Component -in @('replacement-backend', 'all')) {
+        $serviceChecks += 'systemctl cat starfree-replacement.service >/dev/null'
+    }
+    if ($Component -in @('legacy-api', 'all')) {
+        $serviceChecks += 'systemctl cat starfree-legacy.service >/dev/null'
+    }
+    $preflight = @(
+        'set -e',
+        'test -x /usr/local/sbin/lcxqy-deploy',
+        'test -x /usr/local/sbin/lcxqy-rollback',
+        'sudo -n /usr/local/sbin/lcxqy-deploy --help >/dev/null'
+    ) + $serviceChecks
+    & ssh @sshOptions $remote ($preflight -join '; ')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Server preflight failed for $Component. No package was built or uploaded."
+    }
 }
 
 $stage = Join-Path ([IO.Path]::GetTempPath()) ("lcxqy-release-" + [guid]::NewGuid().ToString('N'))
@@ -154,12 +196,6 @@ try {
         return
     }
 
-    $sshOptions = @('-p', "$ServerPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
-    $scpOptions = @('-P', "$ServerPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes')
-    if ($IdentityFile) {
-        $sshOptions += @('-i', $IdentityFile)
-        $scpOptions += @('-i', $IdentityFile)
-    }
     $remote = "$ServerUser@$ServerHost"
     $remoteName = "/tmp/lcxqy-release-$commit.tgz"
     & scp @scpOptions $archive "$remote`:$remoteName"

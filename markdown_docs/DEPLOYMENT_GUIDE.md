@@ -23,17 +23,22 @@
 
 ## 2. 受控一键发布
 
-日常生产发布优先使用仓库根目录的 `deploy/publish-to-server.ps1`。它只发布当前干净工作区对应的已提交 commit，先执行测试或校验，再生成发布包 SHA-256，通过 SSH 上传，最后调用服务器上的固定入口 `/usr/local/sbin/lcxqy-deploy`。详细的会话划分和可复制提示词见 [CODEX_WORKFLOW.md](CODEX_WORKFLOW.md)。
+日常生产发布使用仓库根目录的 `workflow.cmd`。它只允许从干净的 `main` 发布当前 `origin/main` 的精确 commit，先执行服务器预检和本地测试/校验，再生成发布包 SHA-256，通过 SSH 上传，最后调用服务器上的固定入口 `/usr/local/sbin/lcxqy-deploy`。详细的会话划分和可复制提示词见 [CODEX_WORKFLOW.md](CODEX_WORKFLOW.md)。
 
 ~~~powershell
 # 只构建和校验，不连接生产服务器
-.\deploy\publish-to-server.ps1 -Component replacement-backend -DryRun
+.\workflow.cmd publish replacement-backend
 
 # 明确确认后发布一个组件
-.\deploy\publish-to-server.ps1 -Component replacement-backend -ConfirmProduction
+.\workflow.cmd publish replacement-backend -ConfirmProduction
+
+# 发布后只读验收
+.\workflow.cmd verify replacement-backend
 ~~~
 
 组件可选 `replacement-backend`、`legacy-api`、`admin` 和 `all`。`all` 按新后端、旧 API、PHP admin 顺序处理；后续组件失败时，服务器入口会恢复本次已经更新的前置组件。
+
+> 当前生产限制：旧 API 仍是手工启动的 Java 进程，`starfree-legacy.service` 尚未安装。发布脚本会在上传前阻止 `legacy-api` 和 `all`。必须在单独批准的维护窗口先按第 3.4 节迁移并验收 systemd，不能在普通发布中顺手迁移。
 
 服务器目录固定为：
 
@@ -48,7 +53,8 @@
 首次初始化可由有 sudo 权限的部署账号执行：
 
 ~~~powershell
-.\deploy\publish-to-server.ps1 -Component replacement-backend -DryRun
+.\workflow.cmd publish replacement-backend
+# 底层初始化参数只在明确的服务器初始化任务中直接调用
 .\deploy\publish-to-server.ps1 -Component replacement-backend -ConfirmProduction -BootstrapServer
 ~~~
 

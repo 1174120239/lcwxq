@@ -2,6 +2,19 @@
 
 聊一论坛是一个基于 uni-app 的校园论坛项目。本仓库包含前端应用、PHP 管理后台、旧闭源 API 的可部署 JAR、重新实现的 Spring Boot 后端、数据库迁移、生产部署脚本和维护文档。
 
+## 统一工作流
+
+Windows 下从仓库根目录使用 `workflow.cmd`，无需手工记忆 Maven、PHP lint 或发布脚本参数：
+
+```powershell
+.\workflow.cmd doctor
+.\workflow.cmd start feature-name
+.\workflow.cmd check all
+.\workflow.cmd publish replacement-backend
+```
+
+`publish` 默认只是本地演练，不连接服务器。代码经 Pull Request 合并到 `main` 后，单独开启发布会话并显式加 `-ConfirmProduction` 才会部署生产。完整步骤见 [Codex 工作流](markdown_docs/CODEX_WORKFLOW.md)。
+
 ## 目录结构
 
 | 目录 | 内容 |
@@ -13,7 +26,8 @@
 | `backend/starfree-replacement/` | Java 8 / Spring Boot 2.7 后端源码与测试 |
 | `backend/database/migrations/` | 数据库迁移脚本 |
 | `backend/deploy/production/` | 生产部署、路由切换和验收脚本 |
-| `deploy/` | 本地一键发布、服务器固定部署入口和回滚脚本 |
+| `workflow.cmd`、`workflow.ps1` | 开发诊断、分支创建、检查、发布和验收的统一入口 |
+| `deploy/` | 底层发布实现、服务器固定部署入口和回滚脚本 |
 | `backend/reference/` | 旧 Java API 的 Mapper 等逆向参考资料，不作为独立源码发布 |
 | `integrations/` | 外部集成代码或设计入口 |
 | `markdown_docs/` | 项目手册、接口文档与集成设计 |
