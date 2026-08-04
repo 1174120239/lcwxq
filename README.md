@@ -1,6 +1,6 @@
 # 聊一论坛
 
-聊一论坛是一个基于 uni-app 的校园论坛项目。本仓库包含前端应用、重新实现的 Spring Boot 后端、数据库迁移、生产部署脚本和维护文档。
+聊一论坛是一个基于 uni-app 的校园论坛项目。本仓库包含前端应用、PHP 管理后台、旧闭源 API 的可部署 JAR、重新实现的 Spring Boot 后端、数据库迁移、生产部署脚本和维护文档。
 
 ## 目录结构
 
@@ -8,10 +8,12 @@
 |---|---|
 | `pages/`、`components/`、`utils/` | uni-app 前端页面、组件与 API 封装 |
 | `static/` | 前端图片、图标和品牌资源 |
+| `admin/starfree-admin/` | 从生产服务器核对的 PHP 管理后台、脱敏配置模板和部署脚本 |
+| `backend/legacy-api/` | 旧闭源 Java API 的可部署 JAR、配置模板和 systemd 服务 |
 | `backend/starfree-replacement/` | Java 8 / Spring Boot 2.7 后端源码与测试 |
 | `backend/database/migrations/` | 数据库迁移脚本 |
 | `backend/deploy/production/` | 生产部署、路由切换和验收脚本 |
-| `backend/reference/` | 旧系统的必要接口参考资料，不包含旧后端可执行 JAR |
+| `backend/reference/` | 旧 Java API 的 Mapper 等逆向参考资料，不作为独立源码发布 |
 | `integrations/` | 外部集成代码或设计入口 |
 | `markdown_docs/` | 项目手册、接口文档与集成设计 |
 
@@ -30,6 +32,8 @@ mvn spring-boot:run
 ```
 
 主要环境变量包括 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USERNAME`、`DB_PASSWORD`、`REDIS_HOST`、`REDIS_PORT` 和 `REDIS_PASSWORD`。
+
+旧 API 没有源码，仓库只保存从生产服务器核验的可部署 JAR。其安装方式和 PHP admin 的完整部署步骤见[生产部署与回滚手册](markdown_docs/DEPLOYMENT_GUIDE.md)。
 
 ## 文档
 

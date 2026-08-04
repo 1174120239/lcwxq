@@ -12,7 +12,7 @@
 
 - 前端是 HBuilderX / uni-app / Vue 2 项目。
 - 新后端位于 backend/starfree-replacement，使用 Spring Boot 2.7.18，编译为 Java 8 兼容字节码。
-- 生产环境保留旧闭源 Java API，新后端通过 Nginx 精确路由逐步接管接口。
+- 生产环境保留旧闭源 Java API；仓库中的 `backend/legacy-api/dist/StarFreeApi.jar` 是从生产服务器核验的可部署副本，新后端通过 Nginx 精确路由逐步接管接口。
 - PHP admin 管理后台继续使用，不重建。
 - 插件功能不在重建范围，动态 type=6 明确拒绝。
 - 充值、验证码发送、文件上传、聊天和部分第三方登录仍使用旧后端。
@@ -44,11 +44,13 @@ Nginx 只对已验证路径建立精确 location。未匹配路径继续进入�
 | pages、components、utils | uni-app 页面、组件和 API 封装 |
 | static | 前端图片、字体、主题和应用图标 |
 | uni_modules、js_sdk | 前端依赖源码 |
+| admin/starfree-admin/source | PHP 管理后台程序和静态资源；真实 `Config_DB.php` 不提交 |
+| backend/legacy-api | 旧闭源 API JAR、配置模板、systemd 服务和安装脚本 |
 | backend/starfree-replacement | 新后端源码、配置和测试 |
 | backend/database/migrations | 有序数据库迁移 |
 | backend/deploy/production | systemd、部署、切流和验收脚本 |
 | backend/scripts | 本地启动和可清理集成测试 |
-| backend/reference | 旧 admin 源码和必要接口参考；旧可执行 JAR 不提交 |
+| backend/reference | 旧 Java API 的 Mapper 等必要接口参考；不作为源码构建入口 |
 | markdown_docs | 项目自有文档 |
 
 不进入 Git：
@@ -57,7 +59,8 @@ Nginx 只对已验证路径建立精确 location。未匹配路径继续进入�
 - tools 和 backend/.local 本地工具/运行目录。
 - 数据库快照。
 - 服务器、数据库和 Redis 私密凭据。
-- 签名证书、密钥和旧后端可执行 JAR。
+- `backend/legacy-api/config/application.properties`、`admin/starfree-admin/source/Config_DB.php` 和 `.user.ini`。
+- 签名证书、密钥和服务器上的其他未核验可执行文件。
 
 ## 4. 本地开发
 

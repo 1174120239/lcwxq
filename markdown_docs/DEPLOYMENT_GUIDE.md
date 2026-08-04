@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-04
 >
-> 适用服务：starfree-replacement.service
+> 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
 本文只记录当前可执行的部署、验证和回滚流程。接口参数见 [API_USAGE_GUIDE.md](API_USAGE_GUIDE.md)，系统边界见 [AI_PROJECT_BRIEF.md](AI_PROJECT_BRIEF.md)。
 
@@ -21,7 +21,119 @@
 
 新后端只监听 loopback，不应把 18082 直接暴露到公网。
 
-## 2. 服务器文件
+## 2. 从 GitHub 全新部署
+
+本节用于新服务器或需要从仓库重建的环境。生产服务器已有可用服务时，先做备份和维护窗口，不要直接覆盖正在运行的 JAR。
+
+### 2.1 仓库内的可部署资产
+
+| 资产 | 仓库路径 | 服务器目标 |
+|---|---|---|
+| 旧 API JAR | `backend/legacy-api/dist/StarFreeApi.jar` | `/opt/StarFreeApi.jar` |
+| 旧 API 配置模板 | `backend/legacy-api/config/application.example.properties` | `/opt/application.properties`，填写后使用 |
+| 旧 API systemd | `backend/legacy-api/deploy/starfree-legacy.service` | `/etc/systemd/system/` |
+| PHP admin 源码 | `admin/starfree-admin/source/` | `/www/wwwroot/admin.lcxqy.cn/` |
+| admin 配置模板 | `admin/starfree-admin/source/Config_DB.example.php` | `/www/wwwroot/admin.lcxqy.cn/Config_DB.php`，填写后使用 |
+| admin 安装脚本 | `admin/starfree-admin/deploy/install.sh` | 由仓库直接执行 |
+
+旧 API 没有可用源码；JAR 是从生产服务器导出的闭源发布物。它可以运行和部署，但不能用 Maven 编译，也不能通过 GitHub 的源码审查推断内部实现。
+
+### 2.2 获取仓库和检查 JAR
+
+~~~bash
+git clone https://github.com/1174120239/lcwxq.git
+cd lcwxq
+sha256sum -c backend/legacy-api/SHA256SUMS
+php -v
+java -version
+~~
+
+校验必须显示 `OK`，且 JAR 哈希为：
+
+~~~text
+c2daa75c2c6a2968bea2d72783fc4a6844c666306daeacdf936e31dc9cb89c26
+~~~
+
+### 2.3 配置旧 API
+
+~~~bash
+install -d -m 0755 /opt /var/log/lcxqy
+install -m 0600 backend/legacy-api/config/application.example.properties /opt/application.properties
+vi /opt/application.properties
+~~~
+
+至少填写 `spring.datasource.username`、`spring.datasource.password`、`spring.redis.password`（无密码时保持为空）、邮件账号密码和 `webinfo.key`。数据库名默认 `lcxqy`，旧 API 和新后端的表前缀、Redis 前缀必须与现有生产配置一致；支付上线前还要确认 `gateway_url` 是当前环境实际使用的网关，不能直接照抄模板。
+
+不要把填写后的文件复制回 Git 工作区，也不要把真实值写进 shell 历史。仓库只跟踪 `application.example.properties`，服务器上的 `/opt/application.properties` 是独立运行时文件，不属于仓库。
+
+### 2.4 安装并启动旧 API
+
+先确认是否有旧的手工启动进程：
+
+~~~bash
+pgrep -af 'java .*StarFreeApi\.jar' || true
+ss -lntp | grep ':8081' || true
+~~~
+
+如果已有手工启动进程，先记录 PID、工作目录和当前 JAR 哈希，在维护窗口内停止这个明确的旧 API 进程，不能按模糊关键字杀 Java 进程。确认 `8081` 释放后执行：
+
+~~~bash
+sudo bash backend/legacy-api/deploy/install.sh
+systemctl status starfree-legacy.service --no-pager
+curl -fsS http://127.0.0.1:8081/
+~~~
+
+安装脚本会再次校验 JAR、备份旧 JAR、安装 systemd unit、拒绝 `CHANGE_ME` 配置，并确保旧 API 只监听 `127.0.0.1:8081`。首次运行若配置文件不存在，会只创建模板并退出，填完配置后再次运行即可。
+
+### 2.5 部署 PHP admin
+
+先填写模板：
+
+~~~bash
+install -m 0600 admin/starfree-admin/source/Config_DB.example.php /tmp/Config_DB.php
+vi /tmp/Config_DB.php
+install -d -m 0755 /www/wwwroot/admin.lcxqy.cn
+install -m 0600 /tmp/Config_DB.php /www/wwwroot/admin.lcxqy.cn/Config_DB.php
+sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/install.sh
+~~~
+
+如果目标站点已经有 `Config_DB.php`，安装脚本会先备份它；脚本不会把仓库中的配置模板当作生产配置使用。必须确认：
+
+- `$api_site` 指向旧 API 的实际内部地址并以 `/` 结尾。
+- `$api_key` 与旧 API 的 `webinfo.key` 完全相同。
+- `$db_prefix`、`$redis_prefix` 与现有数据库和 Redis 数据一致。
+- `$ADMIN_PATH` 与后台访问路径一致。
+
+### 2.6 配置 Nginx 和 PHP-FPM
+
+参考 `admin/starfree-admin/deploy/nginx-admin.conf` 创建站点配置，替换域名、证书路径和 PHP-FPM 版本。aaPanel 当前环境可以继续使用 `include enable-php-72.conf;`，不要把生产证书提交到仓库。
+
+~~~bash
+nginx -t
+nginx -s reload
+curl -skI https://admin.example.com/
+~~~
+
+返回 `301` 或后台登录页都说明 Web 层已经接通；登录页显示后再检查 PHP-FPM、`Config_DB.php` 和旧 API，不要只依据 HTTP 200 判断后台可用。
+
+### 2.7 部署新后端和 API 入口
+
+旧 API 必须先可用，新后端再按 [第 6 节](#6-jar-部署) 部署。新后端使用 `18082`，旧 API 使用 `8081`，Nginx 只把已经验证的精确路径切到 `18082`，其余请求保留到 `8081`。
+
+如果新后端的启动脚本仍从 `/opt/application.properties` 读取兼容配置，必须保留该文件，不要把它改成只存在于 Git 工作区的配置。部署完成后分别验证两个本地端口，再执行 Nginx 切流。
+
+### 2.8 首次验收顺序
+
+1. `systemctl is-active starfree-legacy.service`。
+2. `curl http://127.0.0.1:8081/`。
+3. admin 域名显示登录页。
+4. 新后端 `/health` 和 `/health/live`。
+5. API 域名匿名读取接口。
+6. 一个登录态读取接口。
+7. 后台登录、帖子读取和一个可回滚的设置读取。
+8. 查看 systemd、PHP-FPM、Nginx 日志，没有持续错误后再放量。
+
+## 3. 服务器文件
 
 ~~~text
 /opt/starfree-replacement/
@@ -33,17 +145,32 @@
 └─ *.rollback-YYYYMMDD-HHMMSS
 ~~~
 
+旧 API 和 admin 的发布文件：
+
+~~~text
+/opt/
+├─ StarFreeApi.jar
+├─ application.properties
+└─ starfree-legacy-start.sh
+
+/etc/systemd/system/starfree-legacy.service
+/www/wwwroot/admin.lcxqy.cn/
+└─ Config_DB.php
+~~~
+
 关键外部文件：
 
 | 路径 | 用途 |
 |---|---|
 | /opt/application.properties | 旧后端数据库、Redis 和兼容配置来源 |
 | /opt/jdk1.8.0_311/bin/java | 生产 Java 运行时 |
+| /etc/systemd/system/starfree-legacy.service | 旧闭源 API 的 systemd 服务 |
+| /www/wwwroot/admin.lcxqy.cn | PHP admin 站点目录 |
 | /www/server/panel/vhost/nginx/extension/api.lcxqy.cn/starfree-replacement-public.conf | 新旧后端精确路由 |
 
 真实服务器地址和 SSH 凭据只保存在本机 markdown_docs/private/SERVER_ACCESS.local.md，不得提交 Git。
 
-## 3. 发布前检查
+## 4. 发布前检查
 
 1. 确认本地 main 已提交，工作区没有遗漏修改。
 2. 运行后端全量测试。
@@ -62,7 +189,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 
 生产只接受已经通过测试并记录 SHA-256 的 JAR。
 
-## 4. 数据库迁移
+## 5. 数据库迁移
 
 | 顺序 | 文件 | 作用 |
 |---|---|---|
@@ -87,7 +214,7 @@ cd /opt/starfree-replacement
 
 脚本从 /opt/application.properties 读取凭据，并校验日志表和唯一键。其他迁移应先阅读 SQL，再通过受控的 MySQL 会话执行。
 
-## 5. JAR 部署
+## 6. JAR 部署
 
 上传候选文件：
 
@@ -114,7 +241,7 @@ deploy-jar.sh 会：
 
 不要绕过这个脚本直接覆盖正在运行的 JAR。
 
-## 6. 服务检查
+## 7. 服务检查
 
 ~~~bash
 systemctl status starfree-replacement.service --no-pager
@@ -126,9 +253,9 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 健康接口成功只证明进程和基础依赖可用，不等于业务接口已验证。
 
-## 7. Nginx 切流
+## 8. Nginx 切流
 
-### 7.1 原则
+### 8.1 原则
 
 - 只添加精确 location。
 - 不修改旧 API 的兜底 location。
@@ -138,7 +265,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。
 
-### 7.2 当前边界
+### 8.2 当前边界
 
 新后端已覆盖的主要范围：
 
@@ -159,7 +286,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 部分新接口会主动委托旧端处理不支持的付费、草稿、商品关联或未知类型请求。不能只看 URL 判断最终写入者。
 
-### 7.3 路由识别
+### 8.3 路由识别
 
 ~~~bash
 curl -skI 'https://api.lcxqy.cn/SFreeSpace/spaceList?searchParams=%7B%7D&limit=1&page=1'
@@ -172,7 +299,7 @@ curl -skI 'https://api.lcxqy.cn/SFreeSpace/spaceList?searchParams=%7B%7D&limit=1
 
 HTTP 200 不代表业务成功，还要检查响应 JSON 的 code 和 msg。
 
-## 8. 验收
+## 9. 验收
 
 每次发布至少验证：
 
@@ -196,9 +323,9 @@ HTTP 200 不代表业务成功，还要检查响应 JSON 的 code 和 msg。
 | 广告奖励 | verify-ads-reward.sh |
 | 注册与账号 | verify-user-registration.sh、verify-account-maintenance.sh |
 
-## 9. 回滚
+## 10. 回滚
 
-### 9.1 JAR
+### 10.1 JAR
 
 ~~~bash
 cp -p /opt/starfree-replacement/starfree-replacement.jar.rollback-<TIMESTAMP> /opt/starfree-replacement/starfree-replacement.jar
@@ -206,7 +333,7 @@ systemctl restart starfree-replacement.service
 curl -fsS http://127.0.0.1:18082/health
 ~~~
 
-### 9.2 Nginx
+### 10.2 Nginx
 
 ~~~bash
 cp -p <NGINX_ROLLBACK_FILE> /www/server/panel/vhost/nginx/extension/api.lcxqy.cn/starfree-replacement-public.conf
@@ -214,11 +341,11 @@ nginx -t
 nginx -s reload
 ~~~
 
-### 9.3 数据库
+### 10.3 数据库
 
 数据库回滚必须单独评估。不要为了回滚 JAR 就自动覆盖整库或整表，否则会丢失发布后的真实数据。优先让旧代码兼容保留的新列/新表；只有迁移本身导致问题时，才使用发布前的定向备份恢复。
 
-## 10. 禁止事项
+## 11. 禁止事项
 
 - 不把数据库、Redis、SSH、支付或 Bot 密钥写进仓库。
 - 不把 18082 或 MySQL 3306 暴露到公网。
@@ -227,3 +354,12 @@ nginx -s reload
 - 不把插件接口误认为已重建。
 - 不同时修改 JAR、数据库和大范围路由后再一次性验证。
 - 不删除旧 JAR、Nginx 回滚文件或数据库备份，直到新版本稳定。
+
+## 12. 上线前安全加固
+
+- 当前服务器 SSH 日志曾报告大量失败登录尝试。部署完成后立即更换 root 密码，创建受限运维用户，改用 SSH 公钥登录，并限制 SSH 来源 IP；不要继续长期使用仓库外泄过的密码。
+- 关闭 root 密码登录前，先用第二个终端验证公钥用户可以登录，避免把自己锁在服务器外。
+- 只对外开放 `80/443` 和确有需要的 SSH 端口；`8081`、`18082`、MySQL `3306` 和 Redis `6379` 只允许本机或受控内网访问。
+- PHP 7.2 已停止上游支持。当前 admin 依赖它才能保持兼容，先在独立环境升级到受支持 PHP 版本并完成后台、上传、邮件和支付设置验证，再切生产。
+- 不执行原服务器上的 `starfreeapi.sh` 自动更新流程；它会从第三方地址下载 JAR、删除文件并使用强制杀进程。仓库安装脚本只使用已校验的 JAR 和本地配置。
+- GitHub 仓库应保持私有。JAR 虽未超过单文件限制，但包含闭源发布物，不应公开镜像或把生产配置、数据库快照和证书与它放在同一仓库。

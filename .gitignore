@@ -39,6 +39,9 @@ logs/
 **/*-secrets.yaml
 markdown_docs/private/
 backend/database/snapshots/
+backend/legacy-api/config/application.properties
+admin/starfree-admin/source/Config_DB.php
+admin/starfree-admin/source/.user.ini
 
 # Signing files and release packages
 *.apk
@@ -54,4 +57,3 @@ backend/database/snapshots/
 # Reverse-engineering inputs and extracted binary content
 /BOOT-INF/
 backend/reference/legacy-java/StarFreeApi.jar
-backend/reference/legacy-admin/*.tar.gz

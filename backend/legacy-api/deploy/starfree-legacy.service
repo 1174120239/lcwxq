@@ -1,0 +1,19 @@
+[Unit]
+Description=StarFree legacy API
+After=network-online.target mysql.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt
+Environment=APP_DIR=/opt
+Environment=JAVA_BIN=/opt/jdk1.8.0_311/bin/java
+ExecStart=/opt/starfree-legacy-start.sh
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
