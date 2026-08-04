@@ -22,7 +22,9 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '8'
+          # Maven compiler uses --release 8; the build JDK must be 9 or newer.
+          # The produced bytecode remains Java 8 compatible.
+          java-version: '17'
           cache: maven
 
       - name: Test replacement backend

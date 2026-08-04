@@ -52,7 +52,9 @@ jobs:
         if: inputs.component == 'replacement-backend' || inputs.component == 'all'
         with:
           distribution: temurin
-          java-version: '8'
+          # Maven compiler uses --release 8; the build JDK must be 9 or newer.
+          # The produced bytecode remains Java 8 compatible.
+          java-version: '17'
           cache: maven
 
       - name: Build replacement backend
