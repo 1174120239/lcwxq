@@ -13,6 +13,7 @@
 | `backend/starfree-replacement/` | Java 8 / Spring Boot 2.7 后端源码与测试 |
 | `backend/database/migrations/` | 数据库迁移脚本 |
 | `backend/deploy/production/` | 生产部署、路由切换和验收脚本 |
+| `deploy/` | 本地一键发布、服务器固定部署入口和回滚脚本 |
 | `backend/reference/` | 旧 Java API 的 Mapper 等逆向参考资料，不作为独立源码发布 |
 | `integrations/` | 外部集成代码或设计入口 |
 | `markdown_docs/` | 项目手册、接口文档与集成设计 |
@@ -40,6 +41,7 @@ mvn spring-boot:run
 - [完整项目技术手册](markdown_docs/AI_PROJECT_BRIEF.md)
 - [接口使用手册](markdown_docs/API_USAGE_GUIDE.md)
 - [生产部署与回滚手册](markdown_docs/DEPLOYMENT_GUIDE.md)
+- [Codex 会话与一键发布工作流](markdown_docs/CODEX_WORKFLOW.md)
 - [AstrBot QQ 发帖同步设计](markdown_docs/QQBOT_INTEGRATION_GUIDE.md)
 
 ## 安全说明

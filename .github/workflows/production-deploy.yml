@@ -1,0 +1,123 @@
+name: Production deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component to deploy
+        required: true
+        type: choice
+        options:
+          - replacement-backend
+          - legacy-api
+          - admin
+          - all
+      ref:
+        description: Commit, tag, or branch to build
+        required: true
+        default: main
+        type: string
+      dry_run:
+        description: Build and validate only; do not connect to the server
+        required: true
+        default: true
+        type: boolean
+      run_migrations:
+        description: Guard only; generic deploys never run migrations
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Reject database migration request
+        if: inputs.run_migrations
+        run: |
+          echo 'Database migrations require a separate reviewed maintenance task.' >&2
+          exit 30
+
+      - uses: actions/setup-java@v4
+        if: inputs.component == 'replacement-backend' || inputs.component == 'all'
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Build replacement backend
+        if: inputs.component == 'replacement-backend' || inputs.component == 'all'
+        working-directory: backend/starfree-replacement
+        run: |
+          mvn -q test
+          mvn -q package -DskipTests
+
+      - name: Validate PHP admin
+        if: inputs.component == 'admin' || inputs.component == 'all'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq php-cli
+          find admin/starfree-admin -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Validate legacy API checksum
+        if: inputs.component == 'legacy-api' || inputs.component == 'all'
+        run: sha256sum -c backend/legacy-api/SHA256SUMS
+
+      - name: Prepare release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          mkdir -p release
+          printf 'COMPONENT=%s\nCOMMIT=%s\n' '${{ inputs.component }}' "$commit" > release/manifest.env
+          if [[ '${{ inputs.component }}' == replacement-backend || '${{ inputs.component }}' == all ]]; then
+            cp backend/starfree-replacement/target/starfree-replacement-*.jar release/replacement-backend.jar
+          fi
+          if [[ '${{ inputs.component }}' == legacy-api || '${{ inputs.component }}' == all ]]; then
+            cp backend/legacy-api/dist/StarFreeApi.jar release/legacy-api.jar
+          fi
+          if [[ '${{ inputs.component }}' == admin || '${{ inputs.component }}' == all ]]; then
+            tar -czf release/admin.tar.gz -C admin starfree-admin
+          fi
+          tar -czf release.tgz -C release .
+          sha256sum release.tgz
+
+      - name: Dry-run summary
+        if: inputs.dry_run
+        run: |
+          echo 'dry_run=true'
+          echo 'No server connection was made.'
+
+      - name: Configure SSH
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' '${{ secrets.LCXQY_SSH_PRIVATE_KEY }}' > ~/.ssh/lcxqy_deploy
+          chmod 600 ~/.ssh/lcxqy_deploy
+          printf '%s\n' '${{ secrets.LCXQY_SSH_KNOWN_HOSTS }}' > ~/.ssh/known_hosts
+
+      - name: Upload and deploy
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.LCXQY_SSH_HOST }}
+          SSH_USER: ${{ secrets.LCXQY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          commit=$(git rev-parse HEAD)
+          hash=$(sha256sum release.tgz | awk '{print $1}')
+          remote="/tmp/lcxqy-release-$commit.tgz"
+          scp -i ~/.ssh/lcxqy_deploy -o BatchMode=yes release.tgz "$SSH_USER@$SSH_HOST:$remote"
+          ssh -i ~/.ssh/lcxqy_deploy -o BatchMode=yes "$SSH_USER@$SSH_HOST" \
+            "sudo /usr/local/sbin/lcxqy-deploy --archive $remote --expected-sha256 $hash"
