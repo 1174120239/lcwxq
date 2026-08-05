@@ -19,7 +19,7 @@
 						<button v-if="type==0||type==4" class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : '发布'}}</button>
 					</block>
 					<block v-else>
-						<button class="cu-btn round post-submit-button" @tap="editSpace()">保存</button>
+						<button class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : '保存'}}</button>
 					</block>
 					<!--  #endif -->
 				</view>
@@ -29,6 +29,10 @@
 			<view class="post-compose">
 				<view class="post-editor-surface">
 					<textarea class="post-editor-input" maxlength="-1" v-model="text" placeholder="分享校园里的新鲜事…"></textarea>
+					<view class="post-editor-status" :class="{'is-error': publishReason && !isUploading}">
+						<text>{{textCount}}/1500</text>
+						<text>{{publishReason}}</text>
+					</view>
 				</view>
 
 				<!--  #ifdef H5 || APP-PLUS -->
@@ -53,8 +57,11 @@
 
 				<view class="media-section" v-if="type==0||type==4">
 					<view class="media-grid">
-						<view class="media-image" :style="'background-image:url('+item+');'" v-for="(item,index) in picList" :key="item + index">
-							<text class="cuIcon-close media-remove" @tap.stop="picClose(item)"></text>
+						<view class="media-image" :class="{'is-failed': item.failed}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path">
+							<view class="media-failed-mask" v-if="item.failed" @tap.stop="retryFailedUpload(item.source)">
+								<text class="cuIcon-refresh"></text><text>上传失败，重试</text>
+							</view>
+							<text class="cuIcon-close media-remove" @tap.stop="item.failed ? removeFailedUpload(item.source) : picClose(item.path)"></text>
 						</view>
 						<view class="media-video" v-if="type==4 && pic">
 							<video class="media-video-preview" :src="videoPreviewPath || pic" :controls="false" :show-center-play-btn="false" object-fit="cover"></video>
@@ -106,7 +113,7 @@
 						<button v-if="type==0||type==4" class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : '发布'}}</button>
 					</block>
 					<block v-else>
-						<button class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" @tap="editSpace()">保存</button>
+						<button class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : '保存'}}</button>
 					</block>
 					
 					
@@ -157,6 +164,9 @@
 				picList:[],
 				videoPreviewPath:"",
 				isUploading:false,
+				failedUploads:[],
+				imageOrder:{},
+				nextUploadOrder:0,
 				token:"",
 				currencyName:"",
 				topicCenter: {
@@ -190,10 +200,40 @@
 			canAddMedia() {
 				if (this.isUploading) return false
 				if (this.type === 4 && this.pic) return false
-				return this.picList.length < 9
+				return this.picList.length + this.failedUploads.length < 9
+			},
+			mediaItems() {
+				const items = this.picList.map((url, index) => ({
+					path: url,
+					order: Object.prototype.hasOwnProperty.call(this.imageOrder, url)
+						? Number(this.imageOrder[url]) : index,
+					failed: false
+				}))
+				this.failedUploads.forEach((item, index) => items.push({
+					path: item.path,
+					order: Number(item.order == null ? this.picList.length + index : item.order),
+					failed: true,
+					source: item
+				}))
+				return items.sort((left, right) => left.order - right.order)
+			},
+			textCount() {
+				return this.stripImageMarker(this.text).length
+			},
+			publishReason() {
+				if (this.isUploading) return '图片正在上传，请稍候'
+				if (this.failedUploads.length) return '有图片上传失败，请重试或删除'
+				if (this.type === 4) {
+					if (!this.pic) return '请先上传视频'
+					if (!this.stripImageMarker(this.text).trim()) return '视频动态需要填写说明'
+					return ''
+				}
+				if (this.type !== 0 || this.picList.length > 0) return ''
+				const remaining = Math.max(0, 4 - this.stripImageMarker(this.text).trim().length)
+				return remaining > 0 ? '纯文字动态至少需要4个字，还需输入' + remaining + '个字' : ''
 			},
 			canPublish() {
-				if (this.isUploading) return false
+				if (this.isUploading || this.failedUploads.length) return false
 				const textLength = this.stripImageMarker(this.text).trim().length
 				const hasText = textLength > 0
 				if (this.type === 4) return hasText && Boolean(this.pic)
@@ -602,6 +642,7 @@
 									}
 								}
 							}
+							if(that.type==0) that.initializeImageOrder();
 							
 							if(that.type==1){
 								that.contentJson = res.data.data.contentJson;
@@ -973,25 +1014,36 @@
 					}, 1000)
 					return false
 				}
-				const remaining = that.type === 0 ? 9 - that.picList.length : 9
+				const remaining = that.type === 0 ? 9 - that.picList.length - that.failedUploads.length : 9
 				if (remaining <= 0) return false
 				uni.chooseImage({
 					count: remaining,
 					sizeType:['compressed'],
 					sourceType: ['album', 'camera'],
-					success: function (res) {
-						const tempFilePaths = res.tempFilePaths || []
-						if (!tempFilePaths.length) return
-						that.isUploading = true
+						success: function (res) {
+							const tempFilePaths = res.tempFilePaths || []
+							if (!tempFilePaths.length) return
+							const orderBase = that.nextUploadOrder
+							that.nextUploadOrder += tempFilePaths.length
+							that.isUploading = true
 						uni.showLoading({ title: "上传中" })
 						let completed = 0
-						let uploadFailed = false
+						const results = new Array(tempFilePaths.length)
 						const finishUpload = () => {
 							completed += 1
 							if (completed !== tempFilePaths.length) return
+							for (let index = 0; index < results.length; index++) {
+								const result = results[index]
+									if (result && result.url && that.picList.length < 9) {
+										that.$set(that.imageOrder, result.url, result.order)
+										that.picList.push(result.url)
+									}
+									if (!result || !result.url) that.failedUploads.push({ path: tempFilePaths[index], order: orderBase + index })
+								}
+								that.sortPicList()
 							that.isUploading = false
 							uni.hideLoading()
-							if (uploadFailed) uni.showToast({ title: '部分图片上传失败，请重试', icon: 'none' })
+							if (that.failedUploads.length) uni.showToast({ title: '部分图片上传失败，可重试或删除', icon: 'none' })
 						}
 						for(let i = 0;i < tempFilePaths.length; i++) {
 							uni.uploadFile({
@@ -1007,17 +1059,19 @@
 												that.pic = ''
 												that.videoPreviewPath = ''
 												that.picList = []
+												that.imageOrder = {}
+												that.failedUploads = []
 											}
 											that.type = 0
-											if (that.picList.length < 9) that.picList.push(data.data.url)
+											results[i] = { url: data.data.url, order: orderBase + i }
 										} else {
-											uploadFailed = true
+											results[i] = null
 										}
 									} catch (error) {
-										uploadFailed = true
+										results[i] = null
 									}
 								},
-								fail: function(){ uploadFailed = true },
+								fail: function(){ results[i] = null },
 								complete: finishUpload
 							})
 						}
@@ -1080,6 +1134,43 @@
 			},
 			picClose(item){
 				this.picList = this.picList.filter(pic => pic !== item)
+				this.$delete(this.imageOrder, item)
+			},
+			sortPicList() {
+				this.picList = this.picList.slice().sort((left, right) =>
+					Number(this.imageOrder[left] || 0) - Number(this.imageOrder[right] || 0))
+			},
+			initializeImageOrder() {
+				this.imageOrder = {}
+				this.picList.forEach((url, index) => this.$set(this.imageOrder, url, index))
+				this.nextUploadOrder = this.picList.length
+			},
+			retryFailedUpload(item) {
+				if (this.isUploading) return
+				this.isUploading = true
+				uni.showLoading({ title: '重新上传' })
+				uni.uploadFile({
+					url: this.$API.upload(), filePath: item.path, name: 'file',
+					formData: { token: this.token },
+					success: response => {
+						try {
+							const data = JSON.parse(response.data)
+							if (data.code === 1 && data.data && data.data.url) {
+								this.$set(this.imageOrder, data.data.url, item.order)
+								this.picList.push(data.data.url)
+								this.sortPicList()
+								this.removeFailedUpload(item)
+								return
+							}
+						} catch (error) {}
+						uni.showToast({ title: '图片上传失败，请重试', icon: 'none' })
+					},
+					fail: () => uni.showToast({ title: '图片上传失败，请重试', icon: 'none' }),
+					complete: () => { this.isUploading = false; uni.hideLoading() }
+				})
+			},
+			removeFailedUpload(item) {
+				this.failedUploads = this.failedUploads.filter(upload => upload !== item)
 			},
 			removeVideo(){
 				this.pic = ''
@@ -1160,6 +1251,32 @@
 	.post-editor-input::placeholder {
 		color: #a2afac;
 	}
+	.post-editor-status {
+		display: flex;
+		justify-content: space-between;
+		gap: 20rpx;
+		padding: 10rpx 4rpx 0;
+		color: #7c8884;
+		font-size: 23rpx;
+	}
+	.post-editor-status.is-error { color: #c44949; }
+	.media-image.is-failed { position: relative; }
+	.media-failed-mask {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 6rpx;
+		padding: 12rpx;
+		background: rgba(30, 34, 33, .72);
+		color: #fff;
+		font-size: 21rpx;
+		text-align: center;
+	}
+	.campus-editor-page.campus-night .post-editor-status { color: #9ba6a2; }
+	.campus-editor-page.campus-night .post-editor-status.is-error { color: #ff9690; }
 
 	.space-owo {
 		width: calc(100% - 32rpx);

@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -91,6 +92,8 @@ class UserRegistrationServiceTest {
                 ArgumentCaptor.forClass(UserRegistrationRepository.RegistrationUser.class);
         verify(repository).insertUser(eq(connection), user.capture());
         assertThat(user.getValue().getInviterUid()).isEqualTo(7L);
+        assertThat(user.getValue().getCampusId()).isEqualTo(2L);
+        assertThat(user.getValue().getGradeId()).isEqualTo(3L);
         verify(journal).commit(eq(connection), eq(OPERATION_KEY), any());
         verify(redis).consumeVerificationCode(MAIL);
     }
@@ -230,9 +233,25 @@ class UserRegistrationServiceTest {
         verify(journal, never()).fail(eq(connection), eq(OPERATION_KEY), any());
     }
 
+    @Test
+    void disabledCampusIsRejectedBeforeUserInsert() throws Exception {
+        RegistrationConfig config = config(false, false, 0, 0);
+        arrangeConfig(config);
+        arrangeStarted();
+        when(repository.enabledIdentityOption(connection, 2L, "campus")).thenReturn(false);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.register(request("", ""), "203.0.113.7"));
+
+        assertThat(error.getMessage()).isEqualTo("请选择当前启用的校区");
+        verify(repository, never()).insertUser(any(), any());
+    }
+
     private void arrangeConfig(RegistrationConfig config) throws SQLException {
         when(repository.config()).thenReturn(config);
         when(repository.config(connection)).thenReturn(config);
+        lenient().when(repository.enabledIdentityOption(connection, 2L, "campus")).thenReturn(true);
+        lenient().when(repository.enabledIdentityOption(connection, 3L, "grade")).thenReturn(true);
     }
 
     private void arrangeStarted() throws SQLException {
@@ -261,6 +280,8 @@ class UserRegistrationServiceTest {
                 "mail", MAIL,
                 "code", code,
                 "inviteCode", inviteCode,
+                "campusId", 2,
+                "gradeId", 3,
                 "assets", 999999,
                 "points", 999999,
                 "experience", 999999);

@@ -132,7 +132,12 @@ public class UserAdministrationService {
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT uid,name,mail,url,screenName,created,activated,logged,`group`,introduce,"
                         + "assets,address,pay,customize,vip,experience,avatar,clientId,bantime,"
-                        + "posttime,ip,local,phone,userBg,invitationCode,invitationUser,points "
+                        + "posttime,ip,local,phone,userBg,invitationCode,invitationUser,points,"
+                        + "campus_option_id AS campusId,grade_option_id AS gradeId,"
+                        + "(SELECT name FROM starfree_identity_options io "
+                        + "WHERE io.id=starfree_users.campus_option_id) AS campus,"
+                        + "(SELECT name FROM starfree_identity_options io "
+                        + "WHERE io.id=starfree_users.grade_option_id) AS grade "
                         + "FROM starfree_users" + where + " ORDER BY " + order
                         + " DESC,uid DESC LIMIT ?,?",
                 rowArgs.toArray());
@@ -141,6 +146,7 @@ public class UserAdministrationService {
         for (Map<String, Object> row : rows) {
             Map<String, Object> item = new LinkedHashMap<>(row);
             long uid = number(get(item, "uid"));
+            item.put("groupKey", value(get(item, "group")));
             item.put("isvip", vipState(get(item, "vip")));
             item.put("isFollow", viewerId == null ? 0 : followCount(viewerId, uid));
             if (!staff) {
@@ -226,11 +232,13 @@ public class UserAdministrationService {
         List<Map<String, Object>> targets;
         if (targetUid > 0) {
             targets = jdbc.queryForList(
-                    "SELECT uid,name,mail,phone,authCode,`group` FROM starfree_users WHERE uid=? LIMIT 1",
+                    "SELECT uid,name,mail,phone,authCode,`group`,campus_option_id,grade_option_id "
+                            + "FROM starfree_users WHERE uid=? LIMIT 1",
                     targetUid);
         } else {
             targets = jdbc.queryForList(
-                    "SELECT uid,name,mail,phone,authCode,`group` FROM starfree_users WHERE name=? LIMIT 1",
+                    "SELECT uid,name,mail,phone,authCode,`group`,campus_option_id,grade_option_id "
+                            + "FROM starfree_users WHERE name=? LIMIT 1",
                     targetName);
         }
         if (targets.isEmpty()) {
@@ -254,6 +262,16 @@ public class UserAdministrationService {
         copyText(params, changes, "userBg", "userBg", 400);
         copyText(params, changes, "address", "address", 4000);
         copyText(params, changes, "pay", "pay", 4000);
+        if (params.containsKey("campusId")) {
+            long campusId = number(params.get("campusId"));
+            requireAssignableIdentityOption(campusId, "campus", targetUid);
+            changes.put("campus_option_id", campusId);
+        }
+        if (params.containsKey("gradeId")) {
+            long gradeId = number(params.get("gradeId"));
+            requireAssignableIdentityOption(gradeId, "grade", targetUid);
+            changes.put("grade_option_id", gradeId);
+        }
         if (params.containsKey("experience")) {
             changes.put("experience", Math.max(0, RequestValues.objectInteger(params, "experience", 0)));
         }
@@ -318,6 +336,19 @@ public class UserAdministrationService {
             caches.afterUserWrite(targetUid, value(get(target, "name")));
         }
         return changed;
+    }
+
+    private void requireAssignableIdentityOption(long id, String type, long targetUid) {
+        String column = "campus".equals(type) ? "campus_option_id" : "grade_option_id";
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM starfree_identity_options o WHERE o.id=? AND o.type=? "
+                        + "AND (o.enabled=1 OR EXISTS (SELECT 1 FROM starfree_users u "
+                        + "WHERE u.uid=? AND u.`" + column + "`=o.id))",
+                Integer.class, id, type, targetUid);
+        if (count == null || count != 1) {
+            throw new IllegalArgumentException("campus".equals(type)
+                    ? "请选择当前启用的校区" : "请选择当前启用的年级");
+        }
     }
 
     /** Administrator-only account deletion; content is intentionally not cascade-deleted. */

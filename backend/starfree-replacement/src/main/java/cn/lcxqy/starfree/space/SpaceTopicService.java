@@ -50,7 +50,7 @@ final class SpaceTopicService {
     }
 
     /**
-     * Returns official topics and the current user's followed topics.
+     * Returns all, hot, official and current-user-followed topics.
      *
      * <p>Official means an existing/admin-created tag without a profile, an explicitly official
      * profile, or a topic marked recommended by the existing admin interface.
@@ -58,6 +58,15 @@ final class SpaceTopicService {
     Map<String, Object> center(Long uid, String searchKey) {
         long viewerUid = uid == null ? 0L : uid;
         String keyword = searchKey == null ? "" : searchKey.trim();
+        List<Object> allArgs = new ArrayList<>();
+        allArgs.add(viewerUid);
+        StringBuilder allSql = new StringBuilder(TOPIC_SELECT)
+                .append("WHERE m.type='tag' ");
+        appendSearch(allSql, allArgs, keyword);
+        allSql.append("ORDER BY m.`order` DESC,spaceCount DESC,m.mid DESC");
+        List<Map<String, Object>> all =
+                normalize(jdbc.queryForList(allSql.toString(), allArgs.toArray()));
+
         List<Object> officialArgs = new ArrayList<>();
         officialArgs.add(viewerUid);
         StringBuilder officialSql = new StringBuilder(TOPIC_SELECT)
@@ -83,6 +92,18 @@ final class SpaceTopicService {
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("all", all);
+        List<Map<String, Object>> hot = new ArrayList<>(all);
+        hot.sort((left, right) -> {
+            int spaceComparison = Long.compare(number(right.get("spaceCount")),
+                    number(left.get("spaceCount")));
+            return spaceComparison != 0 ? spaceComparison
+                    : Long.compare(number(right.get("followCount")), number(left.get("followCount")));
+        });
+        if (hot.size() > 30) {
+            hot = new ArrayList<>(hot.subList(0, 30));
+        }
+        result.put("hot", hot);
         result.put("official", official);
         result.put("followed", followed);
         return result;

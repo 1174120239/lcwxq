@@ -1,5 +1,5 @@
 <template>
-	<view class="userpost userIndex" :class="AppStyle">
+	<view class="userpost userIndex campus-subpage campus-profile-page" :class="AppStyle">
 		<view class="header" :style="[{height:CustomBar*2 + 'upx'}]"  :class="scrollTop>40?'goScroll':''">
 			<view class="cu-bar" :style="{'height': CustomBar*2 + 'upx','padding-top':StatusBar*2 + 'upx'}">
 				<view :class="scrollTop<40 && isLoading !== 0 ?'action2 cu-bar2':''" class="action" @tap="back">
@@ -80,7 +80,7 @@
 				<text class="user-data-label" style="margin-right: 10upx;" @click="copyUid">{{uid}}</text>
 				<text class="tn-icon-copy mirror" @click="copyUid"></text>
 			</view>
-			<view class="user-data-label" style="margin-top: 10upx;word-wrap: break-word">
+			<view class="user-data-label profile-introduce" style="margin-top: 10upx;word-wrap: break-word">
 				<block v-if="introduce!=''&&introduce">
 					{{subText(introduce,60)}}
 				</block>
@@ -179,7 +179,7 @@
 				</view>
 				<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
 					<block  v-for="(item,index) in commentsList" :key="index" v-if="commentsList.length>0">
-						<commentItem :item="item" :isHead="false"></commentItem>
+						<spaceReplyHistoryItem :item="item"></spaceReplyHistoryItem>
 					</block>
 					
 				</view>
@@ -240,7 +240,7 @@
 			</view>
 			
 			<!--占位区域-->
-			<view style="width: 100%;height: 100upx; background-color: #f6f6f6;"></view>
+			<view class="profile-bottom-spacer"></view>
 		</view>
 		
 		<!--加载遮罩-->
@@ -346,7 +346,7 @@
 			}
 			// #ifdef APP-PLUS
 			
-			plus.navigator.setStatusBarStyle("dark")
+			plus.navigator.setStatusBarStyle(that.AppStyle === 'campus-night' ? "light" : "dark")
 			// #endif
 			
 			
@@ -519,7 +519,8 @@
 					
 					url: that.$API.getUserInfo(),
 					data:{
-						"key":that.uid
+						"key":that.uid,
+						"uid":that.uid
 					},
 					header:{
 						'Content-Type':'application/x-www-form-urlencoded'
@@ -926,18 +927,15 @@
 			},
 			getCommentsList(isPage){
 				var that = this;
-				var data = {
-					"type":"comment",
-					"authorId":that.uid,
-				}
 				var page = that.page;
 				if(isPage){
 					page++;
 				}
 				that.$Net.request({
-					url: that.$API.getCommentsList(),
+					url: that.$API.spaceUserReplies(),
 					data:{
-						"searchParams":JSON.stringify(that.$API.removeObjectEmptyKey(data)),
+						"uid":that.uid,
+						"token":localStorage.getItem('token') || '',
 						"limit":5,
 						"page":page,
 						"order":"created"
@@ -953,12 +951,7 @@
 						if(res.data.code==1){
 							var list = res.data.data;
 							if(list.length>0){
-								var commentsList = [];
-								for(var i in list){
-									var arr = list[i];
-									arr.style = "background-image:url("+list[i].avatar+");"
-									commentsList.push(arr);
-								}
+								var commentsList = list;
 								if(isPage){
 									that.page++;
 									that.commentsList = that.commentsList.concat(commentsList);
@@ -966,6 +959,7 @@
 									that.commentsList = commentsList;
 								}
 							}else{
+								if(!isPage) that.commentsList = [];
 								that.moreText="没有更多数据了";
 							}
 							
@@ -1286,6 +1280,40 @@
 </script>
 
 <style>
+.profile-introduce { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.profile-bottom-spacer { width: 100%; height: 100upx; background: #f6f6f6; }
+.campus-profile-page { min-height: 100vh; background: #f4f7f6; }
+.campus-profile-page.campus-night,
+.campus-profile-page.campus-night .all-box { background: #15191b !important; color: #e9eeec !important; }
+.campus-profile-page.campus-night .user-info,
+.campus-profile-page.campus-night .user-info-main,
+.campus-profile-page.campus-night .user-name,
+.campus-profile-page.campus-night .search-type,
+.campus-profile-page.campus-night .search-space,
+.campus-profile-page.campus-night .cu-list.menu-avatar,
+.campus-profile-page.campus-night .cu-card.no-card,
+.campus-profile-page.campus-night .cu-card.no-card > .cu-item,
+.campus-profile-page.campus-night [style*="background-color:#ffffff"],
+.campus-profile-page.campus-night [style*="background-color: #ffffff"],
+.campus-profile-page.campus-night [class*="bg-white"] { background-color: #202527 !important; border-color: #333b3c !important; }
+.campus-profile-page.campus-night .user-info-main > .bg-white { background: #202527 !important; }
+.campus-profile-page.campus-night .user-name,
+.campus-profile-page.campus-night .user-info-name,
+.campus-profile-page.campus-night .user-text,
+.campus-profile-page.campus-night .user-data-num,
+.campus-profile-page.campus-night .user-data-label,
+.campus-profile-page.campus-night .search-type-box,
+.campus-profile-page.campus-night .app-box-title { color: #edf2f0 !important; }
+.campus-profile-page.campus-night .search-type-box.active { color: #5bc49e !important; border-bottom-color: #5bc49e !important; }
+.campus-profile-page.campus-night .app-box-info,
+.campus-profile-page.campus-night .app-category-tag { color: #aeb9b5 !important; }
+.campus-profile-page.campus-night .app-category-tag,
+.campus-profile-page.campus-night .loading-container { background: #293031 !important; }
+.campus-profile-page.campus-night .loading,
+.campus-profile-page.campus-night > view:last-child { background-color: #15191b !important; }
+.campus-profile-page.campus-night .profile-bottom-spacer { background: #15191b !important; }
+.campus-profile-page.campus-night .userInfo-bottom-box .cu-btn { background: #293132 !important; color: #edf2f0 !important; }
+.campus-profile-page.campus-night .userlv.customize { border-color: #7d8b87 !important; color: #dce4e1 !important; }
 .user-info-data {
   display: flex;
   justify-content: space-between;

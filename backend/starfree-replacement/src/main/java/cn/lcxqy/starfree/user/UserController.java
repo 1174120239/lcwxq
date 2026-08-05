@@ -241,9 +241,9 @@ public class UserController {
      * GET/POST {@code /SFreeUsers/userData}：用户内容/评论/关注统计。
      *
      * <p>优先使用公开的 {@code uid}；未传时用 {@code token} 推导当前 uid。成功 data 包含
-     * {@code uid/contents/comments/fans/follow}，统计直接查询数据库且没有缓存。contents/comments
-     * 是该用户全部记录计数，并非“仅公开记录”的隐私过滤结果，因此新增统计字段前必须先明确
-     * 公开边界。用户不存在返回 {@code code=0}。
+     * {@code uid/contents/comments/fans/follow}，统计直接查询数据库且没有缓存。comments
+     * 是已发布动态评论（space type=3）数量，不再统计文章评论。用户不存在返回
+     * {@code code=0}。
      */
     @RequestMapping(value = "/userData", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse data(@RequestParam Map<String, String> params) {
@@ -260,7 +260,8 @@ public class UserController {
         Integer contents = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM starfree_contents WHERE authorId = ?", Integer.class, uid);
         Integer comments = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM starfree_comments WHERE authorId = ?", Integer.class, uid);
+                "SELECT COUNT(*) FROM starfree_space WHERE uid = ? AND type = 3 AND status = 1",
+                Integer.class, uid);
         Integer fans = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM starfree_fan WHERE touid = ?", Integer.class, uid);
         Integer follow = jdbc.queryForObject(

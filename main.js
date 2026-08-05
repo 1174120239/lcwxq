@@ -42,6 +42,8 @@ Vue.component('commentItem',commentItem)
 
 import spaceItem from './pages/components/spaceItem.vue'
 Vue.component('spaceItem',spaceItem)
+import spaceReplyHistoryItem from './pages/components/spaceReplyHistoryItem.vue'
+Vue.component('spaceReplyHistoryItem',spaceReplyHistoryItem)
 import followItem from './pages/components/followItem.vue'
 Vue.component('followItem',followItem)
 

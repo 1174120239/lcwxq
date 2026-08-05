@@ -1,6 +1,6 @@
 # 聊一论坛项目技术手册
 
-> 更新日期：2026-08-04
+> 更新日期：2026-08-05
 >
 > 适用仓库：1174120239/lcwxq
 >
@@ -18,7 +18,7 @@
 - 充值、验证码发送、文件上传、聊天和部分第三方登录仍使用旧后端。
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 188 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 199 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -125,6 +125,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 001_economy_operation_journal.sql | 经济操作幂等日志 |
 | 002_space_views.sql | 动态浏览量 |
 | 003_space_topics.sql | 动态话题、关注和关联 |
+| 004_campus_identity.sql | 校区/入学年份选项及用户稳定引用 id |
 
 ## 5. 请求和响应约定
 
@@ -221,6 +222,13 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 动态话题不能复用文章的 starfree_relationships，因为文章 cid 和动态 id 是不同序列。
 
+校园身份使用：
+
+- `starfree_identity_options.type='campus'/'grade'`：校区和入学年份选项目录。
+- `starfree_users.campus_option_id/grade_option_id`：用户对稳定选项 id 的引用。
+- 注册只能选择启用项；已使用选项通过停用退出新注册，不能硬删除。
+- 改名统一影响所有引用该选项的显示，停用不改变已有用户的历史资料。
+
 ## 8. 后端功能边界
 
 ### 8.1 新后端主要模块
@@ -228,7 +236,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 模块 | 当前能力 |
 |---|---|
 | system | health、liveness |
-| security/user | 登录、退出、注册、找回、资料、token 轮换、用户管理 |
+| security/user | 登录、退出、注册、找回、资料、token 轮换、用户管理、校区和入学年份维护 |
 | content | 列表、详情、普通新增/更新、删除、审核、推荐/置顶/轮播 |
 | comment | 列表、新增、删除、审核 |
 | meta | 分类/标签增删改查、推荐、关系清理 |
@@ -261,20 +269,24 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 ### 9.1 动态
 
 - 支持纯文字、纯图片、图文和视频动态。
-- 空正文且有图片可以发布；正文和媒体都为空时拒绝。
+- 空正文且有图片可以发布；纯文字正文至少 4 字，页面同步显示字数和禁用原因；上传失败图片必须重试或删除后才能提交。
 - 详情成功读取会增加浏览量。
 - 列表卡片进入详情后本地同步浏览量，避免返回时仍显示旧值。
 - 后台删除动态后，空列表必须覆盖旧缓存，详情无内容时不保留失效卡片。
 - 发布和编辑支持最多 3 个话题。
 - 用户输入但未点击“添加”的话题，会在提交前自动创建/选中。
-- 话题可关注和取消关注，可按话题筛选动态。
-- 话题中心面向用户显示“热门话题”，不展示后台维护描述。
+- 话题可搜索、关注和取消关注，并区分全部、热门、我关注的话题。
+- 最多选择 3 个话题筛选动态，多个话题使用 AND 语义；从发现页直接进入时先显示话题信息和相关动态。
+- 个人页评论栏读取动态评论历史，并明确标识原动态已删除或不可见。
+- 动态详情显示完整正文和全部图片，图片预览保持在当前业务页内。
+- 注册必须从后台启用项中选择校区和入学年份；后台可新增、改名、排序和停用选项。
+- 个人简介保留换行并支持显式清空。
 
 ### 9.2 内容与后台
 
 - 帖子管理使用新后端时必须保留后台所需状态和权限字段。
 - 推荐、置顶、轮播字段由内容扩展接口维护。
-- 后台话题管理复用 tag/meta 管理页。
+- 后台话题管理复用 tag/meta 管理页；校区和年级使用独立的稳定选项目录。
 - PHP admin 配置接口仍直接访问 admin.lcxqy.cn。
 
 ### 9.3 消息和聊天
@@ -308,7 +320,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 188
+Tests run: 199
 Failures: 0
 Errors: 0
 Skipped: 0

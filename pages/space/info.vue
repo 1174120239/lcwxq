@@ -52,11 +52,29 @@
 				<block  v-if="spaceInfo.type==0">
 					
 					<view class="grid flex-sub padding-lr col-3 grid-square space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
-						<view class="bg-img" :style="'background-image:url('+data+');'"
-						 v-for="(data,i) in spaceInfo.picList" :key="i" @tap="previewImage(spaceInfo.picList,data)">
+						<view class="bg-img" v-for="(data,i) in spaceInfo.picList" :key="data+i" @tap="previewImage(spaceInfo.picList,data)">
+							<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
+							<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)">
+								<text class="cuIcon-refresh"></text><text>加载失败，点击重试</text>
+							</view>
 						</view>
 					</view>
 				</block>
+				<view class="forward-original" v-if="spaceInfo.type==2">
+					<block v-if="spaceInfo.forwardJson && spaceInfo.forwardJson.id">
+						<view class="forward-author" @tap="toInfo(spaceInfo.forwardJson.id)">@{{spaceInfo.forwardJson.username}}</view>
+						<view class="forward-text" @tap="toInfo(spaceInfo.forwardJson.id)">
+							<rich-text :nodes="markHtml(spaceInfo.forwardJson.text || '')"></rich-text>
+						</view>
+						<view class="space-detail-media forward-media" :class="{'is-single': spaceInfo.forwardJson.picList.length === 1, 'is-double': spaceInfo.forwardJson.picList.length === 2}" v-if="spaceInfo.forwardJson.picList && spaceInfo.forwardJson.picList.length">
+							<view class="bg-img" v-for="(data,i) in spaceInfo.forwardJson.picList" :key="'forward-'+data+i" @tap="previewImage(spaceInfo.forwardJson.picList,data)">
+								<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
+								<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)"><text class="cuIcon-refresh"></text><text>加载失败，点击重试</text></view>
+							</view>
+						</view>
+					</block>
+					<view class="forward-deleted" v-else>原动态已删除</view>
+				</view>
 				<block  v-if="spaceInfo.type==4">
 					<!--  #ifdef H5 || MP-->
 					<view class="paceVideo2">
@@ -292,6 +310,8 @@
 				infoType:0,
 				group:"",
 				uid:0,
+				imageFailures:{},
+				imageRetryVersions:{},
 			}
 		},
 		computed: {
@@ -451,13 +471,13 @@
 						if(res.data.code==1){
 							that.spaceInfo = res.data.data;
 							if(res.data.data.pic&&res.data.data.pic!=""){
-								that.spaceInfo.picList = res.data.data.pic.split("||");
+								that.spaceInfo.picList = res.data.data.pic.split("||").filter(Boolean);
 							}else{
 								that.spaceInfo.picList = [];
 							}
 							if(res.data.data.forwardJson){
 								if(res.data.data.forwardJson.pic&&res.data.data.forwardJson.pic!=""){
-									that.spaceInfo.forwardJson.picList = res.data.data.forwardJson.pic.split("||");
+									that.spaceInfo.forwardJson.picList = res.data.data.forwardJson.pic.split("||").filter(Boolean);
 								}else{
 									that.spaceInfo.forwardJson.picList = [];
 								}
@@ -471,11 +491,24 @@
 				
 			},
 			previewImage(imageList,image) {
-				//预览图片
 				uni.previewImage({
-					urls: imageList,
-					current: image
+					urls: imageList.filter(Boolean),
+					current: image,
+					indicator: 'number',
+					loop: true
 				});
+			},
+			imageSource(url) {
+				const version = this.imageRetryVersions[url] || 0
+				if (!version) return url
+				return url + (url.indexOf('?') === -1 ? '?' : '&') + 'retry=' + version
+			},
+			imageLoadFailed(url) {
+				this.$set(this.imageFailures, url, true)
+			},
+			retryImage(url) {
+				this.$set(this.imageFailures, url, false)
+				this.$set(this.imageRetryVersions, url, Date.now())
 			},
 			subText(text,num){
 				if(text.length < null){
@@ -1324,13 +1357,15 @@
 
 .space-detail-media {
 	display: flex !important;
+	flex-wrap: wrap;
 	gap: 12rpx;
 	margin: 0;
 	padding: 0 28rpx 26rpx !important;
 }
 
 .space-detail-media > .bg-img {
-	flex: 1 1 calc(33.333% - 8rpx);
+	position: relative;
+	flex: 0 0 calc(33.333% - 8rpx);
 	width: auto !important;
 	min-width: 0;
 	padding-bottom: 30%;
@@ -1338,16 +1373,47 @@
 	overflow: hidden;
 }
 
+.space-detail-media > .bg-img > image {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+
 .space-detail-media.is-single > .bg-img {
-	flex-basis: 100%;
+	flex: 0 0 100%;
 	max-width: 100%;
 	padding-bottom: 61.8%;
 }
 
 .space-detail-media.is-double > .bg-img {
-	flex-basis: calc(50% - 6rpx);
+	flex: 0 0 calc(50% - 6rpx);
 	padding-bottom: 46%;
 }
+
+.image-load-error {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8rpx;
+	padding: 12rpx;
+	background: #e9eeec;
+	color: #68736f;
+	font-size: 22rpx;
+	text-align: center;
+}
+
+.forward-original { margin: 0 28rpx 26rpx; padding: 20rpx; background: #f0f4f3; border-radius: 8rpx; }
+.forward-author { color: #168c80; font-weight: 600; }
+.forward-text { margin-top: 10rpx; line-height: 1.65; color: #40514d; }
+.forward-media { padding: 18rpx 0 0 !important; }
+.forward-deleted { color: #7c8783; }
+.campus-night .forward-original { background: #252c2d; }
+.campus-night .forward-text { color: #d7dddb; }
+.campus-night .image-load-error { background: #303738; color: #bec7c4; }
 
 .space-detail-page .space-reply {
 	margin-top: 22rpx;

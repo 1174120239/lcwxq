@@ -202,6 +202,17 @@ public class SpaceController {
                 spaces.followTopic(params));
     }
 
+    /** ANY /SFreeSpace/userReplies: dynamic comments made by one user, newest first. */
+    @RequestMapping("/userReplies")
+    public ApiResponse userReplies(@RequestParam Map<String, String> params) {
+        SpaceService.SpacePage page = spaces.userReplies(
+                RequestValues.integer(params, "uid", 0),
+                RequestValues.integer(params, "page", 1),
+                RequestValues.integer(params, "limit", 10),
+                RequestValues.text(params, "token"));
+        return ApiResponse.paged(page.getData(), page.getData().size(), page.getTotal());
+    }
+
     private String clientIp(HttpServletRequest request) {
         String value = request.getHeader("X-Real-IP");
         if (value == null || value.trim().isEmpty()) {

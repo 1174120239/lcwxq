@@ -52,6 +52,12 @@ class UserRegistrationRepository {
                 "SELECT COUNT(*) FROM starfree_users WHERE mail=?", mail) > 0;
     }
 
+    boolean enabledIdentityOption(Connection connection, long id, String type) throws SQLException {
+        return number(connection,
+                "SELECT COUNT(*) FROM starfree_identity_options WHERE id=? AND type=? AND enabled=1",
+                id, type) == 1;
+    }
+
     List<Map<String, Object>> availableInvitations(Connection connection, String code)
             throws SQLException {
         return list(connection,
@@ -80,10 +86,11 @@ class UserRegistrationRepository {
                 "INSERT INTO starfree_users "
                         + "(name,password,mail,screenName,created,activated,logged,`group`,"
                         + "assets,vip,experience,bantime,posttime,ip,local,phone,"
-                        + "invitationCode,invitationUser,points) "
-                        + "VALUES (?,?,?,?,?,0,0,'contributor',0,0,0,0,0,?,'',?,'',?,0)",
+                        + "campus_option_id,grade_option_id,invitationCode,invitationUser,points) "
+                        + "VALUES (?,?,?,?,?,0,0,'contributor',0,0,0,0,0,?,'',?,?,?,'',?,0)",
                 user.name, user.passwordHash, emptyToNull(user.mail), user.name,
-                user.created, user.remoteAddress, user.phone, user.inviterUid);
+                user.created, user.remoteAddress, user.phone, user.campusId, user.gradeId,
+                user.inviterUid);
     }
 
     int setAssets(Connection connection, long uid, long assets) throws SQLException {
@@ -182,21 +189,34 @@ class UserRegistrationRepository {
         private final String phone;
         private final String remoteAddress;
         private final long inviterUid;
+        private final long campusId;
+        private final long gradeId;
         private final long created;
 
         RegistrationUser(String name, String passwordHash, String mail, String phone,
-                         String remoteAddress, long inviterUid, long created) {
+                         String remoteAddress, long inviterUid, long campusId,
+                         long gradeId, long created) {
             this.name = name;
             this.passwordHash = passwordHash;
             this.mail = mail;
             this.phone = phone;
             this.remoteAddress = remoteAddress;
             this.inviterUid = inviterUid;
+            this.campusId = campusId;
+            this.gradeId = gradeId;
             this.created = created;
         }
 
         long getInviterUid() {
             return inviterUid;
+        }
+
+        long getCampusId() {
+            return campusId;
+        }
+
+        long getGradeId() {
+            return gradeId;
         }
     }
 }

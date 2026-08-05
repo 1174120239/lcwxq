@@ -37,6 +37,18 @@
 				<view class="title">昵称</view>
 				<input placeholder="请输入昵称" name="input" v-model="screenName"></input>
 			</view>
+			<picker :range="campusOptions" range-key="name" @change="campusChange">
+				<view class="cu-form-group">
+					<view class="title">校区</view>
+					<text>{{campusName || '请选择'}}</text><text class="cuIcon-right text-grey"></text>
+				</view>
+			</picker>
+			<picker :range="gradeOptions" range-key="name" @change="gradeChange">
+				<view class="cu-form-group">
+					<view class="title">年级</view>
+					<text>{{gradeName || '请选择'}}</text><text class="cuIcon-right text-grey"></text>
+				</view>
+			</picker>
 			<view class="cu-form-group">
 				<view class="title">邮箱</view>
 				<input placeholder="请输入邮箱" name="input" v-model="mail"></input>
@@ -110,6 +122,12 @@
 				customize:'',
 				token:'',
 				experience:0,
+				campusOptions: [],
+				gradeOptions: [],
+				campusId: 0,
+				gradeId: 0,
+				campusName: '',
+				gradeName: '',
 				
 				groupText:"用户",
 				group:"contributor",
@@ -160,6 +178,7 @@
 			// #endif
 			if(res.uid){
 				that.uid = res.uid;
+				that.loadIdentityOptions();
 				that.getUserInfo();
 			}
 		},
@@ -168,6 +187,26 @@
 						 this.getset();
 						},
 				methods: {
+			campusChange(e) {
+				const option = this.campusOptions[Number(e.detail.value)]
+				this.campusId = option ? option.id : 0
+				this.campusName = option ? option.name : ''
+			},
+			gradeChange(e) {
+				const option = this.gradeOptions[Number(e.detail.value)]
+				this.gradeId = option ? option.id : 0
+				this.gradeName = option ? option.name : ''
+			},
+			loadIdentityOptions() {
+				this.$Net.request({
+					url: this.$API.campusIdentityOptions(), method: 'get', dataType: 'json',
+					success: (res) => {
+						if (res.data.code !== 1) return
+						this.campusOptions = res.data.data.campuses || []
+						this.gradeOptions = res.data.data.grades || []
+					}
+				})
+			},
 					getset() {
 					  var that = this;
 					      uni.request({
@@ -202,6 +241,7 @@
 					url: that.$API.getUserInfo(),
 					data:{
 						"key":that.uid,
+						"uid":that.uid,
 						"token":token
 						
 					},
@@ -216,10 +256,14 @@
 							that.screenName = res.data.data.screenName;
 							that.mail = res.data.data.mail;
 							that.url = res.data.data.url;
-							that.group = res.data.data.groupKey;
+							that.group = res.data.data.groupKey || res.data.data.group;
 							that.customize = res.data.data.customize;
 							that.assets =  res.data.data.assets;
 							that.experience=  res.data.data.experience;
+							that.campusId = Number(res.data.data.campusId || 0);
+							that.gradeId = Number(res.data.data.gradeId || 0);
+							that.campusName = res.data.data.campus || '';
+							that.gradeName = res.data.data.grade || '';
 							var list = that.groupList;
 							for(var i in list){
 								if(list[i].group == that.group){
@@ -267,6 +311,9 @@
 					group:that.group,
 					experience:that.experience
 				}
+				// Users created before campus identity was introduced may legitimately have no value yet.
+				if (that.campusId > 0) data.campusId = that.campusId
+				if (that.gradeId > 0) data.gradeId = that.gradeId
 				uni.showLoading({
 					title: "加载中"
 				});

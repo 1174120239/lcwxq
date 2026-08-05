@@ -1,5 +1,5 @@
 <template>
-	<view class="user" :class="AppStyle">
+	<view class="user campus-subpage campus-user-list-page" :class="AppStyle">
 		<view class="header" :style="[{height:CustomBar + 'px'}]">
 			<view class="cu-bar bg-white" :style="{'height': CustomBar + 'px','padding-top':StatusBar + 'px'}">
 				<view class="action" @tap="back">
@@ -110,7 +110,7 @@
 			that.page=1;
 			// #ifdef APP-PLUS
 			
-			plus.navigator.setStatusBarStyle("dark")
+			plus.navigator.setStatusBarStyle(that.AppStyle === 'campus-night' ? "light" : "dark")
 			// #endif
 			
 		},
@@ -244,4 +244,10 @@
 </script>
 
 <style>
+.campus-user-list-page { min-height: 100vh; background: #f4f7f6; }
+.campus-user-list-page .userList { margin-left: 16rpx; margin-right: 16rpx; overflow: hidden; }
+.campus-user-list-page.campus-night .userList,
+.campus-user-list-page.campus-night .userList > .cu-item,
+.campus-user-list-page.campus-night .loading-main { background: #202527 !important; border-color: #333b3c !important; }
+.campus-user-list-page.campus-night .goUserIndex view { background: #28775f !important; color: #f2f6f4 !important; }
 </style>

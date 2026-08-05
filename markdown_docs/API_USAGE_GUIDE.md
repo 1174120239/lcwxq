@@ -1,8 +1,8 @@
 # LCXQY API 调用手册
 
-更新时间：2026-08-04
+更新时间：2026-08-05
 
-本手册面向前端、管理端、自动化脚本和集成开发，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **136 个唯一 API 路径**，并额外记录支付回调和内部兼容路径，区分新后端、公网切流、混合委托和旧端能力。
+本手册面向前端、管理端、自动化脚本和集成开发，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **140 个唯一 API 路径**，并额外记录支付回调和内部兼容路径，区分新后端、公网切流、混合委托和旧端能力。
 
 这不是 OpenAPI 自动导出文件。历史接口参数并不完全统一，因此以当前前端和新后端兼容行为为准；对未重建旧接口，本文只记录已确认的参数，不伪造未知请求体。
 
@@ -138,16 +138,19 @@ const requestId = API.createRequestId('shop');
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
 | `SFreeUsers/regConfig` | GET/POST / 无 | 无 | 公网新 | `data` 含 `isEmail/isInvite/isPhone`。先读配置再显示注册表单。 |
-| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode` | 公网新 | 服务端决定角色和初始数值；邀请码返利进入 assets；成功后不自动登录。 |
+| `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 代码新/公网旧 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
+| `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 代码新/公网旧 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
+| `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 代码新/公网旧 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
+| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；邀请码返利进入 assets；成功后不自动登录。 |
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；成功后撤销关联会话。 |
-| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
+| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。简介最多 255 字并保留换行，显式传空字符串可清空；不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 旧端 | 成功返回用户和原 token；失效为 `code=0`。 |
-| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | `uid` 优先；返回脱敏资料。 |
-| `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 返回内容、评论、粉丝、关注计数；旧字段为 `contentsNum/commentsNum/fanNum/followNum`，新端同时返回简写字段。 |
+| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | `uid` 优先；新端资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
+| `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 新端的评论计数仅统计已发布动态评论（space type=3），不再统计文章评论；旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | 旧端参数待抓包确认 | 旧端 | 邮箱注册验证码发送；新后端只兼容消费验证码。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
 | `SFreeUsers/SendCode` | GET/POST / 登录态/策略 | 旧端参数待抓包确认 | 旧端 | 历史通用验证码发送。 |
@@ -162,7 +165,8 @@ const requestId = API.createRequestId('shop');
 form_post("SFreeUsers/userRegister", {
     "params": json.dumps({
         "name": "new_user", "password": "密码", "mail": "user@example.com",
-        "code": "邮箱验证码", "inviteCode": "可选邀请码"
+        "code": "邮箱验证码", "inviteCode": "可选邀请码",
+        "campusId": 2, "gradeId": 4
     }, ensure_ascii=False)
 })
 ```
@@ -180,7 +184,7 @@ form_post("SFreeUsers/userRegister", {
 | `SFreeUsers/followList` | GET/POST / 无 | `uid,page,limit` | 旧端 | 关注列表含脱敏 `userJson`。 |
 | `SFreeUsers/fanList` | GET/POST / 无 | `touid,page,limit` | 旧端 | 保留历史参数名 `touid`。 |
 | `SFreeUsers/userList` | GET/POST / 可选 staff | `searchParams,searchKey,order,page,limit,token` | 旧端 | 匿名结果脱敏；`order` 白名单，limit 最大 50。 |
-| `SFreeUsers/manageUserEdit` | GET/POST / staff | `token,params.uid或name` | 代码新/公网旧 | 白名单更新；改角色、密码或敏感标识会撤销所有会话。 |
+| `SFreeUsers/manageUserEdit` | GET/POST / staff | `token,params.uid或name` | 代码新/公网旧 | 白名单更新，含 `campusId/gradeId`；只能新分配启用选项，但用户已引用的停用历史选项可原样保留；改角色、密码或敏感标识会撤销所有会话。 |
 | `SFreeUsers/userDelete` | GET/POST / administrator | `token,key` | 代码新/公网旧 | 删除账号/绑定/session，保留内容、评论和支付审计数据。 |
 | `SFreeUsers/banUser` | GET/POST / staff | `uid,time,type,text` | 代码新/公网旧 | 写 violation、延长禁言并撤销 session；禁止越权封禁。 |
 | `SFreeUsers/unblockUser` | GET/POST / administrator | `uid` | 代码新/公网旧 | 解除当前封禁，保留历史。 |
@@ -276,19 +280,20 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds` | 公网新 | type 仅 0..5；type=0 的动态正文或图片至少提供一种；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
+| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds` | 公网新 | type 仅 0..5；type=0 无图片时正文去除首尾空白后至少 4 字，有图片时正文可为空或不足 4 字；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
 | `SFreeSpace/editSpace` | GET/POST / 作者或 staff | `id,text` 和可选字段，含 `topicIds` | 公网新 | 类型不可变；staff 编辑保留作者，不重复发经验；传 `topicIds=0` 表示清空该动态的话题。 |
 | `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象新增 `topics` 数组；成功读取会增加浏览量。 |
-| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；`searchParams={"topicId":mid}` 可按话题筛选。 |
+| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。 |
 | `SFreeSpace/followSpace` | GET/POST / token | `page,limit` | 公网新 | 只读已关注用户的公开、非回复动态。前端别名见下一行。 |
 | `SFreeSpace/myFollowSpace` | GET/POST / token | `page,limit` | 公网新 | `followSpace` 的前端别名；仅当前页 count。 |
 | `SFreeSpace/spaceDelete` | GET/POST / 作者或 staff | `id` | 公网新 | 只删主行，不级联历史回复、转发、spaceLike，不扣经验。 |
 | `SFreeSpace/spaceLikes` | GET/POST / token | `id` | 公网新 | uid+space id 持久去重；没有取消点赞接口。 |
 | `SFreeSpace/spaceReview` | GET/POST / staff | `id,type` | 公网新 | `type=1` 通过，`0` 拒绝并删主行，写系统通知。 |
 | `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发。 |
-| `SFreeSpace/topicList` | GET/POST / 可选 token | `token,searchKey` | 公网新 | 返回 `data.official` 与 `data.followed`；官方话题来自后台 `tag` 或推荐话题，关注列表只在登录后返回。 |
+| `SFreeSpace/topicList` | GET/POST / 可选 token | `token,searchKey` | 公网新 | 按名称/描述关键词模糊搜索，返回 `data.all/hot/official/followed`；每项含动态数、关注数和当前用户关注状态。关注列表只在登录后返回。 |
 | `SFreeSpace/topicCreate` | GET/POST / token | `token,name` | 公网新 | 用户自建话题；名称自动去掉首尾 `#` 和空白，只允许中英文、数字、下划线、短横线，1-24 字；创建后自动关注。 |
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
+| `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
@@ -312,9 +317,11 @@ form_post("SFreeSpace/spaceList", {
     "token": token,
     "page": "1",
     "limit": "10",
-    "searchParams": json.dumps({"topicId": 12})
+    "searchParams": json.dumps({"topicIds": [12, 18]})
 })
 ```
+
+上例只返回同时包含话题 12 和 18 的动态；数组为空或未传话题条件时返回普通全量动态。
 
 ### 5.3 广告
 

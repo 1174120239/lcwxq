@@ -645,6 +645,7 @@
 			} else {
 				that.token = "";
 			}
+			that.getTopicCenter();
 			if (localStorage.getItem('chatList')) {
 				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
@@ -653,9 +654,6 @@
 			that.unreadNum();
 			if (that.squareid == 0 && (that.follow == 0 || that.follow == 1)) {
 				that.getSpaceList(false);
-			}
-			if (that.squareid == 2) {
-				this.getTopicCenter();
 			}
 			if (that.squareid == 0 && that.follow == 2) {
 				that.changeLoading = 0;
@@ -722,7 +720,7 @@
 			},
 			showAllTopics() {
 				this.showSquareMenu = false;
-				this.handleClick2();
+				uni.navigateTo({ url: '/pages/space/topics' });
 			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
@@ -1491,13 +1489,11 @@
 			},
 			selectTopic(topic) {
 				if (!topic || !topic.mid) return;
-				this.topicId = Number(topic.mid);
-				this.topicName = topic.name || "";
-				this.squareid = 0;
-				this.follow = 1;
-				this.page = 1;
 				this.showSquareMenu = false;
-				this.getSpaceList(false);
+				uni.navigateTo({
+					url: '/pages/space/topics?mid=' + encodeURIComponent(String(topic.mid))
+						+ '&name=' + encodeURIComponent(topic.name || '')
+				});
 			},
 			toggleTopicFollow(topic) {
 				if (!this.token) {

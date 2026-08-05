@@ -67,6 +67,30 @@ class SpaceServiceTest {
     }
 
     @Test
+    void multipleTopicFiltersUseAndExistsPredicates() {
+        Fixture fixture = new Fixture();
+        when(fixture.jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class)))
+                .thenReturn(0);
+        when(fixture.jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(Collections.<Map<String, Object>>emptyList());
+
+        fixture.service.page("{\"topicIds\":[7,9,11]}", 1, 15, "", "created", 0, "");
+
+        verify(fixture.jdbc).queryForObject(
+                contains("st.mid=?) AND EXISTS (SELECT 1 FROM starfree_space_topics st"),
+                eq(Integer.class), eq(7), eq(9), eq(11));
+    }
+
+    @Test
+    void moreThanThreeTopicFiltersAreRejected() {
+        Fixture fixture = new Fixture();
+        assertThatThrownBy(() -> fixture.service.page(
+                "{\"topicIds\":[1,2,3,4]}", 1, 15, "", "created", 0, ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("最多同时筛选3个话题");
+    }
+
+    @Test
     void nonStaffCannotEnableManagementReplyView() {
         Fixture fixture = new Fixture();
         fixture.login(7L, "contributor");
@@ -163,6 +187,24 @@ class SpaceServiceTest {
                 eq(0), eq(1), eq(0))).thenReturn(1);
 
         Map<String, String> request = addRequest("");
+        request.put("pic", "image.png");
+
+        assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+    }
+
+    @Test
+    void shortCaptionIsAcceptedWhenImageIsPresent() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
+                eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
+        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
+                eq(7L), anyLong(), anyLong(), eq("短文"), eq("image.png"), eq(0), eq(0),
+                eq(0), eq(1), eq(0))).thenReturn(1);
+
+        Map<String, String> request = addRequest("短文");
         request.put("pic", "image.png");
 
         assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
@@ -493,6 +535,56 @@ class SpaceServiceTest {
         verify(fixture.jdbc).queryForList(
                 contains("s.status = 1 AND s.onlyMe = 0 AND s.type <> 3"),
                 eq(7L), eq(0), eq(15));
+    }
+
+    @Test
+    void publicReplyHistoryIncludesVisibleOriginalSummary() {
+        Fixture fixture = new Fixture();
+        Map<String, Object> reply = space(21L, 7L, 1, 0, 3);
+        reply.put("toid", 11L);
+        Map<String, Object> original = space(11L, 8L, 1, 0, 0);
+        original.put("text", "original text");
+        original.put("user_uid", 8L);
+        original.put("user_name", "author");
+        when(fixture.jdbc.queryForObject(contains("uid=? AND type=3"), eq(Integer.class), eq(7L)))
+                .thenReturn(1);
+        when(fixture.jdbc.queryForList(contains("WHERE s.uid=? AND s.type=3"),
+                eq(7L), eq(0), eq(5))).thenReturn(Collections.singletonList(reply));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForList(contains("WHERE s.id=? LIMIT 1"), eq(11L)))
+                .thenReturn(Collections.singletonList(original));
+
+        SpaceService.SpacePage page = fixture.service.userReplies(7L, 1, 5, "");
+
+        assertThat(page.getTotal()).isOne();
+        assertThat(page.getData()).hasSize(1);
+        assertThat(page.getData().get(0)).containsEntry("originalState", "visible");
+        assertThat((Map<String, Object>) page.getData().get(0).get("original"))
+                .containsEntry("id", 11L)
+                .containsEntry("text", "original text");
+    }
+
+    @Test
+    void publicReplyHistoryMarksMissingOriginalAsDeleted() {
+        Fixture fixture = new Fixture();
+        Map<String, Object> reply = space(21L, 7L, 1, 0, 3);
+        reply.put("toid", 99L);
+        when(fixture.jdbc.queryForObject(contains("uid=? AND type=3 AND status=1 AND onlyMe=0"),
+                eq(Integer.class), eq(7L))).thenReturn(1);
+        when(fixture.jdbc.queryForList(contains("WHERE s.uid=? AND s.type=3"),
+                eq(7L), eq(0), eq(5))).thenReturn(Collections.singletonList(reply));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForList(contains("WHERE s.id=? LIMIT 1"), eq(99L)))
+                .thenReturn(Collections.emptyList());
+
+        SpaceService.SpacePage page = fixture.service.userReplies(7L, 1, 5, "");
+
+        assertThat(page.getData()).hasSize(1);
+        assertThat(page.getData().get(0))
+                .containsEntry("originalState", "deleted")
+                .containsEntry("original", null);
     }
 
     @Test

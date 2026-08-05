@@ -412,6 +412,13 @@ $adminpw = "123456";
                             </a>
                         </li>
                         <li class="side-nav-item right_10">
+                            <a href="<?php echo $ADMIN_PATH;?>/identityOptions.php" class="side-nav-link">
+                                <i class="dripicons-location"></i>
+                                <span>校区与年级</span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                        </li>
+                        <li class="side-nav-item right_10">
                             <a href="<?php echo $ADMIN_PATH;?>/setRedis.php" class="side-nav-link">
                                 <i class="dripicons-view-apps"></i>
                                 <span>Redis设置</span>

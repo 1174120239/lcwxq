@@ -76,7 +76,7 @@
 				<view class="all-box home-feed" :style="TabCur!=0?'margin-top:0;':''"><view v-if="findtop==1"><block v-for="(item,index) in topContents" :key="'discover-top'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view></view>
 				<view class="data-box discovery-card">
 					<view class="cu-bar bg-white"><view class="action data-box-title">话题推荐</view><view class="action more" @tap="toAlltag"><text>全部话题</text><text class="cuIcon-right"></text></view></view>
-					<view class="tags1"><view class="tags"><text class="tags-box" v-for="(item,index) in tagList" :key="index" @tap='toCategoryContents("#"+item.name+"#",item.mid)'>{{item.name}}</text></view></view>
+					<view class="tags1"><view class="tags"><text class="tags-box" v-for="(item,index) in tagList" :key="index" @tap="toSpaceTopic(item)">{{item.name}}</text></view></view>
 				</view>
 				<view class="data-box discovery-card">
 					<view class="cu-bar bg-white"><view class="action data-box-title"><text class="hot-dot"></text>上升热点</view><view class="action more" @tap='toTopContents("更多热帖","commentsNum")'><text>更多热帖</text><text class="cuIcon-right"></text></view></view>
@@ -145,7 +145,7 @@
 								style="width: 110rpx; height: 110rpx;">
 								<text
 									style="display: inline-block; border-radius: 20rpx;  width: 100rpx;height: 100rpx;">
-									<image src="../../static/page/square/photo.png" mode="widthFix">
+									<image src="../../static/page/square/photo.png" mode="widthFix"></image>
 								</text>
 								<view>发帖</view>
 							</view>
@@ -155,13 +155,12 @@
 								style="border-radius: 20rpx; width: 110rpx; height: 110rpx;">
 								<text
 									style="display: inline-block; border-radius: 20rpx;  width: 100rpx;height: 100rpx;">
-									<image src="../../static/page/square/shop.png" mode="widthFix">
+									<image src="../../static/page/square/shop.png" mode="widthFix"></image>
 
 								</text>
 								<view>商品</view>
 
 
-								</image>
 							</view>
 						</view>
 					</view>
@@ -359,7 +358,7 @@
 						<view class="tags">
 
 							<text class="tags-box" v-for="(item,index) in tagList"
-								@tap='toCategoryContents("#"+item.name+"#",item.mid)'>
+								@tap="toSpaceTopic(item)">
 								{{item.name}}
 							</text>
 
@@ -1399,10 +1398,13 @@
 				})
 			},
 			toAlltag() {
-				var that = this;
-
+				uni.navigateTo({ url: '/pages/space/topics' });
+			},
+			toSpaceTopic(topic) {
+				if (!topic || !topic.mid) return;
 				uni.navigateTo({
-					url: '/pages/contents/alltag'
+					url: '/pages/space/topics?mid=' + encodeURIComponent(String(topic.mid))
+						+ '&name=' + encodeURIComponent(topic.name || '')
 				});
 			},
 			swiperclick(index) {
@@ -3265,6 +3267,20 @@
 	.campus-home.campus-night .discovery-card,
 	.campus-home.campus-night ::v-deep .home-feed .cu-card.article.no-card > .cu-item {
 		box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.18) !important;
+	}
+
+	.campus-home.campus-night .home-notice {
+		border-color: rgba(222, 232, 228, 0.14) !important;
+		background: #202729 !important;
+	}
+
+	.campus-home.campus-night .home-notice .notice-badge {
+		background: #a9473b !important;
+		color: #ffffff !important;
+	}
+
+	.campus-home.campus-night .home-notice marquee {
+		color: #edf2f0 !important;
 	}
 
 	.campus-home.campus-night .discovery-card .cu-bar,

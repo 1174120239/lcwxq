@@ -47,7 +47,10 @@
 			</view>
 			<view class="cu-form-group align-start">
 				<view class="title">个人简介</view>
-				<textarea v-model="introduce"  placeholder="输入个人简介"></textarea>
+				<view class="introduce-editor">
+					<textarea v-model="introduce" maxlength="255" placeholder="输入个人简介，支持换行"></textarea>
+					<text class="introduce-count">{{introduce.length}}/255</text>
+				</view>
 			</view>
 			<view class="cu-form-group margin-top">
 				<view class="title">密码</view>
@@ -152,6 +155,12 @@
 					delta: 1
 				});
 			},
+			profileEditParams(data) {
+				var params = this.$API.removeObjectEmptyKey(data);
+				// Empty introduction is meaningful: it clears the previously saved profile text.
+				params.introduce = this.introduce || "";
+				return params;
+			},
 			showModal(e) {
 				this.modalName = e.currentTarget.dataset.target
 			},
@@ -206,7 +215,7 @@
 					
 					url: that.$API.userEdit(),
 					data:{
-						"params":JSON.stringify(that.$API.removeObjectEmptyKey(data)),
+						"params":JSON.stringify(that.profileEditParams(data)),
 						"token":that.token
 					},
 					header:{
@@ -298,7 +307,7 @@
 					
 					url: that.$API.userEdit(),
 					data:{
-						"params":JSON.stringify(that.$API.removeObjectEmptyKey(data)),
+						"params":JSON.stringify(that.profileEditParams(data)),
 						"token":that.token
 					},
 					header:{
@@ -518,4 +527,7 @@
 </script>
 
 <style>
+.introduce-editor { flex: 1; min-width: 0; }
+.introduce-editor textarea { width: 100%; min-height: 180rpx; line-height: 1.55; white-space: pre-wrap; }
+.introduce-count { display: block; padding: 4rpx 0 12rpx; color: #87918e; font-size: 22rpx; text-align: right; }
 </style>

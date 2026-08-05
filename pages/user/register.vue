@@ -29,6 +29,20 @@
 					<input name="input" v-model="name" placeholder="请输入QQ账号" confirm-type="next"></input>
 					<text @tap="showModal" data-target="Modal" class="auth-help cuIcon-question"></text>
 				</view>
+				<picker class="auth-picker" :range="campusOptions" range-key="name" @change="campusChange">
+					<view class="cu-form-group auth-field">
+						<text class="auth-field-icon cuIcon-location"></text>
+						<text :class="campusId ? '' : 'text-grey'">{{campusName || '请选择校区（必选）'}}</text>
+						<text class="cuIcon-right text-grey"></text>
+					</view>
+				</picker>
+				<picker class="auth-picker" :range="gradeOptions" range-key="name" @change="gradeChange">
+					<view class="cu-form-group auth-field">
+						<text class="auth-field-icon cuIcon-calendar"></text>
+						<text :class="gradeId ? '' : 'text-grey'">{{gradeName || '请选择年级（必选）'}}</text>
+						<text class="cuIcon-right text-grey"></text>
+					</view>
+				</picker>
 				<view class="cu-form-group auth-field" v-if="isEmail>0">
 					<text class="auth-field-icon cuIcon-safe"></text>
 					<input name="input" v-model="code" placeholder="请输入验证码" confirm-type="next"></input>
@@ -121,6 +135,12 @@
 				isEmail:1,
 				isInvite:0,
 				inviteCode:"",
+				campusOptions: [],
+				gradeOptions: [],
+				campusId: 0,
+				gradeId: 0,
+				campusName: '',
+				gradeName: '',
 				
 				modalName: null,
 				campusThemeMode: 'auto',
@@ -146,6 +166,7 @@
 			plus.navigator.setStatusBarStyle(that.campusNight ? "light" : "dark")
 			// #endif
 			that.regConfig();
+			that.loadIdentityOptions();
 		},
 		onHide() {
 			this.stopCampusThemeClock();
@@ -177,6 +198,29 @@
 		},
 			
 		methods: {
+			campusChange(e) {
+				const option = this.campusOptions[Number(e.detail.value)]
+				this.campusId = option ? option.id : 0
+				this.campusName = option ? option.name : ''
+			},
+			gradeChange(e) {
+				const option = this.gradeOptions[Number(e.detail.value)]
+				this.gradeId = option ? option.id : 0
+				this.gradeName = option ? option.name : ''
+			},
+			loadIdentityOptions() {
+				this.$Net.request({
+					url: this.$API.campusIdentityOptions(),
+					method: 'get',
+					dataType: 'json',
+					success: (res) => {
+						if (res.data.code !== 1) return
+						this.campusOptions = res.data.data.campuses || []
+						this.gradeOptions = res.data.data.grades || []
+					},
+					fail: () => uni.showToast({ title: '校区和年级加载失败', icon: 'none' })
+				})
+			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
 				applyCampusThemeShell(this.campusThemeMode, this.campusThemeClock)
@@ -342,6 +386,10 @@
 						});
 						return false;
 					}
+				if (!that.campusId || !that.gradeId) {
+					uni.showToast({ title: '请选择校区和年级', icon: 'none' });
+					return false;
+				}
 				if(that.isEmail==1){
 					if(that.code == ""){
 						uni.showToast({
@@ -388,7 +436,9 @@
 			      'code': that.code,
 			      'password': that.password,
 			      'mail': mail,
-			      'inviteCode': that.inviteCode
+			      'inviteCode': that.inviteCode,
+			      'campusId': that.campusId,
+			      'gradeId': that.gradeId
 			    }
 			    // 发起请求...
 				that.$Net.request({

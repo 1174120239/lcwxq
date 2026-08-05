@@ -21,4 +21,11 @@ class SpaceControllerCompatibilityTest {
         RequestMapping mapping = SpaceController.class.getAnnotation(RequestMapping.class);
         assertThat(mapping.value()).containsExactly("/SFreeSpace");
     }
+
+    @Test
+    void dynamicReplyHistoryHasDedicatedRoute() throws Exception {
+        Method method = SpaceController.class.getMethod("userReplies", java.util.Map.class);
+        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+        assertThat(mapping.value()).containsExactly("/userReplies");
+    }
 }

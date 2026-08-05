@@ -44,7 +44,7 @@
 						</view>
 						<view class="grid flex-sub padding-lr col-3 grid-square" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
-							 v-for="(data,i) in item.picList" :key="i" @tap="previewImage(item.picList,data)">
+							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
 						</view>
 					</block>

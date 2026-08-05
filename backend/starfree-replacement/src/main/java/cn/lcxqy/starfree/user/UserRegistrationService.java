@@ -90,6 +90,8 @@ public class UserRegistrationService {
                 "name", request.name,
                 "mail", request.mail,
                 "phone", request.phone,
+                "campusId", request.campusId,
+                "gradeId", request.gradeId,
                 "remoteAddress", request.remoteAddress,
                 "inviteCode", request.inviteCode);
         EconomyOperationJournal.BeginResult begin = journal.begin(connection, operationKey,
@@ -107,6 +109,12 @@ public class UserRegistrationService {
         boolean inviterChanged = false;
         boolean projectionsComplete = false;
         try {
+            if (!repository.enabledIdentityOption(connection, request.campusId, "campus")) {
+                throw new IllegalArgumentException("请选择当前启用的校区");
+            }
+            if (!repository.enabledIdentityOption(connection, request.gradeId, "grade")) {
+                throw new IllegalArgumentException("请选择当前启用的年级");
+            }
             if (repository.nameExists(connection, request.name)) {
                 throw new IllegalArgumentException("\u8be5\u7528\u6237\u540d\u5df2\u6ce8\u518c");
             }
@@ -144,7 +152,8 @@ public class UserRegistrationService {
             UserRegistrationRepository.RegistrationUser user =
                     new UserRegistrationRepository.RegistrationUser(
                             request.name, passwordHash, request.mail, request.phone,
-                            request.remoteAddress, inviterUid, now);
+                            request.remoteAddress, inviterUid, request.campusId,
+                            request.gradeId, now);
             userId = repository.insertUser(connection, user);
 
             int rebate = inviterUid > 0 ? config.getRebateAmount() : 0;
@@ -241,6 +250,8 @@ public class UserRegistrationService {
         String phone = RequestValues.objectText(body, "phone");
         String code = RequestValues.objectText(body, "code");
         String inviteCode = RequestValues.objectText(body, "inviteCode");
+        long campusId = RequestValues.objectInteger(body, "campusId", 0);
+        long gradeId = RequestValues.objectInteger(body, "gradeId", 0);
         String address = safeAddress(remoteAddress);
 
         if (name.isEmpty() || name.length() > 32 || hasControlCharacter(name)) {
@@ -258,8 +269,14 @@ public class UserRegistrationService {
         if (inviteCode.length() > 255) {
             throw new IllegalArgumentException("\u9519\u8bef\u7684\u9080\u8bf7\u7801");
         }
+        if (campusId <= 0) {
+            throw new IllegalArgumentException("请选择校区");
+        }
+        if (gradeId <= 0) {
+            throw new IllegalArgumentException("请选择年级");
+        }
         RegistrationRequest request = new RegistrationRequest(
-                name, password, mail, phone, code, inviteCode, address);
+                name, password, mail, phone, code, inviteCode, address, campusId, gradeId);
         validatePolicy(request, config);
         return request;
     }
@@ -380,9 +397,12 @@ public class UserRegistrationService {
         private final String code;
         private final String inviteCode;
         private final String remoteAddress;
+        private final long campusId;
+        private final long gradeId;
 
         private RegistrationRequest(String name, String password, String mail, String phone,
-                                    String code, String inviteCode, String remoteAddress) {
+                                    String code, String inviteCode, String remoteAddress,
+                                    long campusId, long gradeId) {
             this.name = name;
             this.password = password;
             this.mail = mail;
@@ -390,6 +410,8 @@ public class UserRegistrationService {
             this.code = code;
             this.inviteCode = inviteCode;
             this.remoteAddress = remoteAddress;
+            this.campusId = campusId;
+            this.gradeId = gradeId;
         }
     }
 }

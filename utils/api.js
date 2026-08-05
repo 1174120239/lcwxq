@@ -217,6 +217,15 @@ module.exports = {
 	regConfig:function(){
 		return API_URL + 'SFreeUsers/regConfig';
 	},
+	campusIdentityOptions:function(){
+		return API_URL + 'SFreeUsers/campusIdentityOptions';
+	},
+	campusIdentityManage:function(){
+		return API_URL + 'SFreeUsers/campusIdentityManage';
+	},
+	campusIdentitySave:function(){
+		return API_URL + 'SFreeUsers/campusIdentitySave';
+	},
 	signOut:function(){
 		return API_URL + 'SFreeUsers/signOut';
 	},
@@ -582,6 +591,9 @@ module.exports = {
 	},
 	topicFollow:function(){
 		return API_URL + 'SFreeSpace/topicFollow';
+	},
+	spaceUserReplies:function(){
+		return API_URL + 'SFreeSpace/userReplies';
 	},
 	
 	SMuser:function(){

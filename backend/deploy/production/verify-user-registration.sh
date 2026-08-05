@@ -245,7 +245,14 @@ if [[ "$IS_EMAIL" -gt 0 ]]; then
     CODE_CREATED=true
 fi
 
-export TEST_NAME TEST_MAIL TEST_PASSWORD TEST_CODE INVITE_CODE IS_INVITE
+CAMPUS_ID="$(sql "SELECT id FROM starfree_identity_options WHERE type='campus' AND enabled=1 ORDER BY sort_order DESC,id DESC LIMIT 1")"
+GRADE_ID="$(sql "SELECT id FROM starfree_identity_options WHERE type='grade' AND enabled=1 ORDER BY sort_order DESC,id DESC LIMIT 1")"
+[[ "$CAMPUS_ID" =~ ^[1-9][0-9]*$ && "$GRADE_ID" =~ ^[1-9][0-9]*$ ]] || {
+    echo "No enabled campus or grade option is available" >&2
+    exit 22
+}
+
+export TEST_NAME TEST_MAIL TEST_PASSWORD TEST_CODE INVITE_CODE IS_INVITE CAMPUS_ID GRADE_ID
 register_params="$($PYTHON_BIN -c '
 import json,os
 data = {
@@ -257,6 +264,8 @@ data = {
     "points": 999999,
     "experience": 999999,
     "vip": 999999,
+    "campusId": int(os.environ["CAMPUS_ID"]),
+    "gradeId": int(os.environ["GRADE_ID"]),
 }
 if os.environ["IS_INVITE"] == "1":
     data["inviteCode"] = os.environ["INVITE_CODE"]
@@ -307,10 +316,10 @@ if [[ "$IS_INVITE" == 1 ]]; then
     fi
 fi
 
-IFS='|' read -r assets points experience vip invitation_user hash_prefix user_count \
+IFS='|' read -r assets points experience vip campus_id grade_id invitation_user hash_prefix user_count \
     inviter_assets invitation_status rebate_logs committed_ops review_ops <<< \
     "$(sql "SELECT CONCAT_WS('|',u.assets,u.points,u.experience,u.vip,
-        u.invitationUser,LEFT(u.password,4),
+        u.campus_option_id,u.grade_option_id,u.invitationUser,LEFT(u.password,4),
         (SELECT COUNT(*) FROM starfree_users WHERE name='$TEST_NAME'),
         (SELECT assets FROM starfree_users WHERE uid=$INVITER_UID),
         COALESCE((SELECT status FROM starfree_invitation WHERE code='$INVITE_CODE' LIMIT 1),0),
@@ -326,6 +335,10 @@ IFS='|' read -r assets points experience vip invitation_user hash_prefix user_co
 [[ "$assets|$points|$experience|$vip" == '0|0|0|0' ]] || {
     echo "Client-controlled account values reached the user row" >&2
     exit 16
+}
+[[ "$campus_id" == "$CAMPUS_ID" && "$grade_id" == "$GRADE_ID" ]] || {
+    echo "Campus or grade identity was not stored" >&2
+    exit 23
 }
 [[ "$invitation_user" == "$expected_inviter" && "$hash_prefix" == '$P$B' ]] || {
     echo "Invitation relationship or PHPass hash is incorrect" >&2

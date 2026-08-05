@@ -76,6 +76,9 @@
 							UID:{{item.uid}}&nbsp;&nbsp;{{assetsname}}:<text class="text-blue">{{item.assets}}</text>
 						</view>
 					</view>
+					<view class="text-gray text-xs text-cut" v-if="item.campus || item.grade">
+						{{item.campus || '未设置校区'}} · {{item.grade || '未设置年级'}}
+					</view>
 				</view>
 				<view class="action user-list-btn">
 					<block v-if="type==''">

@@ -54,7 +54,16 @@ public class LegacyTokenService {
      */
     public Map<String, Object> userById(long uid) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT uid,name,mail,url,screenName,created,activated,logged,`group`,introduce,assets,address,pay,customize,vip,experience,avatar,clientId,bantime,posttime,ip,local,phone,userBg,invitationCode,invitationUser,points FROM starfree_users WHERE uid = ? LIMIT 1",
+                "SELECT u.uid,u.name,u.mail,u.url,u.screenName,u.created,u.activated,u.logged,"
+                        + "u.`group`,u.introduce,u.assets,u.address,u.pay,u.customize,u.vip,"
+                        + "u.experience,u.avatar,u.clientId,u.bantime,u.posttime,u.ip,u.local,"
+                        + "u.phone,u.userBg,u.invitationCode,u.invitationUser,u.points,"
+                        + "u.campus_option_id AS campusId,campus.name AS campus,"
+                        + "u.grade_option_id AS gradeId,grade.name AS grade "
+                        + "FROM starfree_users u "
+                        + "LEFT JOIN starfree_identity_options campus ON campus.id=u.campus_option_id "
+                        + "LEFT JOIN starfree_identity_options grade ON grade.id=u.grade_option_id "
+                        + "WHERE u.uid = ? LIMIT 1",
                 uid);
         if (rows.isEmpty()) {
             return null;

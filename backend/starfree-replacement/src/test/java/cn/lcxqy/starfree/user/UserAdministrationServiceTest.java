@@ -121,6 +121,24 @@ class UserAdministrationServiceTest {
     }
 
     @Test
+    void historicalDisabledIdentityCanRemainAssignedDuringAnotherProfileEdit() {
+        arrangeActor("admin-token", 1, "root", "administrator");
+        jdbc.rows = Collections.singletonList(row(
+                "uid", 7, "name", "alice", "mail", "old@example.com",
+                "phone", "13800138000", "authCode", "", "group", "contributor",
+                "campus_option_id", 12));
+        jdbc.count = 1;
+        jdbc.updateResult = 1;
+
+        int changed = service.manageEdit(
+                "admin-token", row("uid", 7, "screenName", "Alice", "campusId", 12));
+
+        assertThat(changed).isEqualTo(1);
+        assertThat(jdbc.lastObjectQuery).contains("o.enabled=1 OR EXISTS");
+        assertThat(jdbc.lastObjectArguments).containsExactly(12L, "campus", 7L);
+    }
+
+    @Test
     void editorCannotBanAnotherEditorOrAnAdministrator() {
         arrangeActor("editor-token", 2, "moderator", "editor");
         jdbc.rows = Collections.singletonList(row(
@@ -183,6 +201,8 @@ class UserAdministrationServiceTest {
         private int count;
         private int updateResult;
         private int updateCalls;
+        private String lastObjectQuery;
+        private Object[] lastObjectArguments;
 
         @Override
         public List<Map<String, Object>> queryForList(String sql, Object... args) {
@@ -192,6 +212,8 @@ class UserAdministrationServiceTest {
         @Override
         @SuppressWarnings("unchecked")
         public <T> T queryForObject(String sql, Class<T> requiredType, Object... args) {
+            lastObjectQuery = sql;
+            lastObjectArguments = args;
             return (T) Integer.valueOf(count);
         }
 

@@ -24,6 +24,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -326,11 +329,8 @@ public class SpaceService {
         appendIntegerFilter(where, args, filters, "toid", "s.toid");
         appendIntegerFilter(where, args, filters, "status", "s.status");
         appendIntegerFilter(where, args, filters, "onlyMe", "s.onlyMe");
-        if (filters.containsKey("topicId")) {
-            int topicId = RequestValues.objectInteger(filters, "topicId", 0);
-            if (topicId <= 0) {
-                throw new IllegalArgumentException("话题参数不正确");
-            }
+        List<Integer> topicFilters = topicFilterIds(filters);
+        for (Integer topicId : topicFilters) {
             where.append(" AND EXISTS (SELECT 1 FROM starfree_space_topics st "
                     + "WHERE st.space_id=s.id AND st.mid=?)");
             args.add(topicId);
@@ -535,6 +535,53 @@ public class SpaceService {
         return topics.follow(viewer.uid,
                 RequestValues.integer(request, "mid", 0),
                 RequestValues.integer(request, "type", -1));
+    }
+
+    /** Lists one user's dynamic replies with an explicit parent visibility state. */
+    public SpacePage userReplies(long uid, int page, int limit, String token) {
+        if (uid <= 0) {
+            Viewer current = requireViewer(token);
+            uid = current.uid;
+        }
+        Viewer viewer = viewer(token, false);
+        int safePage = Math.max(1, page);
+        int safeLimit = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
+        boolean canSeePrivateReplies = viewer.staff
+                || (viewer.uid != null && viewer.uid.longValue() == uid);
+        String visibleReply = canSeePrivateReplies ? "" : " AND onlyMe=0";
+        Integer total = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM starfree_space WHERE uid=? AND type=3 AND status=1"
+                        + visibleReply,
+                Integer.class, uid);
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                SPACE_SELECT + " WHERE s.uid=? AND s.type=3 AND s.status=1 "
+                        + (canSeePrivateReplies ? "" : "AND s.onlyMe=0 ")
+                        + "ORDER BY s.created DESC,s.id DESC LIMIT ?,?",
+                uid, (safePage - 1) * safeLimit, safeLimit);
+        List<Map<String, Object>> data = new ArrayList<>();
+        SpaceConfig config = config();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> reply = coreSpace(row);
+            reply.put("userJson", userJson(row, config));
+            long parentId = number(get(row, "toid"));
+            List<Map<String, Object>> parents = jdbc.queryForList(
+                    SPACE_SELECT + " WHERE s.id=? LIMIT 1", parentId);
+            if (parents.isEmpty()) {
+                reply.put("originalState", "deleted");
+                reply.put("original", null);
+            } else if (!canView(parents.get(0), viewer)) {
+                reply.put("originalState", "forbidden");
+                reply.put("original", null);
+            } else {
+                Map<String, Object> original = coreSpace(parents.get(0));
+                original.put("userJson", userJson(parents.get(0), config));
+                original.put("text", preview(value(get(parents.get(0), "text")), 180));
+                reply.put("originalState", "visible");
+                reply.put("original", original);
+            }
+            data.add(reply);
+        }
+        return new SpacePage(data, total == null ? 0 : total);
     }
 
     private void removeTopicsBestEffort(long spaceId) {
@@ -821,13 +868,46 @@ public class SpaceService {
             if (mediaPresent) return "";
             throw new IllegalArgumentException("\u52a8\u6001\u5185\u5bb9\u4e0d\u80fd\u4e3a\u7a7a");
         }
-        if (text.length() < 4) {
-            throw new IllegalArgumentException("\u52a8\u6001\u5185\u5bb9\u957f\u5ea6\u4e0d\u80fd\u5c0f\u4e8e4");
+        if (!mediaPresent && text.trim().length() < 4) {
+            throw new IllegalArgumentException("纯文字动态至少需要4个字");
         }
         if (text.length() > MAX_TEXT_LENGTH) {
             throw new IllegalArgumentException("\u6700\u5927\u52a8\u6001\u5185\u5bb9\u4e3a1500\u5b57\u7b26");
         }
         return text;
+    }
+
+    private List<Integer> topicFilterIds(Map<String, Object> filters) {
+        Set<Integer> result = new LinkedHashSet<>();
+        if (filters.containsKey("topicId")) {
+            addTopicFilter(result, filters.get("topicId"));
+        }
+        Object raw = filters.get("topicIds");
+        if (raw instanceof Collection) {
+            for (Object value : (Collection<?>) raw) {
+                addTopicFilter(result, value);
+            }
+        } else if (raw != null) {
+            for (String value : String.valueOf(raw).split("[,\\s]+")) {
+                if (!value.trim().isEmpty()) {
+                    addTopicFilter(result, value);
+                }
+            }
+        }
+        if (result.size() > SpaceTopicService.MAX_TOPICS_PER_SPACE) {
+            throw new IllegalArgumentException("最多同时筛选3个话题");
+        }
+        return new ArrayList<>(result);
+    }
+
+    private void addTopicFilter(Set<Integer> result, Object value) {
+        try {
+            int id = Integer.parseInt(String.valueOf(value));
+            if (id <= 0) throw new NumberFormatException();
+            result.add(id);
+        } catch (NumberFormatException error) {
+            throw new IllegalArgumentException("话题参数不正确");
+        }
     }
 
     private void validateForbidden(long uid, SpaceConfig config, String text) {

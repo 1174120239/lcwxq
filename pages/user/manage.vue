@@ -219,6 +219,14 @@
 				</view>
 				<view class="index-sort-box">
 					<waves itemClass="butclass">
+						<view class="index-sort-main" @tap="toLink('/pages/manage/campusIdentity')">
+							<view class="index-sort-i"><text class="cuIcon-location"></text></view>
+							<view class="index-sort-text">校区年级</view>
+						</view>
+					</waves>
+				</view>
+				<view class="index-sort-box">
+					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/manage/giftVIP')">
 							<view class="index-sort-i">
 								<text class="cuIcon-vip"></text>

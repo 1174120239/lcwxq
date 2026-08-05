@@ -233,6 +233,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 001 | 001_economy_operation_journal.sql | 经济操作幂等日志 |
 | 002 | 002_space_views.sql | 动态浏览量字段 |
 | 003 | 003_space_topics.sql | 动态话题、关注和关系表 |
+| 004 | 004_campus_identity.sql | 校区/入学年份选项和用户引用列 |
 
 规则：
 
@@ -241,6 +242,11 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 - 先迁移数据库，再部署读取新结构的 JAR。
 - 已执行的迁移先查 information_schema，不要凭感觉重复运行。
 - MyISAM 主表不支持真正事务，跨表修改必须保留补偿和回滚方案。
+
+004 会新增 `starfree_identity_options`，并修改 `starfree_users`。执行前必须定向备份
+`starfree_users`，确认 001-003 已完成，再执行一次 004；执行后检查两个新增索引、四个种子选项
+以及用户表新增列。读取用户资料和处理注册的新 JAR 依赖这些结构，因此 **不能在未执行 004 时部署该 JAR**。
+停用选项不会清空已有用户引用，回滚 JAR 时也不要自动删除新表或新列。
 
 001 可使用：
 

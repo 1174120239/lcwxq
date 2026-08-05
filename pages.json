@@ -412,6 +412,10 @@
 			"path": "pages/manage/usersedit"
 		},
 		{
+			"path": "pages/manage/campusIdentity",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
 			"path": "pages/manage/withdraw",
 			"style": {
 				"enablePullDownRefresh": true
@@ -526,6 +530,13 @@
 			"path": "pages/space/info",
 			"style": {
 				"enablePullDownRefresh": true
+			}
+		},
+		{
+			"path": "pages/space/topics",
+			"style": {
+				"navigationStyle": "custom",
+				"enablePullDownRefresh": false
 			}
 		},
 		{

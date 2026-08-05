@@ -20,11 +20,11 @@
 			<view class="cu-item">
 				<view class="cu-list menu-avatar comment">
 					<view class="no-data" v-if="commentsList.length==0">
-						暂时没有评论
+						暂时没有动态评论
 					</view>
 					<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
 						<block  v-for="(item,index) in commentsList" :key="index" v-if="commentsList.length>0">
-							<commentItem :item="item"></commentItem>
+							<spaceReplyHistoryItem :item="item"></spaceReplyHistoryItem>
 						</block>
 					</view>
 					
@@ -67,23 +67,26 @@
 				
 				moreText:"加载更多",
 				page:1,
+				isLoad:0,
+				noMore:false,
 				
 				isLoading:0,
 				
 				owo:owo,
 				owoList:[],
 				allowDelete:0,
+				uid:0,
 				
 			}
 		},
 		onPullDownRefresh(){
-			var that = this;
-			
+			this.page = 1;
+			this.noMore = false;
+			this.moreText = "加载更多";
+			this.getCommentsList(false);
 		},
 		onReachBottom() {
-		    //触底后执行的方法，比如无限加载之类的
-			var that = this;
-			that.loadMore();
+			if(!this.noMore) this.loadMore();
 		},
 		onShow(){
 			var that = this;
@@ -91,7 +94,6 @@
 			
 			//plus.navigator.setStatusBarStyle("dark")
 			// #endif
-			that.page=1;
 		},
 		onLoad() {
 			var that = this;
@@ -106,7 +108,6 @@
 			}
 			that.owoList = owoList;
 			// #endif
-			that.contentConfig();
 			that.getCommentsList(false);
 		},
 		methods:{
@@ -117,10 +118,9 @@
 			},
 			loadMore(){
 				var that = this;
+				if(that.isLoad!=0 || that.noMore) return;
 				that.moreText="正在加载中...";
-				if(that.isLoad==0){
-					that.getCommentsList(true);
-				}
+				that.getCommentsList(true);
 			},
 
 			toInfo(cid,title){
@@ -154,27 +154,34 @@
 				var that = this;
 				var userInfo = null;
 				if(localStorage.getItem('userinfo')){
-					
 					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+					that.uid = userInfo.uid;
 				}else{
 					uni.showToast({
 						title: "请先登录哦",
 						icon: 'none'
 					})
+					that.isLoading=1;
+					uni.stopPullDownRefresh();
 					return false;
 				}
-				var data = {
-					"type":"comment",
-					"authorId":userInfo.uid
+				var token = localStorage.getItem('token') || userInfo.token || '';
+				if(!token){
+					uni.showToast({ title: "请先登录哦", icon: 'none' });
+					that.isLoading=1;
+					uni.stopPullDownRefresh();
+					return false;
 				}
 				var page = that.page;
 				if(isPage){
 					page++;
 				}
+				that.isLoad=1;
 				that.$Net.request({
-					url: that.$API.getCommentsList(),
+					url: that.$API.spaceUserReplies(),
 					data:{
-						"searchParams":JSON.stringify(that.$API.removeObjectEmptyKey(data)),
+						"uid":userInfo.uid,
+						"token":token,
 						"limit":5,
 						"page":page,
 					},
@@ -184,16 +191,14 @@
 					method: "get",
 					dataType: 'json',
 					success: function(res) {
+						uni.stopPullDownRefresh();
 						that.isLoad=0;
 						if(res.data.code==1){
 							var list = res.data.data;
 							if(list.length>0){
-								var commentsList = [];
-								for(var i in list){
-									var arr = list[i];
-									arr.style = "background-image:url("+list[i].avatar+");"
-									commentsList.push(arr);
-								}
+								that.noMore = list.length < 5;
+								that.moreText = that.noMore ? "没有更多评论了" : "加载更多";
+								var commentsList = list;
 								if(isPage){
 									that.page++;
 									that.commentsList = that.commentsList.concat(commentsList);
@@ -201,6 +206,8 @@
 									that.commentsList = commentsList;
 								}
 							}else{
+								that.noMore = true;
+								if(!isPage) that.commentsList = [];
 								that.moreText="没有更多评论了";
 							}
 							
@@ -211,6 +218,7 @@
 						}, 300)
 					},
 					fail: function(res) {
+						uni.stopPullDownRefresh();
 						that.isLoad=0;
 						that.moreText="加载更多";
 						var timer = setTimeout(function() {
