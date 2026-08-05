@@ -18,12 +18,13 @@
 ### 日常开发
 
 1. 默认只在本地工作区操作，不连接生产服务器。
-2. 先读取相关接口、数据表、部署和风险文档，再修改代码。
-3. 新功能从 `main` 创建 `codex/<feature-name>` 分支；不要直接推送 `main`。
+2. 先运行 `./workflow.cmd status`，再读取相关接口、数据表、部署和风险文档。
+3. 新功能从同步且干净的 `main` 运行 `./workflow.cmd start <feature-name>`，创建 `codex/<feature-name>` 分支；不要直接推送 `main`。
 4. 修改必须保持现有前端协议兼容，除非用户明确要求改变协议。
 5. 后端写操作必须检查身份、所有权、状态、重复提交、审计/积分副作用和缓存失效。
 6. 新增或修复共享行为时补充针对性测试；至少运行受影响模块测试。
-7. 不要把调试输出、生产配置、数据库快照、Cookie、token、密码或密钥写入仓库。
+7. 提交或推送前运行受影响范围的 `./workflow.cmd check <scope>`；准备合并前必须运行 `./workflow.cmd check all`。
+8. 不要把调试输出、生产配置、数据库快照、Cookie、token、密码或密钥写入仓库。
 
 ### 代码审查
 
@@ -34,10 +35,13 @@
 发布必须是独立会话，并且只发布用户指定的已提交 commit 和组件。优先使用：
 
 ```powershell
-.\deploy\publish-to-server.ps1 -Component replacement-backend -ConfirmProduction
+.\workflow.cmd deploy
+.\workflow.cmd deploy -ConfirmProduction
+.\workflow.cmd publish replacement-backend
+.\workflow.cmd publish replacement-backend -ConfirmProduction
 ```
 
-发布前备份，发布后健康检查；失败时回滚。默认不执行数据库迁移。迁移只有在用户明确要求且命令带 `-RunMigrations` 时才能执行。发布结果必须汇报 commit、组件、SHA-256、服务状态、HTTP 健康状态、备份路径和迁移是否执行。
+`deploy` 是日常 `replacement-backend` 的快捷入口；不带确认只做本地构建演练，带确认才连接生产。`publish` 保留给组件指定和维护场景。生产只能发布当前 `origin/main` 的精确提交，不能从功能分支上线。发布前备份，发布后健康检查；失败时回滚。通用发布命令永不执行数据库迁移，迁移必须是用户单独授权的维护任务。发布结果必须汇报 commit、组件、SHA-256、服务状态、HTTP 健康状态、备份路径和迁移是否执行。
 
 生产操作包括以下高风险动作，不能由普通开发会话自行执行：
 
@@ -74,8 +78,8 @@
 
 结束前至少完成：
 
-1. `git diff --check` 和敏感信息扫描。
-2. 运行与改动相关的测试、lint 或构建。
+1. 运行 `./workflow.cmd check all`，其中包含测试、lint、脚本语法、`git diff --check`、文档链接和敏感文件检查。
+2. 若全量检查因明确的环境限制不能运行，至少运行受影响范围的 `./workflow.cmd check <scope>` 并说明限制。
 3. 检查 Git 工作区，确认没有把 `target/`、`unpackage/`、私密配置或临时文件加入版本控制。
 4. 明确说明已验证内容、未能验证的内容、剩余风险和下一步命令。
 
