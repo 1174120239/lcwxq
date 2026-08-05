@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('doctor', 'start', 'check', 'status', 'publish', 'verify')]
+    [ValidateSet('doctor', 'start', 'check', 'status', 'publish', 'deploy', 'verify')]
     [string]$Command = 'status',
 
     [Parameter(Position = 1)]
@@ -260,6 +260,15 @@ switch ($Command) {
         & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
             (Join-Path $repoRoot 'deploy/publish-to-server.ps1') @arguments
         if ($LASTEXITCODE -ne 0) { throw "Publish command failed: $Target" }
+    }
+    'deploy' {
+        # The normal production target is the replacement backend. Keep the
+        # component-specific publish command for admin and legacy maintenance.
+        $arguments = @('-Component', 'replacement-backend')
+        if ($ConfirmProduction) { $arguments += '-ConfirmProduction' } else { $arguments += '-DryRun' }
+        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+            (Join-Path $repoRoot 'deploy/publish-to-server.ps1') @arguments
+        if ($LASTEXITCODE -ne 0) { throw 'Deploy command failed: replacement-backend' }
     }
     'verify' {
         if ($Target -notin @('replacement-backend', 'legacy-api', 'admin')) {

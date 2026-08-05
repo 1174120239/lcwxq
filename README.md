@@ -10,10 +10,10 @@ Windows 下从仓库根目录使用 `workflow.cmd`，无需手工记忆 Maven、
 .\workflow.cmd doctor
 .\workflow.cmd start feature-name
 .\workflow.cmd check all
-.\workflow.cmd publish replacement-backend
+.\workflow.cmd deploy
 ```
 
-`publish` 默认只是本地演练，不连接服务器。代码经 Pull Request 合并到 `main` 后，单独开启发布会话并显式加 `-ConfirmProduction` 才会部署生产。完整步骤见 [Codex 工作流](markdown_docs/CODEX_WORKFLOW.md)。
+`deploy` 默认只是本地演练，不连接服务器。代码经 Pull Request 合并到 `main` 后，单独开启发布会话并显式加 `-ConfirmProduction` 才会部署生产。完整步骤见 [Codex 工作流](markdown_docs/CODEX_WORKFLOW.md)。
 
 ## 目录结构
 

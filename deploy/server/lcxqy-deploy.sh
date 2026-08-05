@@ -36,7 +36,7 @@ done
 [[ "$(id -u)" -eq 0 ]] || { echo 'Run as root or through a narrowly scoped sudo rule.' >&2; exit 1; }
 [[ "$REMOTE_ROOT" == /srv/lcxqy ]] || { echo 'Remote root must be /srv/lcxqy.' >&2; exit 2; }
 
-health_check() {
+health_check_once() {
     case "$1" in
         replacement-backend) curl -fsS --max-time 15 http://127.0.0.1:18082/health >/dev/null ;;
         legacy-api) curl -fsS --max-time 15 http://127.0.0.1:8081/ >/dev/null ;;
@@ -54,10 +54,26 @@ service_check() {
     esac
 }
 
+wait_for_component() {
+    local component="$1"
+    local attempts=12
+    local delay_seconds=5
+    local attempt
+    for ((attempt=1; attempt<=attempts; attempt++)); do
+        if service_check "$component" && health_check_once "$component"; then
+            return 0
+        fi
+        if (( attempt < attempts )); then
+            sleep "$delay_seconds"
+        fi
+    done
+    echo "Component did not become healthy within $((attempts * delay_seconds)) seconds: $component" >&2
+    return 1
+}
+
 verify_component() {
     local component="$1"
-    service_check "$component"
-    health_check "$component"
+    wait_for_component "$component"
     echo "component=$component"
     case "$component" in
         replacement-backend) sha256sum /opt/starfree-replacement/starfree-replacement.jar ;;
@@ -184,7 +200,7 @@ deploy_replacement() {
         rollback_component replacement-backend
         return 20
     fi
-    if ! service_check replacement-backend || ! health_check replacement-backend; then
+    if ! wait_for_component replacement-backend; then
         rollback_component replacement-backend
         return 21
     fi
@@ -205,7 +221,7 @@ deploy_legacy() {
         rollback_component legacy-api
         return 20
     fi
-    if ! service_check legacy-api || ! health_check legacy-api; then
+    if ! wait_for_component legacy-api; then
         rollback_component legacy-api
         return 21
     fi
@@ -231,7 +247,7 @@ deploy_admin() {
         rollback_component admin
         return 20
     fi
-    if ! health_check admin; then
+    if ! wait_for_component admin; then
         rollback_component admin
         return 21
     fi

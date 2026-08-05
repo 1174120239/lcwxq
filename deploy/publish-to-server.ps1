@@ -128,7 +128,10 @@ try {
         "CREATED_UTC=$([DateTime]::UtcNow.ToString('o'))"
     )
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [IO.File]::WriteAllLines((Join-Path $stage 'manifest.env'), $manifest, $utf8NoBom)
+    # Write the protocol file with LF explicitly. WriteAllLines uses the
+    # Windows platform newline (CRLF), which the Linux server validator rejects.
+    $manifestText = ($manifest -join "`n") + "`n"
+    [IO.File]::WriteAllText((Join-Path $stage 'manifest.env'), $manifestText, $utf8NoBom)
 
     $effectiveComponents = if ($Component -eq 'all') {
         @('replacement-backend', 'legacy-api', 'admin')

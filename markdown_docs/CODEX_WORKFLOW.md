@@ -49,6 +49,8 @@
 | `status -Remote` | 是，只读 | 核对三个生产组件的当前健康状态 |
 | `publish <component>` | 否 | 构建发布包并输出 commit、组件和 SHA-256 |
 | `publish <component> -ConfirmProduction` | 是，写入 | 仅从干净且同步的 `main` 发布指定组件 |
+| `deploy` | 否 | `replacement-backend` 的默认发布演练快捷方式 |
+| `deploy -ConfirmProduction` | 是，写入 | 发布当前 `origin/main` 的 `replacement-backend` |
 | `verify <component>` | 是，只读 | 调用服务器固定入口执行发布后验收 |
 
 `check all` 会运行 Spring Boot 测试、PHP lint、PowerShell/Bash 语法检查、Markdown 链接检查、`git diff --check` 和敏感文件名检查。前端依赖 HBuilderX，本仓库没有可在命令行完整复现的 uni-app 构建，因此改动前端后还必须在 HBuilderX 中手工运行对应页面。
@@ -63,7 +65,7 @@
 任务：<清楚描述一个功能或 bug>
 范围：<前端 / replacement 后端 / admin / 文档>
 约束：保持旧 API 协议兼容；不要连接生产服务器；不要修改无关文件。
-完成标准：实现代码、补充针对性测试、更新相关 Markdown，并汇报测试命令和未验证风险。
+完成标准：实现代码、补充针对性测试、更新相关 Markdown；检查通过后提交并推送功能分支，但不要合并 `main`、连接生产或执行数据库迁移，并汇报测试命令和未验证风险。
 开始前先检查 git 状态，不要覆盖工作区已有修改。
 ```
 
@@ -79,8 +81,9 @@
 
 ```text
 这是一次生产发布会话。先阅读 AGENTS.md、CODEX_WORKFLOW.md 和 DEPLOYMENT_GUIDE.md。
-只发布已提交的指定 commit：<commit SHA 或 HEAD>；组件：<replacement-backend / legacy-api / admin / all>。
-默认 dry-run，不执行数据库迁移，不修改 Nginx 路由。只有我明确确认后，才使用 -ConfirmProduction。
+默认发布已经合并到 `main` 的 replacement-backend；先运行 `workflow.cmd deploy` dry-run。
+只有我明确确认后，才运行 `workflow.cmd deploy -ConfirmProduction`。
+不执行数据库迁移，不修改 Nginx 路由；admin、legacy-api、all 只有我明确指定组件时才处理。
 发布前做只读检查和备份，发布后报告 commit、组件、SHA-256、服务状态、HTTP 健康状态、备份路径和回滚命令。
 ```
 
@@ -126,7 +129,7 @@ setx LCXQY_SSH_KEY "$env:USERPROFILE\.ssh\lcxqy_deploy"
 演练，不连接服务器：
 
 ```powershell
-.\workflow.cmd publish replacement-backend
+.\workflow.cmd deploy
 ```
 
 实际发布前，先切回 `main`、拉取已合并代码并确认 `HEAD` 等于 `origin/main`。发布命令会再次强制检查这些条件：
@@ -135,11 +138,13 @@ setx LCXQY_SSH_KEY "$env:USERPROFILE\.ssh\lcxqy_deploy"
 git switch main
 git pull --ff-only origin main
 .\workflow.cmd check all
-.\workflow.cmd publish replacement-backend -ConfirmProduction
+.\workflow.cmd deploy -ConfirmProduction
 .\workflow.cmd verify replacement-backend
 ```
 
 发布脚本只接受干净工作区、当前 commit 和已推送的远端分支；生产额外限制为精确的 `origin/main`。它会先执行服务器只读预检，再构建/校验组件、生成带 manifest 和 SHA-256 的压缩包、通过 SSH/SCP 上传到服务器临时目录，最后调用服务器固定入口。`all` 按顺序处理三个组件，不会自动执行迁移或 Nginx 切流。
+
+日常不需要记住组件参数：`deploy` 等价于 `publish replacement-backend`。只有发布 admin、旧 API 或组合组件时，才使用 `publish <component>`。
 
 当前生产旧 API 仍由手工 Java 进程占用 `127.0.0.1:8081`，尚无 `starfree-legacy.service`。因此 `legacy-api` 和 `all` 的生产发布会在上传前主动失败；在单独维护窗口完成 systemd 迁移前，只发布 `replacement-backend` 或 `admin`。
 

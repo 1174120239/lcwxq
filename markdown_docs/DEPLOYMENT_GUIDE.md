@@ -27,10 +27,10 @@
 
 ~~~powershell
 # 只构建和校验，不连接生产服务器
-.\workflow.cmd publish replacement-backend
+.\workflow.cmd deploy
 
 # 明确确认后发布一个组件
-.\workflow.cmd publish replacement-backend -ConfirmProduction
+.\workflow.cmd deploy -ConfirmProduction
 
 # 发布后只读验收
 .\workflow.cmd verify replacement-backend
@@ -39,6 +39,8 @@
 组件可选 `replacement-backend`、`legacy-api`、`admin` 和 `all`。`all` 按新后端、旧 API、PHP admin 顺序处理；后续组件失败时，服务器入口会恢复本次已经更新的前置组件。
 
 > 当前生产限制：旧 API 仍是手工启动的 Java 进程，`starfree-legacy.service` 尚未安装。发布脚本会在上传前阻止 `legacy-api` 和 `all`。必须在单独批准的维护窗口先按第 3.4 节迁移并验收 systemd，不能在普通发布中顺手迁移。
+
+日常只发布重建后端时使用 `workflow.cmd deploy`；`publish <component>` 仅用于 admin、legacy-api 或 all 等特殊组件。部署入口会使用 LF 格式的 manifest，并在服务重启后等待启动完成和健康接口恢复，再决定是否回滚。
 
 服务器目录固定为：
 

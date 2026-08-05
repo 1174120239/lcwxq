@@ -35,11 +35,13 @@
 发布必须是独立会话，并且只发布用户指定的已提交 commit 和组件。优先使用：
 
 ```powershell
+.\workflow.cmd deploy
+.\workflow.cmd deploy -ConfirmProduction
 .\workflow.cmd publish replacement-backend
 .\workflow.cmd publish replacement-backend -ConfirmProduction
 ```
 
-第一条只做本地构建演练；第二条才连接生产。生产只能发布当前 `origin/main` 的精确提交，不能从功能分支上线。发布前备份，发布后健康检查；失败时回滚。通用发布命令永不执行数据库迁移，迁移必须是用户单独授权的维护任务。发布结果必须汇报 commit、组件、SHA-256、服务状态、HTTP 健康状态、备份路径和迁移是否执行。
+`deploy` 是日常 `replacement-backend` 的快捷入口；不带确认只做本地构建演练，带确认才连接生产。`publish` 保留给组件指定和维护场景。生产只能发布当前 `origin/main` 的精确提交，不能从功能分支上线。发布前备份，发布后健康检查；失败时回滚。通用发布命令永不执行数据库迁移，迁移必须是用户单独授权的维护任务。发布结果必须汇报 commit、组件、SHA-256、服务状态、HTTP 健康状态、备份路径和迁移是否执行。
 
 生产操作包括以下高风险动作，不能由普通开发会话自行执行：
 
