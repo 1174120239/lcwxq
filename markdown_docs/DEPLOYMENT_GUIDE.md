@@ -25,6 +25,8 @@
 
 日常生产发布优先使用仓库根目录的 `deploy/publish-to-server.ps1`。它只发布当前干净工作区对应的已提交 commit，先执行测试或校验，再生成发布包 SHA-256，通过 SSH 上传，最后调用服务器上的固定入口 `/usr/local/sbin/lcxqy-deploy`。详细的会话划分和可复制提示词见 [CODEX_WORKFLOW.md](CODEX_WORKFLOW.md)。
 
+服务器入口会在替换前验证压缩包内的 JAR，并在重启后等待最多 60 秒完成服务和 HTTP 健康检查。失败回滚时会先停止对应服务，再恢复备份 JAR，避免运行中的 Java 进程读取到正在被覆盖的文件。
+
 ~~~powershell
 # 只构建和校验，不连接生产服务器
 .\deploy\publish-to-server.ps1 -Component replacement-backend -DryRun

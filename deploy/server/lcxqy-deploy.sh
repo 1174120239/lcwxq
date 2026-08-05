@@ -54,6 +54,33 @@ service_check() {
     esac
 }
 
+validate_jar() {
+    local artifact="$1"
+    if [[ -x /opt/jdk1.8.0_311/bin/jar ]]; then
+        /opt/jdk1.8.0_311/bin/jar tf "$artifact" >/dev/null
+    elif command -v jar >/dev/null 2>&1; then
+        jar tf "$artifact" >/dev/null
+    elif command -v unzip >/dev/null 2>&1; then
+        unzip -t "$artifact" >/dev/null
+    else
+        echo 'No JAR validator is available on the server.' >&2
+        return 2
+    fi
+}
+
+wait_for_component() {
+    local component="$1"
+    local timeout_seconds="${2:-60}"
+    local deadline=$((SECONDS + timeout_seconds))
+    while (( SECONDS < deadline )); do
+        if service_check "$component" && health_check "$component"; then
+            return 0
+        fi
+        sleep 2
+    done
+    service_check "$component" && health_check "$component"
+}
+
 verify_component() {
     local component="$1"
     service_check "$component"
@@ -120,20 +147,36 @@ rollback_component() {
     case "$component" in
         replacement-backend)
             if [[ -f "$backup_dir/starfree-replacement.jar" ]]; then
+                if ! systemctl stop starfree-replacement.service; then
+                    echo 'Could not stop replacement backend before rollback.' >&2
+                    return 20
+                fi
                 install -m 0644 "$backup_dir/starfree-replacement.jar" /opt/starfree-replacement/starfree-replacement.jar
-                systemctl restart starfree-replacement.service || true
+                systemctl start starfree-replacement.service || true
+                wait_for_component replacement-backend 60 || true
             elif [[ -f "$backup_dir/replacement-backend.no-previous" ]]; then
+                if ! systemctl stop starfree-replacement.service; then
+                    echo 'Could not stop replacement backend before rollback.' >&2
+                    return 20
+                fi
                 rm -f /opt/starfree-replacement/starfree-replacement.jar
-                systemctl stop starfree-replacement.service || true
             fi
             ;;
         legacy-api)
             if [[ -f "$backup_dir/StarFreeApi.jar" ]]; then
+                if ! systemctl stop starfree-legacy.service; then
+                    echo 'Could not stop legacy API before rollback.' >&2
+                    return 20
+                fi
                 install -m 0644 "$backup_dir/StarFreeApi.jar" /opt/StarFreeApi.jar
-                systemctl restart starfree-legacy.service || true
+                systemctl start starfree-legacy.service || true
+                wait_for_component legacy-api 60 || true
             elif [[ -f "$backup_dir/legacy-api.no-previous" ]]; then
+                if ! systemctl stop starfree-legacy.service; then
+                    echo 'Could not stop legacy API before rollback.' >&2
+                    return 20
+                fi
                 rm -f /opt/StarFreeApi.jar
-                systemctl stop starfree-legacy.service || true
             fi
             ;;
         admin)
@@ -171,20 +214,28 @@ restore_current_link() {
 deploy_replacement() {
     local target=/opt/starfree-replacement/starfree-replacement.jar
     mkdir -p /opt/starfree-replacement || return 20
+    if ! validate_jar "$incoming/replacement-backend.jar"; then
+        echo 'Replacement JAR validation failed.' >&2
+        return 23
+    fi
     if [[ -f "$target" ]]; then
         cp -p "$target" "$backup_dir/starfree-replacement.jar" || return 20
     else
         touch "$backup_dir/replacement-backend.no-previous" || return 20
     fi
+    if ! systemctl stop starfree-replacement.service; then
+        echo 'Could not stop replacement backend before deployment.' >&2
+        return 20
+    fi
     if ! install -m 0644 "$incoming/replacement-backend.jar" "$target"; then
         rollback_component replacement-backend
         return 20
     fi
-    if ! systemctl restart starfree-replacement.service; then
+    if ! systemctl start starfree-replacement.service; then
         rollback_component replacement-backend
         return 20
     fi
-    if ! service_check replacement-backend || ! health_check replacement-backend; then
+    if ! wait_for_component replacement-backend 60; then
         rollback_component replacement-backend
         return 21
     fi
@@ -192,20 +243,28 @@ deploy_replacement() {
 
 deploy_legacy() {
     local target=/opt/StarFreeApi.jar
+    if ! validate_jar "$incoming/legacy-api.jar"; then
+        echo 'Legacy JAR validation failed.' >&2
+        return 23
+    fi
     if [[ -f "$target" ]]; then
         cp -p "$target" "$backup_dir/StarFreeApi.jar" || return 20
     else
         touch "$backup_dir/legacy-api.no-previous" || return 20
     fi
+    if ! systemctl stop starfree-legacy.service; then
+        echo 'Could not stop legacy API before deployment.' >&2
+        return 20
+    fi
     if ! install -m 0644 "$incoming/legacy-api.jar" "$target"; then
         rollback_component legacy-api
         return 20
     fi
-    if ! systemctl restart starfree-legacy.service; then
+    if ! systemctl start starfree-legacy.service; then
         rollback_component legacy-api
         return 20
     fi
-    if ! service_check legacy-api || ! health_check legacy-api; then
+    if ! wait_for_component legacy-api 60; then
         rollback_component legacy-api
         return 21
     fi
