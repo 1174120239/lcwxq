@@ -86,7 +86,11 @@ try {
         "CREATED_UTC=$([DateTime]::UtcNow.ToString('o'))"
     )
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [IO.File]::WriteAllLines((Join-Path $stage 'manifest.env'), $manifest, $utf8NoBom)
+    [IO.File]::WriteAllText(
+        (Join-Path $stage 'manifest.env'),
+        (($manifest -join "`n") + "`n"),
+        $utf8NoBom
+    )
 
     $effectiveComponents = if ($Component -eq 'all') {
         @('replacement-backend', 'legacy-api', 'admin')
