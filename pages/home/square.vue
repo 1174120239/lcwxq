@@ -17,7 +17,7 @@
 			<view class="square-filter-menu" :class="{'is-open':showSquareMenu}" @tap.stop>
 				<view class="filter-menu-title">动态筛选</view>
 				<view class="filter-menu-options">
-					<view :class="{'is-active':follow==1&&squareid==0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
+					<view :class="{'is-active':follow==1&&squareid==0&&topicId==0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
 					<view :class="{'is-active':follow==0&&squareid==0}" @tap="setFollow(0);showSquareMenu=false">关注</view>
 					<view :class="{'is-active':follow==2&&squareid==0}" @tap="setFollow(2);showSquareMenu=false">视频</view>
 					<view :class="{'is-active':follow==3&&squareid==0}" @tap="setFollow(3);showSquareMenu=false">图集</view>
@@ -26,9 +26,9 @@
 				<view class="filter-menu-topics" v-if="officialTopicPreview.length>0">
 					<scroll-view scroll-x class="filter-topic-scroll" :show-scrollbar="false">
 						<view class="filter-topic-track">
-							<view class="filter-topic-chip" v-for="topic in officialTopicPreview" :key="'menu-topic-'+topic.mid"
+							<view class="filter-topic-chip" :class="{'is-active': isTopicSelected(topic.mid)}" v-for="topic in officialTopicPreview" :key="'menu-topic-'+topic.mid"
 								@tap="selectTopic(topic)">
-								<text class="cuIcon-tag"></text><text>#{{topic.name}}</text>
+								<text :class="isTopicSelected(topic.mid) ? 'cuIcon-check' : 'cuIcon-tag'"></text><text>#{{topic.name}}</text>
 							</view>
 							<view class="filter-topic-more" @tap="showAllTopics">
 								<text>显示更多</text><text class="cuIcon-right"></text>
@@ -57,7 +57,7 @@
 					</view>
 				</view>
 			</scroll-view>
-			<view class="appcontent margin-top-xl">
+			<view class="appcontent margin-top-xl" @tap="collapseSquareMenu" @touchmove="collapseSquareMenu">
 			
 			<block v-if="follow==0">
 				<view class="no-data" v-if="token==''">
@@ -83,7 +83,7 @@
 			<block v-if="follow==1">
 			<view class="no-data square-empty" v-if="spaceList.length==0">
 				<text class="cuIcon-text"></text>
-				什么都没有
+				{{topicId > 0 ? '该话题下暂无动态' : '什么都没有'}}
 			</view>
 			
 			<spaceItem :spaceList="spaceList"></spaceItem>
@@ -600,6 +600,9 @@
 			
 			
 		},
+		onPageScroll() {
+			this.collapseSquareMenu()
+		},
 		onHide() {
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
@@ -712,6 +715,9 @@
 			
 		},
 		methods: {
+			collapseSquareMenu() {
+				if (this.showSquareMenu) this.showSquareMenu = false
+			},
 			toggleSquareMenu() {
 				this.showSquareMenu = !this.showSquareMenu;
 				if (this.showSquareMenu && !this.topicCenterLoading) {
@@ -1489,11 +1495,18 @@
 			},
 			selectTopic(topic) {
 				if (!topic || !topic.mid) return;
+				const selected = String(this.topicId) === String(topic.mid);
+				this.squareid = 0;
+				this.follow = 1;
+				this.topicId = selected ? 0 : Number(topic.mid);
+				this.topicName = selected ? '' : (topic.name || '');
+				this.page = 1;
+				this.spaceList = [];
 				this.showSquareMenu = false;
-				uni.navigateTo({
-					url: '/pages/space/topics?mid=' + encodeURIComponent(String(topic.mid))
-						+ '&name=' + encodeURIComponent(topic.name || '')
-				});
+				this.getSpaceList(false);
+			},
+			isTopicSelected(mid) {
+				return Number(this.topicId) > 0 && String(this.topicId) === String(mid);
 			},
 			toggleTopicFollow(topic) {
 				if (!this.token) {
@@ -2538,6 +2551,13 @@
 		border-radius: 999rpx;
 		background: #e7f4ef;
 		color: #207966;
+	}
+
+	.filter-topic-chip.is-active {
+		border: 1rpx solid #16847c;
+		background: #16847c;
+		font-weight: 600;
+		color: #fff;
 	}
 
 	.filter-topic-chip text:last-child {
@@ -3654,6 +3674,12 @@
 	.campus-square.campus-night .filter-topic-chip {
 		background: rgba(62, 146, 112, 0.18) !important;
 		color: #79d0ae !important;
+	}
+
+	.campus-square.campus-night .filter-topic-chip.is-active {
+		border-color: #79d0ae !important;
+		background: #328661 !important;
+		color: #fff !important;
 	}
 
 	.campus-square.campus-night .filter-topic-more,

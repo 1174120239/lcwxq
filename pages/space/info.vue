@@ -45,7 +45,7 @@
 						
 					</view>
 				</view>
-				<view class="text-content break-all">
+				<view class="text-content break-all space-detail-text">
 					<rich-text :nodes="markHtml(spaceInfo.text)"></rich-text>
 				</view>
 				
@@ -606,6 +606,8 @@
 				}
 				text = that.replaceAll(text,"/r/n","<br>");
 				text =that.replaceAll(text,"||rn||","<br>");
+				text = that.replaceAll(text,"\\r\\n","<br>");
+				text = that.replaceAll(text,"\\n","<br>");
 				text = that.TransferString(text);
 				return text;
 			},
@@ -1353,6 +1355,16 @@
 	font-size: 30rpx;
 	line-height: 1.7;
 	color: #2f4642;
+}
+
+.space-detail-page .space-info .space-detail-text,
+.space-detail-page .space-info .space-detail-text rich-text {
+	display: block;
+	height: auto;
+	max-height: none;
+	overflow: visible;
+	white-space: normal;
+	-webkit-line-clamp: unset;
 }
 
 .space-detail-media {

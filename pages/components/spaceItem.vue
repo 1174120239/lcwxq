@@ -48,7 +48,7 @@
 							<rich-text :nodes="markHtml(item.text)"></rich-text>
 						</view>
 						<view class="space-read-more" v-if="isLongText(item.text)" @tap.stop="toInfo(item.id,index)">
-							<text>内容较长，查看全文</text><text class="cuIcon-right margin-left-xs"></text>
+							<text>查看全文</text><text class="cuIcon-right margin-left-xs"></text>
 						</view>
 						<view class="grid flex-sub padding-lr col-3 grid-square" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
@@ -66,7 +66,7 @@
 							<rich-text :nodes="markHtml(item.text)"></rich-text>
 						</view>
 						<view class="space-read-more" v-if="isLongText(item.text)" @tap.stop="toInfo(item.id,index)">
-							<text>内容较长，查看全文</text><text class="cuIcon-right margin-left-xs"></text>
+							<text>查看全文</text><text class="cuIcon-right margin-left-xs"></text>
 						</view>
 						<view class="padding-lr spaceVideo" @tap.stop="noop">
 							<!--  #ifdef H5 || MP-->
@@ -242,10 +242,13 @@
 			},
 			isLongText(text){
 				var content = String(text || '')
+					.replace(/<br\s*\/?\s*>/gi, '\n')
+					.replace(/<\/(p|div|li)>/gi, '\n')
 					.replace(/<[^>]*>/g, '')
-					.replace(/&nbsp;/g, ' ')
-					.replace(/\|\|rn\|\|/g, '\n')
-					.replace(/\/r\/n/g, '\n')
+					.replace(/&nbsp;|&#160;/gi, ' ')
+					.replace(/&#10;|&#x0a;/gi, '\n')
+					.replace(/&#13;|&#x0d;/gi, '\r')
+					.replace(/\|\|rn\|\||\/r\/n|\\r\\n|\\n/gi, '\n')
 					.trim();
 				var lineBreaks = (content.match(/\r\n|\r|\n/g) || []).length;
 				var textLimit = this.compact ? 44 : 90;
@@ -366,6 +369,9 @@
 					}
 				}
 				text = that.replaceAll(text,"/r/n","<br>");
+				text = that.replaceAll(text,"||rn||","<br>");
+				text = that.replaceAll(text,"\\r\\n","<br>");
+				text = that.replaceAll(text,"\\n","<br>");
 				text = that.TransferString(text);
 				return text;
 			},
@@ -906,7 +912,6 @@
 
 .space-feed .cu-card.dynamic > .cu-item > .text-content {
 	position: relative;
-	max-height: 9em;
 	margin-bottom: 22rpx;
 	padding: 0 30rpx;
 	font-size: 29rpx;
@@ -919,7 +924,9 @@
 }
 
 .space-feed .cu-card.dynamic > .cu-item > .space-text-preview-long {
+	max-height: 9em;
 	margin-bottom: 10rpx;
+	overflow: hidden;
 }
 
 .space-read-more {
@@ -1072,12 +1079,16 @@
 }
 
 .space-feed-compact .cu-card.dynamic > .cu-item > .text-content {
-	display: -webkit-box;
-	max-height: 4.8em;
 	margin-bottom: 14rpx;
 	padding: 0 16rpx;
 	font-size: 24rpx;
 	line-height: 1.5;
+	overflow: visible;
+}
+
+.space-feed-compact .cu-card.dynamic > .cu-item > .space-text-preview-long {
+	display: -webkit-box;
+	max-height: 4.8em;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
 	overflow: hidden;

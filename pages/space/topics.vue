@@ -29,7 +29,7 @@
 		</view>
 
 		<view class="topic-list" v-if="!directTopicView && visibleTopics.length">
-			<view class="topic-row" v-for="topic in visibleTopics" :key="'topic-'+topic.mid">
+			<view class="topic-row" :class="{'is-selected': isSelected(topic.mid)}" v-for="topic in visibleTopics" :key="'topic-'+topic.mid">
 				<view class="topic-row-main" @tap="toggleSelected(topic)">
 					<view class="topic-row-heading">
 						<text class="topic-name">#{{topic.name}}</text>
@@ -265,6 +265,7 @@
 	.topic-clear { color: #78827f; margin-left: auto; padding: 10rpx; }
 	.topic-list { background: #fff; }
 	.topic-row { min-height: 126rpx; padding: 22rpx 24rpx; display: flex; align-items: center; border-bottom: 1px solid #edf0ef; }
+	.topic-row.is-selected { background: #edf8f4; box-shadow: inset 6rpx 0 0 #168c67; }
 	.topic-row-main { flex: 1; min-width: 0; }
 	.topic-row-heading { display: flex; align-items: center; gap: 10rpx; }
 	.topic-name { font-size: 30rpx; font-weight: 600; }
@@ -286,6 +287,7 @@
 	.campus-night .topic-header, .campus-night .topic-controls, .campus-night .topic-list, .campus-night .topic-empty, .campus-night .result-band { background: #1c2223; border-color: #303839; }
 	.campus-night .topic-search { background: #273031; }
 	.campus-night .topic-row, .campus-night .topic-tabs { border-color: #303839; }
+	.campus-night .topic-row.is-selected { background: #20342f; }
 	.campus-night .topic-name, .campus-night .topic-title { color: #f1f4f3; }
 	.campus-night .topic-meta, .campus-night .result-mode, .campus-night .topic-clear { color: #9ba7a3; }
 	.campus-night .direct-filter-entry { color: #b9c3c0; background: #1c2223; border-color: #303839; }

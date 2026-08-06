@@ -138,9 +138,9 @@ const requestId = API.createRequestId('shop');
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
 | `SFreeUsers/regConfig` | GET/POST / 无 | 无 | 公网新 | `data` 含 `isEmail/isInvite/isPhone`。先读配置再显示注册表单。 |
-| `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 代码新/公网旧 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
-| `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 代码新/公网旧 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
-| `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 代码新/公网旧 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
+| `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 公网新 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
+| `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
+| `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
 | `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；邀请码返利进入 assets；成功后不自动登录。 |
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |

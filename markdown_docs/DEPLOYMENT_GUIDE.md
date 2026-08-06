@@ -308,7 +308,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个用户接口统一使用 `promote-campus-identity-routes.sh`，脚本只增加对应精确 location，并逐个校验 `X-Starfree-Backend` 响应头。
 
 ### 9.2 当前边界
 
