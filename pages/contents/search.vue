@@ -33,12 +33,9 @@
 				</view>
 			</view>
 			<!--  #endif -->
-			<view class="search-type grid" :class="sy_appbox?'col-4':'col-3'">
+			<view class="search-type grid" :class="'col-' + typeColumns">
 				<view class="search-type-box" v-if="sy_appbox&&appModOrder==1" @tap="toType(5)" :class="type==5?'active':''">
 					<text>应用</text>
-				</view>
-				<view class="search-type-box" @tap="toType(0)" :class="type==0?'active':''">
-					<text>帖子</text>
 				</view>
 				<view class="search-type-box" v-if="sy_appbox&&appModOrder==0" @tap="toType(5)" :class="type==5?'active':''">
 					<text>应用</text>
@@ -210,7 +207,9 @@
 				
 				searchText:"",
 				
-				type:0,
+				// H5/App search starts with dynamic content; MP starts with users because the dynamic tab is unavailable there.
+				type:3,
+				typeColumns:2,
 				
 				page:1,
 				moreText:"加载更多",
@@ -273,7 +272,7 @@
 			
 			plus.navigator.setStatusBarStyle("dark")
 			// #endif
-			that.getContentsList(false);
+			that.reload();
 			
 			
 		},
@@ -290,12 +289,18 @@
 			// #ifdef APP-PLUS || MP
 			that.NavBar = this.CustomBar;
 			// #endif
+			// #ifdef MP
+			that.type = 2;
+			// #endif
 			//插件检测
 			var cachedPlugins = localStorage.getItem('getPlugins');
 			if (cachedPlugins) {
 				const pluginList = JSON.parse(cachedPlugins);
 				// 检查插件是否存在于插件列表中
 				that.sy_appbox = pluginList.includes('sy_appbox'); 
+				// #ifdef H5 || APP-PLUS
+				that.typeColumns = that.sy_appbox ? 3 : 2;
+				// #endif
 			}
 			if(that.sy_appbox){
 				that.getAppBoxInfo();
