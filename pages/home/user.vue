@@ -25,6 +25,7 @@
 						<view class="profile-name"><text>{{name}}</text><text class="cuIcon-unfold"></text></view>
 						<view class="profile-id" @tap="copyUid"><text>{{appname}}：{{uid}}</text><text class="cuIcon-copy"></text></view>
 						<view class="profile-campus" v-if="userInfo.campus">{{userInfo.campus}}</view>
+						<view class="profile-grade" v-if="userInfo.grade">{{userInfo.grade}}</view>
 						<view class="profile-ip">IP：校园</view>
 					</view>
 					<view class="profile-name-block" v-else @tap="toLogin">
@@ -1746,6 +1747,13 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		font-size: 22rpx;
 		line-height: 30rpx;
 		color: rgba(255, 255, 255, 0.62);
+	}
+
+	.profile-grade {
+		margin-top: 2rpx;
+		font-size: 21rpx;
+		line-height: 29rpx;
+		color: rgba(255, 255, 255, 0.56);
 	}
 
 	.profile-stats {
