@@ -771,6 +771,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 					dataType: 'json',
 					success: function(res) {
 						//console.log(JSON.stringify(res));
+						that.syncDynamicCommentCount();
 						if(res.data.code==1){
 							var profileData = res.data.data || {};
 							that.userData = profileData;
@@ -790,6 +791,28 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 						})
 					}
 				})
+			},
+			syncDynamicCommentCount() {
+				var that = this;
+				if (!that.uid) return;
+				that.$Net.request({
+					url: that.$API.spaceList(),
+					data: {
+						searchParams: JSON.stringify({uid: that.uid, type: 3}),
+						token: that.token,
+						page: 1,
+						limit: 1
+					},
+					header: {'Content-Type':'application/x-www-form-urlencoded'},
+					method: 'get',
+					dataType: 'json',
+					success: function(res) {
+						if (res.data.code == 1 && res.data.total != null) {
+							that.userData.comments = res.data.total;
+							that.userData.commentsNum = res.data.total;
+						}
+					}
+				});
 			},
 			formatNumber(num) {
 			    return num >= 1e3 && num < 1e4 ? (num / 1e3).toFixed(1) + 'k' : num >= 1e4 ? (num / 1e4).toFixed(1) + 'w' : num

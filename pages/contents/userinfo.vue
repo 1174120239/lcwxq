@@ -677,6 +677,7 @@
 					dataType: 'json',
 					success: function(res) {
 						//console.log(JSON.stringify(res));
+						that.syncDynamicCommentCount();
 						if(res.data.code==1){
 							var profileData = res.data.data || {};
 							that.fanNum = profileData.fanNum != null ? profileData.fanNum : profileData.fans;
@@ -693,6 +694,27 @@
 						})
 					}
 				})
+			},
+			syncDynamicCommentCount() {
+				var that = this;
+				if (!that.uid) return;
+				that.$Net.request({
+					url: that.$API.spaceList(),
+					data: {
+						searchParams: JSON.stringify({uid: that.uid, type: 3}),
+						token: localStorage.getItem('token') || '',
+						page: 1,
+						limit: 1
+					},
+					header: {'Content-Type':'application/x-www-form-urlencoded'},
+					method: 'get',
+					dataType: 'json',
+					success: function(res) {
+						if (res.data.code == 1 && res.data.total != null) {
+							that.commentsNum = res.data.total;
+						}
+					}
+				});
 			},
 			toLink(text){
 				var that = this;
@@ -938,9 +960,9 @@
 					page++;
 				}
 				that.$Net.request({
-					url: that.$API.spaceUserReplies(),
+					url: that.$API.spaceList(),
 					data:{
-						"uid":that.uid,
+						"searchParams": JSON.stringify({uid:that.uid,type:3}),
 						"token":localStorage.getItem('token') || '',
 						"limit":5,
 						"page":page,
@@ -957,7 +979,21 @@
 						if(res.data.code==1){
 							var list = res.data.data;
 							if(list.length>0){
-								var commentsList = list;
+							var commentsList = list.map(function(item) {
+								var parent = item.parentJson;
+								if (parent && parent.id) {
+									item.originalState = 'visible';
+									item.original = {
+										id: parent.id,
+										text: parent.text,
+										userJson: {name: parent.username || '用户'}
+									};
+								} else {
+									item.originalState = 'deleted';
+									item.original = null;
+								}
+								return item;
+							});
 								if(isPage){
 									that.page++;
 									that.commentsList = that.commentsList.concat(commentsList);

@@ -178,9 +178,9 @@
 				}
 				that.isLoad=1;
 				that.$Net.request({
-					url: that.$API.spaceUserReplies(),
+					url: that.$API.spaceList(),
 					data:{
-						"uid":userInfo.uid,
+						"searchParams": JSON.stringify({uid:userInfo.uid,type:3}),
 						"token":token,
 						"limit":5,
 						"page":page,
@@ -198,7 +198,21 @@
 							if(list.length>0){
 								that.noMore = list.length < 5;
 								that.moreText = that.noMore ? "没有更多评论了" : "加载更多";
-								var commentsList = list;
+								var commentsList = list.map(function(item) {
+									var parent = item.parentJson;
+									if (parent && parent.id) {
+										item.originalState = 'visible';
+										item.original = {
+											id: parent.id,
+											text: parent.text,
+											userJson: {name: parent.username || '用户'}
+										};
+									} else {
+										item.originalState = 'deleted';
+										item.original = null;
+									}
+									return item;
+								});
 								if(isPage){
 									that.page++;
 									that.commentsList = that.commentsList.concat(commentsList);
