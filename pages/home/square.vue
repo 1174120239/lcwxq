@@ -10,19 +10,22 @@
 			<view class="square-filter-row" @tap="toggleSquareMenu">
 				<view class="square-filter-label">
 					<text class="cuIcon-filter"></text>
-					<text>{{squareid==0?(topicId>0?'#'+topicName:(follow==0?'关注':follow==1?'全部':follow==2?'视频':'图集')):(squareid==1&&groupChatEnabled)?'群聊':squareid==2?'话题':'校园应用'}}</text>
+					<text>{{squareFilterLabel}}</text>
 				</view>
 				<text class="cuIcon-unfold square-filter-arrow" :class="{'is-open':showSquareMenu}"></text>
 			</view>
 			<view class="square-filter-menu" :class="{'is-open':showSquareMenu}" @tap.stop>
 				<view class="filter-menu-title">动态筛选</view>
 				<view class="filter-menu-options">
-					<view :class="{'is-active':follow==1&&squareid==0&&topicId==0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
+					<view :class="{'is-active':follow==1&&squareid==0&&selectedTopics.length===0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
 					<view :class="{'is-active':follow==0&&squareid==0}" @tap="setFollow(0);showSquareMenu=false">关注</view>
 					<view :class="{'is-active':follow==2&&squareid==0}" @tap="setFollow(2);showSquareMenu=false">视频</view>
 					<view :class="{'is-active':follow==3&&squareid==0}" @tap="setFollow(3);showSquareMenu=false">图集</view>
 				</view>
-				<view class="filter-menu-title service-title">校园服务</view>
+				<view class="filter-menu-title service-title">
+					<text>话题筛选</text>
+					<text class="filter-topic-count" v-if="selectedTopics.length">已选 {{selectedTopics.length}}/3</text>
+				</view>
 				<view class="filter-menu-topics" v-if="officialTopicPreview.length>0">
 					<scroll-view scroll-x class="filter-topic-scroll" :show-scrollbar="false">
 						<view class="filter-topic-track">
@@ -83,7 +86,7 @@
 			<block v-if="follow==1">
 			<view class="no-data square-empty" v-if="spaceList.length==0">
 				<text class="cuIcon-text"></text>
-				{{topicId > 0 ? '该话题下暂无动态' : '什么都没有'}}
+				{{selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
 			</view>
 			
 			<spaceItem :spaceList="spaceList"></spaceItem>
@@ -440,8 +443,7 @@
 				followedTopics: [],
 				topicCenterLoaded: false,
 				topicCenterLoading: false,
-				topicId: 0,
-				topicName: "",
+				selectedTopics: [],
 				appList: [], 
 				limit: 15,
 				loading: false,
@@ -537,6 +539,15 @@
 		computed: {
 			campusNight() {
 				return resolveCampusNight(this.campusThemeMode, isDongchangfuNight(this.campusThemeClock))
+			},
+			squareFilterLabel() {
+				if (this.squareid == 0) {
+					if (this.selectedTopics.length === 1) return '#' + this.selectedTopics[0].name
+					if (this.selectedTopics.length > 1) return '已选' + this.selectedTopics.length + '个话题'
+					return this.follow == 0 ? '关注' : this.follow == 1 ? '全部' : this.follow == 2 ? '视频' : '图集'
+				}
+				if (this.squareid == 1 && this.groupChatEnabled) return '群聊'
+				return this.squareid == 2 ? '话题' : '校园应用'
 			},
 			squareHeaderSpacer() {
 				const systemInfo = uni.getSystemInfoSync()
@@ -1349,8 +1360,7 @@
 				var that = this;
 				that.page = 1;
 				that.squareid = 0;
-				that.topicId = 0;
-				that.topicName = "";
+				that.selectedTopics = [];
 				that.follow = type;
 				that.stopChatPolling();
 				if (type == 2) {
@@ -1495,18 +1505,22 @@
 			},
 			selectTopic(topic) {
 				if (!topic || !topic.mid) return;
-				const selected = String(this.topicId) === String(topic.mid);
+				const selected = this.isTopicSelected(topic.mid);
+				if (!selected && this.selectedTopics.length >= 3) {
+					uni.showToast({ title: '最多同时选择3个话题', icon: 'none' });
+					return;
+				}
 				this.squareid = 0;
 				this.follow = 1;
-				this.topicId = selected ? 0 : Number(topic.mid);
-				this.topicName = selected ? '' : (topic.name || '');
+				this.selectedTopics = selected
+					? this.selectedTopics.filter(item => String(item.mid) !== String(topic.mid))
+					: this.selectedTopics.concat([{ mid: Number(topic.mid), name: topic.name || '' }]);
 				this.page = 1;
 				this.spaceList = [];
-				this.showSquareMenu = false;
 				this.getSpaceList(false);
 			},
 			isTopicSelected(mid) {
-				return Number(this.topicId) > 0 && String(this.topicId) === String(mid);
+				return this.selectedTopics.some(item => String(item.mid) === String(mid));
 			},
 			toggleTopicFollow(topic) {
 				if (!this.token) {
@@ -2061,6 +2075,8 @@
 			getSpaceList(isPage) {
 				var that = this;
 				var page = that.page;
+				var topicIds = that.selectedTopics.map(item => Number(item.mid));
+				var topicFilterKey = topicIds.join(',');
 				if (isPage) {
 					page++;
 				}
@@ -2071,12 +2087,13 @@
 						"page": page,
 						"order": "created",
 						"token": that.token,
-						"searchParams": that.topicId > 0
-							? JSON.stringify({ topicId: that.topicId }) : ""
+						"searchParams": topicIds.length > 0
+							? JSON.stringify({ topicIds: topicIds }) : ""
 					},
 					method: "get",
 					dataType: 'json',
 					success: function(res) {
+						if (that.selectedTopics.map(item => Number(item.mid)).join(',') !== topicFilterKey) return;
 						that.isLoading = 1;
 						that.isLoad = 0;
 						that.moreText = "加载更多";
@@ -2121,6 +2138,7 @@
 						}
 					},
 					fail: function(res) {
+						if (that.selectedTopics.map(item => Number(item.mid)).join(',') !== topicFilterKey) return;
 						that.isLoading = 1;
 						that.moreText = "加载更多";
 						that.isLoad = 0;
@@ -2487,7 +2505,15 @@
 	}
 
 	.service-title {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		margin-top: 26rpx;
+	}
+
+	.filter-topic-count {
+		font-weight: 600;
+		color: #16847c;
 	}
 
 	.filter-menu-services {
