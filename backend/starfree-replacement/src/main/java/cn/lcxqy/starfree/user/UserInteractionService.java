@@ -47,7 +47,7 @@ public class UserInteractionService {
 
         List<Map<String, Object>> data = new ArrayList<>();
         for (Map<String, Object> row : rows) {
-            data.add(toInbox(row));
+            data.add(toInbox(row, uid));
         }
         return new InboxPage(data, total == null ? 0 : total);
     }
@@ -68,7 +68,7 @@ public class UserInteractionService {
         }
         if ("comment".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 "
-                    + "AND type IN ('comment', 'postComment')", uid);
+                    + "AND type IN ('comment', 'postComment', 'spaceComment')", uid);
         }
         if ("finance".equals(type) || "system".equals(type) || "fan".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 AND type = ?",
@@ -157,7 +157,7 @@ public class UserInteractionService {
         return new FollowPage(data, total == null ? 0 : total);
     }
 
-    private Map<String, Object> toInbox(Map<String, Object> row) {
+    private Map<String, Object> toInbox(Map<String, Object> row, long viewerUid) {
         Map<String, Object> result = new LinkedHashMap<>(row);
         result.put("userJson", publicUser(number(row.get("uid"))));
         if ("comment".equals(String.valueOf(row.get("type")))) {
@@ -170,6 +170,23 @@ public class UserInteractionService {
                 Map<String, Object> content = contents.get(0);
                 result.put("contenTitle", content.get("title"));
                 result.put("contentsInfo", new LinkedHashMap<>(content));
+            }
+        }
+        if ("spaceComment".equals(String.valueOf(row.get("type")))) {
+            List<Map<String, Object>> spaces = jdbc.queryForList(
+                    "SELECT id,uid,text,type,status,onlyMe FROM starfree_space WHERE id = ? LIMIT 1",
+                    number(row.get("value")));
+            if (spaces.isEmpty()) {
+                result.put("spaceState", "deleted");
+                result.put("spaceInfo", null);
+            } else {
+                Map<String, Object> space = spaces.get(0);
+                long ownerUid = number(space.get("uid"));
+                long status = number(space.get("status"));
+                long onlyMe = number(space.get("onlyMe"));
+                boolean visible = ownerUid == viewerUid || (status == 1 && onlyMe == 0);
+                result.put("spaceState", visible ? "visible" : "hidden");
+                result.put("spaceInfo", visible ? new LinkedHashMap<>(space) : null);
             }
         }
         return result;
@@ -207,7 +224,7 @@ public class UserInteractionService {
             return "";
         }
         if ("comment".equals(type)) {
-            return " AND type IN ('comment', 'postComment')";
+            return " AND type IN ('comment', 'postComment', 'spaceComment')";
         }
         filters.add(type);
         return " AND type = ?";

@@ -2,7 +2,9 @@ package cn.lcxqy.starfree.space;
 
 import cn.lcxqy.starfree.api.RequestValues;
 import cn.lcxqy.starfree.security.LegacyTokenService;
+import cn.lcxqy.starfree.push.UniPushService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -63,14 +65,22 @@ public class SpaceService {
     private final LegacyTokenService tokens;
     private final LegacySpaceAbuseGuard abuseGuard;
     private final SpaceTopicService topics;
+    private final UniPushService push;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
+        this(jdbc, mapper, tokens, abuseGuard, null);
+    }
+
+    @Autowired
+    public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
+                        LegacySpaceAbuseGuard abuseGuard, UniPushService push) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tokens = tokens;
         this.abuseGuard = abuseGuard;
         this.topics = new SpaceTopicService(jdbc);
+        this.push = push;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -105,8 +115,10 @@ public class SpaceService {
         if (config.identifylvPost == 1) {
             throw new IllegalArgumentException("\u8bf7\u5148\u5b8c\u6210\u84ddV\u8ba4\u8bc1");
         }
+        Map<String, Object> replyTarget = null;
         if (type == 3) {
-            Map<String, Object> parent = requireSpace(toid);
+            replyTarget = requireSpace(toid);
+            Map<String, Object> parent = replyTarget;
             if (number(get(parent, "status")) == 0) {
                 throw new IllegalArgumentException("\u52a8\u6001\u8fd8\u672a\u901a\u8fc7\u5ba1\u6838");
             }
@@ -181,6 +193,9 @@ public class SpaceService {
                 LOG.error("Space {} was published but postExp could not be granted",
                         viewer.uid, error);
             }
+        }
+        if (type == 3 && status == 1 && replyTarget != null) {
+            notifySpaceComment(viewer.uid, replyTarget, now, text);
         }
         return status == 0;
     }
@@ -270,6 +285,10 @@ public class SpaceService {
         }
         if (type == 0) {
             removeTopicsBestEffort(id);
+        }
+        if (type == 1 && number(get(space, "type")) == 3) {
+            notifySpaceComment(number(get(space, "uid")), space,
+                    number(get(space, "created")), value(get(space, "text")));
         }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u5df2\u5ba1\u6838\u901a\u8fc7"
@@ -980,6 +999,83 @@ public class SpaceService {
             // successful operation into a client-visible failure and trigger a duplicate retry.
             LOG.error("Could not write space moderation notice for uid {}", toUid, error);
         }
+    }
+
+    /** Writes inbox rows for a dynamic owner and, when applicable, the replied-to commenter. */
+    private void notifySpaceComment(long actorUid, Map<String, Object> replyTarget,
+                                    long created, String text) {
+        long parentType = number(get(replyTarget, "type"));
+        long parentUid = parentType == 3 ? number(get(replyTarget, "uid")) : 0;
+        long rootId = number(get(replyTarget, "id"));
+        Map<String, Object> root = replyTarget;
+        int depth = 0;
+        while (number(get(root, "type")) == 3 && depth++ < 16) {
+            rootId = number(get(root, "toid"));
+            root = findSpaceReference(rootId);
+            if (root.isEmpty()) {
+                break;
+            }
+        }
+        long ownerUid = number(get(root, "uid"));
+        long commentId = findLatestSpaceId(actorUid, created);
+        if (commentId <= 0) {
+            return;
+        }
+        if (ownerUid > 0 && ownerUid != actorUid) {
+            writeSpaceInbox(actorUid, ownerUid, rootId, commentId,
+                    "评论了你的动态：" + previewText(text));
+        }
+        if (parentUid > 0 && parentUid != actorUid && parentUid != ownerUid) {
+            writeSpaceInbox(actorUid, parentUid, rootId, commentId,
+                    "回复了你的动态评论：" + previewText(text));
+        }
+    }
+
+    private Map<String, Object> findSpaceReference(long id) {
+        if (id <= 0) {
+            return Collections.emptyMap();
+        }
+        try {
+            List<Map<String, Object>> rows = jdbc.queryForList(
+                    "SELECT id,uid,toid,type FROM starfree_space WHERE id=? LIMIT 1", id);
+            return rows.isEmpty() ? Collections.<String, Object>emptyMap() : rows.get(0);
+        } catch (DataAccessException error) {
+            LOG.error("Could not resolve root dynamic {} for notification", id, error);
+            return Collections.emptyMap();
+        }
+    }
+
+    private long findLatestSpaceId(long uid, long created) {
+        try {
+            Long id = jdbc.queryForObject(
+                    "SELECT id FROM starfree_space WHERE uid=? AND created=? AND type=3 "
+                            + "ORDER BY id DESC LIMIT 1",
+                    Long.class, uid, created);
+            return id == null ? 0 : id;
+        } catch (DataAccessException error) {
+            LOG.error("Could not resolve dynamic comment id for uid {}", uid, error);
+            return 0;
+        }
+    }
+
+    private void writeSpaceInbox(long fromUid, long toUid, long spaceId, long commentId, String text) {
+        try {
+            jdbc.update("INSERT INTO starfree_inbox "
+                            + "(type,uid,text,touid,isread,value,created,cid) VALUES (?,?,?,?,?,?,?,?)",
+                    "spaceComment", fromUid, text, toUid, 0, spaceId,
+                    Instant.now().getEpochSecond(), commentId);
+            if (push != null) {
+                push.sendComment(toUid, "动态评论", text, "spaceComment:" + spaceId);
+            }
+        } catch (DataAccessException error) {
+            // The dynamic is already published; notification failure must not duplicate it on retry.
+            LOG.error("Could not write dynamic comment notice for uid {}", toUid, error);
+        }
+    }
+
+    private String previewText(String text) {
+        String value = text == null ? "" : text.replace("\r", " ").replace("\n", " ").trim();
+        return value.length() > 120 ? value.substring(0, 120) + "..." : value;
     }
 
     private int countPublicChildren(long id, int type) {

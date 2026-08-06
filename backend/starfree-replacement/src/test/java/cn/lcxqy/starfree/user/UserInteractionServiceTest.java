@@ -11,6 +11,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,5 +55,22 @@ class UserInteractionServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("You cannot follow yourself");
         verify(jdbc, never()).update(anyString(), eq(7L), eq(7L));
+    }
+
+    @Test
+    void commentReadFilterIncludesDynamicCommentNotifications() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(7L);
+        when(jdbc.update(anyString(), eq(7L))).thenReturn(3);
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+        request.put("type", "comment");
+
+        int changed = new UserInteractionService(jdbc, tokens).markRead(request);
+
+        assertThat(changed).isEqualTo(3);
+        verify(jdbc).update(contains("'spaceComment'"), eq(7L));
     }
 }

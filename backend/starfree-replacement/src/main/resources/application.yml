@@ -27,3 +27,12 @@ legacy:
     enabled: ${LEGACY_REDIS_ENABLED:false}
     prefix: ${LEGACY_REDIS_PREFIX:starfree}
     session-ttl: ${LEGACY_REDIS_SESSION_TTL:86400}
+
+# UniPush is opt-in. Keep credentials outside the repository and enable it only in the
+# production runtime environment after the UniApp app id/client id pairing is verified.
+unipush:
+  enabled: ${UNIPUSH_ENABLED:false}
+  app-id: ${UNIPUSH_APP_ID:}
+  app-key: ${UNIPUSH_APP_KEY:}
+  app-secret: ${UNIPUSH_APP_SECRET:}
+  api-base: ${UNIPUSH_API_BASE:https://restapi.getui.com}

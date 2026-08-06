@@ -294,7 +294,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 ### 9.3 消息和聊天
 
-站内通知仍保留；私聊和群聊前端入口已收敛或隐藏。旧聊天接口未重建，不能把消息中心超时直接归因于新后端。
+站内通知仍保留；动态评论和回复会写入 `starfree_inbox` 的 `spaceComment` 类型，并携带原动态 id，消息中心可直接打开动态详情。UniApp Push 使用用户绑定的 `clientId`，后端 UniPush 发送器由 `UNIPUSH_ENABLED` 和运行时凭据控制，推送失败不影响站内消息落库。私聊和群聊前端入口已收敛或隐藏。旧聊天接口未重建，不能把消息中心超时直接归因于新后端。
 
 ### 9.4 主题和布局
 

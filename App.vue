@@ -84,14 +84,37 @@
 		// #ifdef H5
 		mixins: [pageAnimation],
 		// #endif
-		onLaunch: function() {
+			onLaunch: function() {
 			applyCampusThemeShell(getCampusThemeMode())
 			// #ifdef APP-PLUS
 			campusInstallBackButtonHandler()
 			
-			//点击系统通知的推送跳转到指定的界面
+			// UniPush 点击和前台接收统一通知消息中心；payload 允许是字符串或对象。
+			const campusPushPayload = function(msg) {
+				const payload = msg && msg.payload != null ? msg.payload : '';
+				const value = typeof payload === 'string' ? payload : JSON.stringify(payload);
+				uni.$emit('campus:push', {
+					payload: value,
+					title: msg && (msg.title || msg.aps && msg.aps.alert && msg.aps.alert.title),
+					content: msg && (msg.content || msg.aps && msg.aps.alert && msg.aps.alert.body)
+				});
+				return value;
+			};
+			plus.push.addEventListener("receive", function(msg) {
+				const payload = campusPushPayload(msg);
+				// App 前台时系统不会总是弹出通知，补一条本地通知，后台仍由 UniPush 展示。
+				if (msg && msg.type === 'receive' && plus.os.name === 'Android') {
+					plus.push.createMessage(
+						msg.content || '收到一条新的动态评论消息',
+						payload || 'spaceComment',
+						{title: msg.title || '校园通知'}
+					);
+				}
+			}, false);
+
+			// 点击系统通知的推送跳转到消息中心
 			plus.push.addEventListener("click", function(msg) {
-				var payload = msg.payload;
+				var payload = campusPushPayload(msg);
 				if(payload=="finance"){
 					setTimeout(function() {
 						uni.navigateTo({
@@ -106,7 +129,7 @@
 						})
 					}, 1000)
 				}
-				if(payload.indexOf("comment")!=-1){
+				if(payload.indexOf("comment")!=-1 || payload=="spaceComment"){
 					setTimeout(function() {
 						uni.navigateTo({
 							url: '/pages/user/inbox'

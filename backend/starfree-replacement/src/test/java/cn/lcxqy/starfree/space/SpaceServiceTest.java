@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -219,6 +220,70 @@ class SpaceServiceTest {
         request.put("pic", "image.png");
 
         assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+    }
+
+    @Test
+    void dynamicCommentNotifiesTheDynamicOwner() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Map<String, Object> parent = space(11L, 8L, 1, 0, 0);
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid,created"), eq(11L)))
+                .thenReturn(Collections.singletonList(parent));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
+                eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
+        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
+                eq(7L), anyLong(), anyLong(), eq("dynamic comment"), isNull(), eq(3), eq(0),
+                eq(11), eq(1), eq(0))).thenReturn(1);
+        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
+                eq(Long.class), eq(7L), anyLong())).thenReturn(21L);
+        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_inbox"),
+                eq("spaceComment"), eq(7L), anyString(), eq(8L), eq(0), eq(11L),
+                anyLong(), eq(21L))).thenReturn(1);
+
+        Map<String, String> request = addRequest("dynamic comment");
+        request.put("type", "3");
+        request.put("toid", "11");
+
+        assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+        verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
+                eq("spaceComment"), eq(7L), contains("评论了你的动态"), eq(8L), eq(0),
+                eq(11L), anyLong(), eq(21L));
+    }
+
+    @Test
+    void replyToDynamicCommentNotifiesOwnerAndRepliedUser() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Map<String, Object> parent = space(12L, 9L, 1, 0, 3);
+        parent.put("toid", 11L);
+        Map<String, Object> root = space(11L, 8L, 1, 0, 0);
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid,created"), eq(12L)))
+                .thenReturn(Collections.singletonList(parent));
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid,toid,type"), eq(11L)))
+                .thenReturn(Collections.singletonList(root));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
+                eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
+        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
+                eq(7L), anyLong(), anyLong(), eq("nested reply"), isNull(), eq(3), eq(0),
+                eq(12), eq(1), eq(0))).thenReturn(1);
+        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
+                eq(Long.class), eq(7L), anyLong())).thenReturn(22L);
+
+        Map<String, String> request = addRequest("nested reply");
+        request.put("type", "3");
+        request.put("toid", "12");
+
+        assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+        verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
+                eq("spaceComment"), eq(7L), contains("评论了你的动态"), eq(8L), eq(0),
+                eq(11L), anyLong(), eq(22L));
+        verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
+                eq("spaceComment"), eq(7L), contains("回复了你的动态评论"), eq(9L), eq(0),
+                eq(11L), anyLong(), eq(22L));
     }
 
     @Test
