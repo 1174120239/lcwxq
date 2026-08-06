@@ -148,8 +148,8 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。简介最多 255 字并保留换行，显式传空字符串可清空；不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
-| `SFreeUsers/userStatus` | GET/POST / token | `token` | 旧端 | 成功返回用户和原 token；失效为 `code=0`。 |
-| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | `uid` 优先；新端资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
+| `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
+| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | `uid` 优先；资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 新端的评论计数仅统计已发布动态评论（space type=3），不再统计文章评论；旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | 旧端参数待抓包确认 | 旧端 | 邮箱注册验证码发送；新后端只兼容消费验证码。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |

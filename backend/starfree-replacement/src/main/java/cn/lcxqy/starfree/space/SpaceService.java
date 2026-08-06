@@ -50,8 +50,13 @@ public class SpaceService {
                     + "u.avatar AS user_avatar,u.experience AS user_experience,"
                     + "u.vip AS user_vip,u.`group` AS user_group,u.bantime AS user_bantime,"
                     + "u.ip AS user_ip,u.local AS user_local,u.customize AS user_customize,"
-                    + "u.introduce AS user_introduce FROM starfree_space s "
-                    + "LEFT JOIN starfree_users u ON u.uid = s.uid";
+                    + "u.introduce AS user_introduce,"
+                    + "u.campus_option_id AS user_campus_id,campus.name AS user_campus,"
+                    + "u.grade_option_id AS user_grade_id,grade.name AS user_grade "
+                    + "FROM starfree_space s "
+                    + "LEFT JOIN starfree_users u ON u.uid = s.uid "
+                    + "LEFT JOIN starfree_identity_options campus ON campus.id = u.campus_option_id "
+                    + "LEFT JOIN starfree_identity_options grade ON grade.id = u.grade_option_id";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -642,6 +647,10 @@ public class SpaceService {
         user.put("local", value(get(row, "user_local")));
         putNonNull(user, "customize", get(row, "user_customize"));
         putNonNull(user, "introduce", get(row, "user_introduce"));
+        putNonNull(user, "campusId", get(row, "user_campus_id"));
+        putNonNull(user, "campus", get(row, "user_campus"));
+        putNonNull(user, "gradeId", get(row, "user_grade_id"));
+        putNonNull(user, "grade", get(row, "user_grade"));
         return user;
     }
 

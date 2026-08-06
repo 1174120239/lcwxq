@@ -30,6 +30,7 @@
 						</view>
 						<view class="content flex-sub">
 							<view>{{spaceInfo.userJson.name}}
+							<text class="space-detail-campus" v-if="spaceInfo.userJson.campus">{{spaceInfo.userJson.campus}}</text>
 							<text class="userlv" v-if="spaceInfo.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
 							<text class="userlv" :style="getLvStyle(spaceInfo.userJson.experience)">{{getLv(spaceInfo.userJson.experience)}}</text>
 							
@@ -1355,6 +1356,13 @@
 	font-size: 30rpx;
 	line-height: 1.7;
 	color: #2f4642;
+}
+
+.space-detail-campus {
+	margin-left: 10rpx;
+	font-size: 21rpx;
+	font-weight: 500;
+	color: #819190;
 }
 
 .space-detail-page .space-info .space-detail-text,

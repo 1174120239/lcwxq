@@ -11,7 +11,7 @@
 				
 							</view>
 							<view class="content flex-sub">
-								<view><text style="color: #ff6b97;" v-if="item.userJson.isvip>0">{{item.userJson.name}}</text><text v-else>{{item.userJson.name}}</text>
+								<view><text style="color: #ff6b97;" v-if="item.userJson.isvip>0">{{item.userJson.name}}</text><text v-else>{{item.userJson.name}}</text><text class="space-campus-badge" v-if="item.userJson.campus">{{item.userJson.campus}}</text>
 								<block v-if="item.userJson.uid!=0">
 									<text class="userlv" v-if="item.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
 									<text class="userlv" :style="getLvStyle(item.userJson.experience)">{{getLv(item.userJson.experience)}}</text>
@@ -697,6 +697,12 @@
 			background: #f2f8f6;
 			font-size: 22rpx;
 			color: #287d69;
+		}
+		.space-campus-badge {
+			margin-left: 8rpx;
+			font-size: 20rpx;
+			font-weight: 500;
+			color: #788b8c;
 		}
 		  .videoPlay-close {
 		    z-index: 99;

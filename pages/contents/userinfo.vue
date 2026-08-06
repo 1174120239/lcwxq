@@ -80,6 +80,7 @@
 				<text class="user-data-label" style="margin-right: 10upx;" @click="copyUid">{{uid}}</text>
 				<text class="tn-icon-copy mirror" @click="copyUid"></text>
 			</view>
+			<view class="profile-campus" v-if="campus">{{campus}}</view>
 			<view class="user-data-label profile-introduce" style="margin-top: 10upx;word-wrap: break-word">
 				<block v-if="introduce!=''&&introduce">
 					{{subText(introduce,60)}}
@@ -301,6 +302,7 @@
 				vip:"",
 				isvip:"",
 				introduce:"",
+				campus:"",
 				fanNum:0,
 				contentsNum:0,
 				commentsNum:0,
@@ -537,6 +539,7 @@
 							that.customize = res.data.data.customize;
 							that.experience = res.data.data.experience;
 							that.introduce = res.data.data.introduce;
+							that.campus = res.data.data.campus || '';
 							if(res.data.data.screenName){
 								that.myname = res.data.data.screenName;
 							}else{
@@ -1281,6 +1284,7 @@
 
 <style>
 .profile-introduce { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.profile-campus { margin-top: 8upx; font-size: 24upx; color: #7b8b89; }
 .profile-bottom-spacer { width: 100%; height: 100upx; background: #f6f6f6; }
 .campus-profile-page { min-height: 100vh; background: #f4f7f6; }
 .campus-profile-page.campus-night,

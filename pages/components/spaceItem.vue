@@ -12,6 +12,7 @@
 							</view>
 							<view class="content flex-sub space-author-content">
 								<view class="space-author-line"><text class="space-author-name" :class="{'is-vip': item.userJson.isvip>0}">{{item.userJson.name}}</text>
+								<text class="space-campus-badge" v-if="item.userJson.campus">{{item.userJson.campus}}</text>
 								<block v-if="item.userJson.uid!=0">
 									<text class="userlv space-vip-badge" v-if="item.userJson.isvip>0">VIP</text>
 									<text class="userlv space-level-badge" :style="getLvStyle(item.userJson.experience)">{{getLv(item.userJson.experience)}}</text>
@@ -857,6 +858,18 @@
 	color: #e96282;
 }
 
+.space-campus-badge {
+	flex: 0 0 auto;
+	max-width: 150rpx;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 20rpx;
+	font-weight: 500;
+	line-height: 28rpx;
+	color: #788b8c;
+}
+
 .space-vip-badge,
 .space-level-badge {
 	flex: 0 0 auto;
@@ -1142,6 +1155,10 @@
 	.space-feed-compact .space-author-name {
 		max-width: 88rpx;
 		font-size: 22rpx;
+	}
+	.space-feed-compact .space-campus-badge {
+		max-width: 120rpx;
+		font-size: 18rpx;
 	}
 	.space-feed-compact .cu-card.dynamic > .cu-item > .text-content {
 		padding-right: 14rpx;

@@ -24,6 +24,7 @@
 					<view class="profile-name-block" v-if="userInfo">
 						<view class="profile-name"><text>{{name}}</text><text class="cuIcon-unfold"></text></view>
 						<view class="profile-id" @tap="copyUid"><text>{{appname}}：{{uid}}</text><text class="cuIcon-copy"></text></view>
+						<view class="profile-campus" v-if="userInfo.campus">{{userInfo.campus}}</view>
 						<view class="profile-ip">IP：校园</view>
 					</view>
 					<view class="profile-name-block" v-else @tap="toLogin">
@@ -745,71 +746,6 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				    url: url
 				});
 			},
-			userStatus() {
-				var that = this;
-				that.$Net.request({
-					
-					url: that.$API.userStatus(),
-					data:{
-						"token":that.token
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if(res.data.code==0){
-							
-							if(that.userInfo != null){
-								that.isLoginShow = true;
-							}
-							localStorage.removeItem('userinfo');
-							localStorage.removeItem('token');
-							
-							that.userInfo = null;
-						}else{
-							
-							if(localStorage.getItem('userinfo')){
-								
-								var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-								if(userInfo.screenName){
-									that.name = userInfo.screenName;
-								}else{
-									that.name = userInfo.name;
-								}
-								if(res.data.data.customize){
-									userInfo.customize = res.data.data.customize;
-								}
-								if(res.data.data.lv){
-									userInfo.lv = res.data.data.lv;
-								}
-								if(res.data.data.isvip){
-									userInfo.isvip = res.data.data.isvip;
-								}
-								if(res.data.data.vip){
-									userInfo.vip = res.data.data.vip;
-								}
-								if(res.data.data.experience){
-									userInfo.experience = res.data.data.experience;
-								}
-								localStorage.setItem('userinfo',JSON.stringify(userInfo));
-								// if(res.data.data.avatar){
-								// 	that.userInfo = res.data.data.avatar;
-								// }
-								
-							}
-							
-						}
-					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
-				})
-			},
 			toGroup(){
 				var url = that.$API.GetGroupUrl();
 				// #ifdef APP-PLUS
@@ -969,9 +905,22 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 					dataType: 'json',
 					success: function(res) {
 						if(res.data.code==1){
-							that.assets = res.data.data.assets;
-							that.vip = res.data.data.vip;
-							that.isvip = res.data.data.isvip;
+							var latestUser = Object.assign({}, that.userInfo || {}, res.data.data || {});
+							latestUser.campus = res.data.data.campus || '';
+							latestUser.grade = res.data.data.grade || '';
+							that.userInfo = latestUser;
+							that.name = latestUser.screenName || latestUser.name || that.name;
+							that.assets = latestUser.assets;
+							that.vip = latestUser.vip;
+							that.isvip = latestUser.isvip;
+							localStorage.setItem('userinfo', JSON.stringify(latestUser));
+						}else if(res.data.code==0){
+							if(that.userInfo != null){
+								that.isLoginShow = true;
+							}
+							localStorage.removeItem('userinfo');
+							localStorage.removeItem('token');
+							that.userInfo = null;
 						}
 					},
 					fail: function(res) {
@@ -1790,6 +1739,13 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		font-size: 23rpx;
 		line-height: 32rpx;
 		color: rgba(255, 255, 255, 0.68);
+	}
+
+	.profile-campus {
+		margin-top: 6rpx;
+		font-size: 22rpx;
+		line-height: 30rpx;
+		color: rgba(255, 255, 255, 0.62);
 	}
 
 	.profile-stats {

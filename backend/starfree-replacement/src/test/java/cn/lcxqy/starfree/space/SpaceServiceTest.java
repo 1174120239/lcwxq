@@ -139,6 +139,12 @@ class SpaceServiceTest {
         Fixture fixture = new Fixture();
         Map<String, Object> row = space(11L, 8L, 1, 0, 0);
         row.put("views", 4);
+        row.put("user_uid", 8L);
+        row.put("user_name", "campus-user");
+        row.put("user_campus_id", 3L);
+        row.put("user_campus", "东校区");
+        row.put("user_grade_id", 5L);
+        row.put("user_grade", "2024级");
         when(fixture.jdbc.queryForList(contains("LEFT JOIN starfree_users"), eq(11L)))
                 .thenReturn(Collections.singletonList(row));
         when(fixture.jdbc.update(
@@ -153,6 +159,11 @@ class SpaceServiceTest {
         Map<String, Object> result = fixture.service.info(11L, "");
 
         assertThat(result.get("views")).isEqualTo(5L);
+        assertThat((Map<String, Object>) result.get("userJson"))
+                .containsEntry("campusId", 3L)
+                .containsEntry("campus", "东校区")
+                .containsEntry("gradeId", 5L)
+                .containsEntry("grade", "2024级");
         verify(fixture.jdbc).update(
                 eq("UPDATE starfree_space SET views = COALESCE(views, 0) + 1 WHERE id = ?"),
                 eq(11L));
