@@ -150,7 +150,7 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
 | `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | `uid` 优先；资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
-| `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 新端的评论计数仅统计已发布动态评论（space type=3），不再统计文章评论；旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
+| `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | 旧端参数待抓包确认 | 旧端 | 邮箱注册验证码发送；新后端只兼容消费验证码。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
 | `SFreeUsers/SendCode` | GET/POST / 登录态/策略 | 旧端参数待抓包确认 | 旧端 | 历史通用验证码发送。 |

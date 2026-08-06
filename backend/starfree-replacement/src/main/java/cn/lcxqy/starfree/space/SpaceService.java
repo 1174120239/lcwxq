@@ -572,14 +572,16 @@ public class SpaceService {
         int safeLimit = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
         boolean canSeePrivateReplies = viewer.staff
                 || (viewer.uid != null && viewer.uid.longValue() == uid);
-        String visibleReply = canSeePrivateReplies ? "" : " AND onlyMe=0";
+        // Authors and moderators can review their own pending replies. Other viewers only see
+        // public, approved replies, matching the visibility rules used by the dynamic feed.
+        String visibleReply = canSeePrivateReplies ? "" : " AND status=1 AND onlyMe=0";
         Integer total = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM starfree_space WHERE uid=? AND type=3 AND status=1"
+                "SELECT COUNT(*) FROM starfree_space WHERE uid=? AND type=3"
                         + visibleReply,
                 Integer.class, uid);
         List<Map<String, Object>> rows = jdbc.queryForList(
-                SPACE_SELECT + " WHERE s.uid=? AND s.type=3 AND s.status=1 "
-                        + (canSeePrivateReplies ? "" : "AND s.onlyMe=0 ")
+                SPACE_SELECT + " WHERE s.uid=? AND s.type=3 "
+                        + (canSeePrivateReplies ? "" : "AND s.status=1 AND s.onlyMe=0 ")
                         + "ORDER BY s.created DESC,s.id DESC LIMIT ?,?",
                 uid, (safePage - 1) * safeLimit, safeLimit);
         List<Map<String, Object>> data = new ArrayList<>();

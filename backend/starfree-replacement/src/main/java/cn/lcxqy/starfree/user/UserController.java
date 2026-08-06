@@ -242,12 +242,14 @@ public class UserController {
      *
      * <p>优先使用公开的 {@code uid}；未传时用 {@code token} 推导当前 uid。成功 data 包含
      * {@code uid/contents/comments/fans/follow}，统计直接查询数据库且没有缓存。comments
-     * 是已发布动态评论（space type=3）数量，不再统计文章评论。用户不存在返回
+     * 是动态评论（space type=3）数量；本人不传 uid 时包含待审核评论，查看他人只统计已发布评论。
+     * 不再统计文章评论。用户不存在返回
      * {@code code=0}。
      */
     @RequestMapping(value = "/userData", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse data(@RequestParam Map<String, String> params) {
-        long uid = RequestValues.integer(params, "uid", 0);
+        long requestedUid = RequestValues.integer(params, "uid", 0);
+        long uid = requestedUid;
         if (uid <= 0) {
             Long current = tokens.userId(RequestValues.text(params, "token"));
             uid = current == null ? 0 : current;
@@ -260,7 +262,8 @@ public class UserController {
         Integer contents = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM starfree_contents WHERE authorId = ?", Integer.class, uid);
         Integer comments = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM starfree_space WHERE uid = ? AND type = 3 AND status = 1",
+                "SELECT COUNT(*) FROM starfree_space WHERE uid = ? AND type = 3"
+                        + (requestedUid > 0 ? " AND status = 1" : ""),
                 Integer.class, uid);
         Integer fans = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM starfree_fan WHERE touid = ?", Integer.class, uid);

@@ -664,6 +664,31 @@ class SpaceServiceTest {
     }
 
     @Test
+    void ownReplyHistoryIncludesPendingComments() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Map<String, Object> reply = space(21L, 7L, 0, 0, 3);
+        reply.put("toid", 11L);
+        Map<String, Object> original = space(11L, 8L, 1, 0, 0);
+        original.put("user_uid", 8L);
+        original.put("user_name", "author");
+        when(fixture.jdbc.queryForObject(
+                eq("SELECT COUNT(*) FROM starfree_space WHERE uid=? AND type=3"),
+                eq(Integer.class), eq(7L))).thenReturn(1);
+        when(fixture.jdbc.queryForList(contains("WHERE s.uid=? AND s.type=3"),
+                eq(7L), eq(0), eq(5))).thenReturn(Collections.singletonList(reply));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForList(contains("WHERE s.id=? LIMIT 1"), eq(11L)))
+                .thenReturn(Collections.singletonList(original));
+
+        SpaceService.SpacePage page = fixture.service.userReplies(7L, 1, 5, "token");
+
+        assertThat(page.getTotal()).isOne();
+        assertThat((Map<String, Object>) page.getData().get(0)).containsEntry("status", 0L);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void failedLikeCounterCompensatesInsertedMyisamLog() throws Exception {
         Fixture fixture = new Fixture();
