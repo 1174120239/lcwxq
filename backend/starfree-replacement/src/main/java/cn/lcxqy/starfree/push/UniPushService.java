@@ -147,8 +147,9 @@ public class UniPushService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("authtoken", authToken);
-        http.postForEntity(apiBase + "/v1/" + appId + "/push_single",
+        String raw = http.postForObject(apiBase + "/v1/" + appId + "/push_single",
                 new HttpEntity<>(request, headers), String.class);
+        LOG.info("UniPush v1 single push response: {}", raw);
     }
 
     private String authenticateV2() throws Exception {
@@ -184,8 +185,9 @@ public class UniPushService {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("token", authToken);
-        http.postForEntity(apiBase + "/v2/" + appId + "/push/single/cid",
+        String raw = http.postForObject(apiBase + "/v2/" + appId + "/push/single/cid",
                 new HttpEntity<>(request, headers), String.class);
+        LOG.info("UniPush v2 single push response: {}", raw);
     }
 
     private String authToken(String raw) throws Exception {
@@ -193,12 +195,19 @@ public class UniPushService {
             return "";
         }
         Map<String, Object> response = mapper.readValue(raw, new TypeReference<Map<String, Object>>() { });
-        Object data = response.get("data");
-        if (!(data instanceof Map)) {
-            return "";
+        Object token = response.get("auth_token");
+        if (token != null) {
+            return String.valueOf(token);
         }
-        Object token = ((Map<?, ?>) data).get("auth_token");
-        return token == null ? "" : String.valueOf(token);
+        Object data = response.get("data");
+        if (data instanceof Map) {
+            Object nested = ((Map<?, ?>) data).get("auth_token");
+            if (nested != null) {
+                return String.valueOf(nested);
+            }
+        }
+        LOG.warn("UniPush auth response contained no auth_token");
+        return "";
     }
 
     private String sha256(String value) throws Exception {

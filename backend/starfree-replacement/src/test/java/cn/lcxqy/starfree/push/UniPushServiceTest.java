@@ -43,7 +43,7 @@ class UniPushServiceTest {
         when(jdbc.queryForObject(anyString(), eq(String.class), any()))
                 .thenReturn("cid-123");
         when(http.postForObject(contains("/v1/app-id/auth_sign"), any(HttpEntity.class),
-                eq(String.class))).thenReturn("{\"result\":\"ok\",\"data\":{\"auth_token\":\"tok-1\"}}");
+                eq(String.class))).thenReturn("{\"result\":\"ok\",\"auth_token\":\"tok-1\"}");
 
         UniPushService push = new UniPushService(
                 jdbc, http, new ObjectMapper(), true,
@@ -60,7 +60,7 @@ class UniPushServiceTest {
         assertThat(authBody.get("sign")).isEqualTo(expectedSign);
 
         ArgumentCaptor<HttpEntity> sent = ArgumentCaptor.forClass(HttpEntity.class);
-        verify(http).postForEntity(contains("/v1/app-id/push_single"), sent.capture(), eq(String.class));
+        verify(http).postForObject(contains("/v1/app-id/push_single"), sent.capture(), eq(String.class));
         HttpEntity<?> entity = sent.getValue();
         assertThat(entity.getHeaders().getFirst("authtoken")).isEqualTo("tok-1");
         Map<String, Object> body = (Map<String, Object>) entity.getBody();
@@ -94,7 +94,7 @@ class UniPushServiceTest {
 
         verify(http).postForObject(contains("/v2/app-id/auth"), any(HttpEntity.class), eq(String.class));
         ArgumentCaptor<HttpEntity> sent = ArgumentCaptor.forClass(HttpEntity.class);
-        verify(http).postForEntity(contains("/v2/app-id/push/single/cid"), sent.capture(), eq(String.class));
+        verify(http).postForObject(contains("/v2/app-id/push/single/cid"), sent.capture(), eq(String.class));
         assertThat(sent.getValue().getHeaders().getFirst("token")).isEqualTo("tok-2");
         Map<String, Object> body = (Map<String, Object>) sent.getValue().getBody();
         assertThat(body.get("request_id")).isNotNull();
