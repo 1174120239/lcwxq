@@ -27,7 +27,7 @@
 			</view>
 			<view class="cu-form-group">
 			<view class="title">背景</view>
-			<input :placeholder="ifurl==true ? '已更新' : '个人页的背景封面'" @tap="upload" name="input" disabled></input>
+			<input :placeholder="ifurl==true ? '已上传，保存后生效' : '个人页的背景封面'" @tap="upload" name="input" disabled></input>
 			<text class="text-blue" @tap="upload">上传</text>
 			</view>
 			<view class="cu-form-group">
@@ -181,99 +181,6 @@
 					that.introduce = userInfo.introduce;
 				}
 			},
-			userEditbh() {
-				var that = this;
-				if (that.password != "") {
-					if (that.password != that.repassword) {
-						uni.showToast({
-						    title:"两次密码不一致",
-							icon:'none',
-							duration: 1000,
-							position:'bottom',
-						});
-						return false
-					}
-					
-				}
-				
-				
-				var data = {
-					uid:that.uid,
-					name:that.name,
-					screenName:that.screenName,
-					password:that.password,
-					introduce:that.introduce,
-					userBg:that.userBg,
-				}
-				if(that.avatarNew!=''){
-					data.avatar = that.avatarNew;
-				}
-				uni.showLoading({
-					title: "加载中"
-				});
-				that.$Net.request({
-					
-					url: that.$API.userEdit(),
-					data:{
-						"params":JSON.stringify(that.profileEditParams(data)),
-						"token":that.token
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						//console.log(JSON.stringify(res))
-						setTimeout(function () {
-							uni.hideLoading();
-						}, 1000);
-						uni.showToast({
-							title: '背景图已更新',
-							icon: 'success'
-						})
-						if(res.data.code==1){
-							//保存用户信息
-							if(that.password!=""){
-								localStorage.removeItem('userinfo');
-								localStorage.removeItem('token');
-								var timer = setTimeout(function() {
-									uni.reLaunch({
-										url: '/pages/home/home'
-									})
-									clearTimeout('timer')
-								}, 1000)
-							}else{
-								var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-								userInfo.screenName=that.screenName;
-								userInfo.userBg=that.userBg;
-								userInfo.introduce = that.introduce;
-								if(that.avatarNew!=''){
-									userInfo.avatar = that.avatarNew;
-								}
-								that.avatarNew = '';
-								localStorage.setItem('userinfo',JSON.stringify(userInfo));
-								that.getCacheInfo();
-							}
-							
-						}
-						if(that.backif==1){
-							that.back();
-						}
-						
-					},
-					fail: function(res) {
-						setTimeout(function () {
-							uni.hideLoading();
-						}, 1000);
-						uni.showToast({
-							title: "网络不太好哦",
-							icon: 'none'
-						})
-						uni.stopPullDownRefresh()
-					}
-				})
-			},
 			userEdit() {
 				var that = this;
 				if (that.password != "") {
@@ -347,10 +254,9 @@
 								localStorage.setItem('userinfo',JSON.stringify(userInfo));
 								that.getCacheInfo();
 							}
-							
-						}
-						if(that.backif==1){
-							that.back();
+							if(that.backif==1){
+								that.back();
+							}
 						}
 					},
 					fail: function(res) {
@@ -389,23 +295,27 @@
 			        formData: {
 			          'token': that.token
 			        },
-			        success: function(uploadFileRes) {
-			          var data = JSON.parse(uploadFileRes.data);
-			          uni.showToast({
-			            title: data.msg,
-			            icon: 'none'
-			          })
-			          if (data.code == 1) {
-			            that.userBg = data.data.url;
-						that.ifurl = true
-						that.userEditbh();
-			          }
-			        },
-			        fail: function() {
-			          setTimeout(function() {
-			            uni.hideLoading();
-			          }, 1000);
-			        }
+					success: function(uploadFileRes) {
+					  uni.hideLoading();
+					  var data;
+					  try {
+					    data = JSON.parse(uploadFileRes.data);
+					  } catch (error) {
+					    uni.showToast({ title: '背景图上传失败，请重试', icon: 'none' });
+					    return;
+					  }
+					  if (data.code == 1 && data.data && data.data.url) {
+					    that.userBg = data.data.url;
+						that.ifurl = true;
+						uni.showToast({ title: '背景图已上传，请点击保存', icon: 'none' });
+					  } else {
+						uni.showToast({ title: data.msg || '背景图上传失败，请重试', icon: 'none' });
+					  }
+					},
+					fail: function() {
+					  uni.hideLoading();
+					  uni.showToast({ title: '背景图上传失败，请重试', icon: 'none' });
+					}
 			      });
 			    },
 			    fail: function() {
@@ -484,35 +394,28 @@
 					   'token': that.token
 					  },
 					  success: function (uploadFileRes) {
-						  setTimeout(function () {
-						  	uni.hideLoading();
-						  }, 1000);
-						  
-							var data = JSON.parse(uploadFileRes.data);
-							//var data = uploadFileRes.data;
-							
-							
-							if(data.code==1){
-								// uni.showToast({
-								// 	title: data.msg,
-								// 	icon: 'none'
-								// })
+							uni.hideLoading();
+							var data;
+							try {
+								data = JSON.parse(uploadFileRes.data);
+							} catch (error) {
+								uni.showToast({ title: '头像上传失败，请重试', icon: 'none' });
+								return;
+							}
+							if(data.code==1 && data.data && data.data.url){
 								that.avatar = data.data.url;
 								that.avatarNew = data.data.url;
 								localStorage.removeItem('toAvatar');
-								that.userEdit();
-								//console.log(that.avatar)
-								
+								uni.showToast({ title: '头像已上传，请点击保存', icon: 'none' });
 							}else{
 								uni.showToast({
-									title: "头像上传失败，请检查接口",
+									title: data.msg || "头像上传失败，请重试",
 									icon: 'none'
 								})
 							}
 						},fail:function(){
-							setTimeout(function () {
-								uni.hideLoading();
-							}, 1000);
+							uni.hideLoading();
+							uni.showToast({ title: '头像上传失败，请重试', icon: 'none' });
 						}
 						
 					   
