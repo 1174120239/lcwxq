@@ -24,12 +24,13 @@ done
 
 complete=true
 empty=true
+header_total="$(grep -Fc "add_header X-Starfree-Backend $HEADER always;" "$CONF" || true)"
 for route in "${ROUTES[@]}"; do
     location_count="$(grep -Fc "location = /SFreeUsers/$route {" "$CONF" || true)"
-    header_count="$(grep -Fc "add_header X-Starfree-Backend $HEADER always;" "$CONF" || true)"
-    [[ "$location_count" == 1 && "$header_count" == 1 ]] || complete=false
-    [[ "$location_count" == 0 && "$header_count" == 0 ]] || empty=false
+    [[ "$location_count" == 1 && "$header_total" -ge "${#ROUTES[@]}" ]] || complete=false
+    [[ "$location_count" == 0 ]] || empty=false
 done
+[[ "$header_total" == 0 ]] || empty=false
 
 if [[ "$complete" == true ]]; then
     BACKUP='already-promoted'
