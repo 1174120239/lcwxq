@@ -42,7 +42,7 @@
 						<view class="text-content break-all">
 							<rich-text :nodes="markHtml(item.text)"></rich-text>
 						</view>
-						<view class="grid flex-sub padding-lr col-3 grid-square" v-if="item.picList.length>0">
+						<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
@@ -174,6 +174,15 @@
 				},
 				
 				methods: {
+					imageGridClass(count){
+						if(count === 1){
+							return 'is-single';
+						}
+						if(count === 2){
+							return 'is-double';
+						}
+						return 'is-multi';
+					},
 					getvideoimg(){
 						var that = this;
 						      uni.request({

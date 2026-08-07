@@ -55,7 +55,7 @@
 					</view>
 					<block  v-if="item.type==0">
 						
-						<view class="grid flex-sub padding-lr col-3 grid-square" v-if="item.picList.length>0">
+						<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
 							 v-for="(data,i) in item.picList" :key="i" @tap="previewImage(item.picList,data)">
 							</view>
@@ -108,7 +108,7 @@
 										<text class="text-blue">@{{item.forwardJson.username}}：</text><rich-text :nodes="markHtml(item.forwardJson.text)"></rich-text>
 									</view>
 									
-									<view class="grid flex-sub col-3 grid-square margin-top-xs" v-if="item.forwardJson.picList.length>0">
+									<view class="grid flex-sub col-3 grid-square space-image-grid forward-media margin-top-xs" :class="imageGridClass(item.forwardJson.picList.length)" v-if="item.forwardJson.picList.length>0">
 										<view class="bg-img" :style="'background-image:url('+data+');'"
 										 v-for="(data,i) in item.forwardJson.picList" :key="i">
 										</view>
@@ -278,6 +278,15 @@
 			
 		},
 		methods: {
+			imageGridClass(count){
+				if(count === 1){
+					return 'is-single';
+				}
+				if(count === 2){
+					return 'is-double';
+				}
+				return 'is-multi';
+			},
 			back(){
 				uni.navigateBack({
 					delta: 1

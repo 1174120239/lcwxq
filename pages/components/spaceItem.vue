@@ -51,7 +51,7 @@
 						<view class="space-read-more" v-if="isLongText(item.text)" @tap.stop="toInfo(item.id,index)">
 							<text>查看全文</text><text class="cuIcon-right margin-left-xs"></text>
 						</view>
-						<view class="grid flex-sub padding-lr col-3 grid-square" v-if="item.picList.length>0">
+						<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
@@ -212,6 +212,15 @@
 			
 			noop(){},
 			
+			imageGridClass(count){
+				if(count === 1){
+					return 'is-single';
+				}
+				if(count === 2){
+					return 'is-double';
+				}
+				return 'is-multi';
+			},
 			getvideoimg(){
 				var that = this;
 				      uni.request({
@@ -961,35 +970,6 @@
 	color: #0f7268;
 }
 
-.space-feed .grid.grid-square {
-	display: flex;
-	gap: 12rpx;
-	margin: 0;
-	padding: 0 30rpx;
-}
-
-.space-feed .grid.grid-square > .bg-img {
-	flex: 1 1 calc(33.333% - 8rpx);
-	width: auto;
-	min-width: 0;
-	padding-bottom: 31%;
-	border-radius: 12rpx;
-	box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.4);
-	overflow: hidden;
-}
-
-.space-feed .grid.grid-square > .bg-img:first-child:nth-last-child(1) {
-	flex-basis: 100%;
-	max-width: 100%;
-	padding-bottom: 61.8%;
-}
-
-.space-feed .grid.grid-square > .bg-img:first-child:nth-last-child(2),
-.space-feed .grid.grid-square > .bg-img:first-child:nth-last-child(2) ~ .bg-img {
-	flex-basis: calc(50% - 6rpx);
-	padding-bottom: 46%;
-}
-
 .space-feed .text-center.grid {
 	min-height: 86rpx;
 	margin: 26rpx 30rpx 0;
@@ -1113,20 +1093,6 @@
 	font-size: 18rpx;
 }
 
-.space-feed-compact .grid.grid-square {
-	gap: 6rpx;
-	padding: 0 16rpx;
-}
-
-.space-feed-compact .grid.grid-square > .bg-img {
-	padding-bottom: 30%;
-	border-radius: 8rpx;
-}
-
-.space-feed-compact .grid.grid-square > .bg-img:first-child:nth-last-child(1) {
-	padding-bottom: 61.8%;
-}
-
 .space-feed-compact .text-center.grid {
 	min-height: 64rpx;
 	margin: 16rpx 16rpx 0;
@@ -1166,11 +1132,11 @@
 		font-size: 23rpx;
 	}
 	.space-feed-compact .space-category,
-	.space-feed-compact .grid.grid-square {
+	.space-feed-compact .space-image-grid {
 		margin-right: 14rpx;
 		margin-left: 14rpx;
 	}
-	.space-feed-compact .grid.grid-square {
+	.space-feed-compact .space-image-grid {
 		padding-right: 0;
 		padding-left: 0;
 	}
@@ -1287,7 +1253,7 @@
 	.space-feed { padding-right: 12rpx; padding-left: 12rpx; }
 	.space-feed .square-list .cu-list.menu-avatar > .cu-item2 { padding-right: 24rpx; }
 	.space-feed .cu-card.dynamic > .cu-item > .text-content,
-	.space-feed .grid.grid-square { padding-right: 24rpx; padding-left: 24rpx; }
+	.space-feed .space-image-grid { padding-right: 24rpx; padding-left: 24rpx; }
 	.space-read-more { margin-right: 24rpx; margin-left: 24rpx; }
 	.space-feed .text-center.grid { margin-right: 24rpx; margin-left: 24rpx; }
 	.space-category { margin-right: 24rpx; margin-left: 24rpx; }

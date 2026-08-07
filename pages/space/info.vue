@@ -52,7 +52,7 @@
 				
 				<block  v-if="spaceInfo.type==0">
 					
-					<view class="grid flex-sub padding-lr col-3 grid-square space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
+					<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
 						<view class="bg-img" v-for="(data,i) in spaceInfo.picList" :key="data+i" @tap="previewImage(spaceInfo.picList,data)">
 							<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
 							<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)">
@@ -67,7 +67,7 @@
 						<view class="forward-text" @tap="toInfo(spaceInfo.forwardJson.id)">
 							<rich-text :nodes="markHtml(spaceInfo.forwardJson.text || '')"></rich-text>
 						</view>
-						<view class="space-detail-media forward-media" :class="{'is-single': spaceInfo.forwardJson.picList.length === 1, 'is-double': spaceInfo.forwardJson.picList.length === 2}" v-if="spaceInfo.forwardJson.picList && spaceInfo.forwardJson.picList.length">
+						<view class="space-image-grid space-detail-media forward-media" :class="{'is-single': spaceInfo.forwardJson.picList.length === 1, 'is-double': spaceInfo.forwardJson.picList.length === 2}" v-if="spaceInfo.forwardJson.picList && spaceInfo.forwardJson.picList.length">
 							<view class="bg-img" v-for="(data,i) in spaceInfo.forwardJson.picList" :key="'forward-'+data+i" @tap="previewImage(spaceInfo.forwardJson.picList,data)">
 								<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
 								<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)"><text class="cuIcon-refresh"></text><text>加载失败，点击重试</text></view>
@@ -1375,40 +1375,11 @@
 	-webkit-line-clamp: unset;
 }
 
-.space-detail-media {
-	display: flex !important;
-	flex-wrap: wrap;
-	gap: 12rpx;
-	margin: 0;
-	padding: 0 28rpx 26rpx !important;
-}
-
-.space-detail-media > .bg-img {
-	position: relative;
-	flex: 0 0 calc(33.333% - 8rpx);
-	width: auto !important;
-	min-width: 0;
-	padding-bottom: 30%;
-	border-radius: 12rpx;
-	overflow: hidden;
-}
-
 .space-detail-media > .bg-img > image {
 	position: absolute;
 	inset: 0;
 	width: 100%;
 	height: 100%;
-}
-
-.space-detail-media.is-single > .bg-img {
-	flex: 0 0 100%;
-	max-width: 100%;
-	padding-bottom: 61.8%;
-}
-
-.space-detail-media.is-double > .bg-img {
-	flex: 0 0 calc(50% - 6rpx);
-	padding-bottom: 46%;
 }
 
 .image-load-error {

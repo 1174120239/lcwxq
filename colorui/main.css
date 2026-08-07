@@ -2955,6 +2955,55 @@ scroll-view.cu-steps .cu-item {
 	height: 100%;
 	position: absolute;
 }
+
+/* 动态图片：1张通栏、2张双列、3张及以上固定三列九宫格 */
+.space-image-grid {
+	display: grid !important;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12rpx;
+	padding: 0 30rpx;
+}
+
+.space-image-grid:not(.forward-media) {
+	margin: 0;
+}
+
+.space-image-grid > .bg-img {
+	position: relative;
+	margin: 0 !important;
+	width: 100%;
+	padding-bottom: 100%;
+	border-radius: 12rpx;
+	overflow: hidden;
+}
+
+.space-image-grid.is-single > .bg-img {
+	grid-column: 1 / -1;
+	max-width: 100%;
+	padding-bottom: 61.8%;
+}
+
+.space-image-grid.is-double {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.space-image-grid.space-detail-media {
+	padding: 0 28rpx 26rpx !important;
+}
+
+.space-image-grid.forward-media {
+	padding: 18rpx 0 0 !important;
+}
+
+.space-feed-compact .space-image-grid {
+	gap: 6rpx;
+	padding: 0 16rpx;
+}
+
+.space-feed-compact .space-image-grid > .bg-img {
+	border-radius: 8rpx;
+}
+
 .grid.col-1.grid-square>view {
 	padding-bottom: 100%;
 	height: 0;
