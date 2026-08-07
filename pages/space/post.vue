@@ -86,6 +86,19 @@
 							<text class="cuIcon-close topic-chip-close" @tap="removeTopic(topic)"></text>
 						</view>
 					</view>
+					<view class="topic-recommend">
+						<text class="topic-recommend-label">官方推荐</text>
+						<view class="topic-recommend-state" v-if="topicLoading">加载中…</view>
+						<scroll-view class="topic-recommend-scroll" scroll-x v-else-if="recommendedTopics.length>0">
+							<view class="topic-recommend-track">
+								<view class="topic-recommend-chip" :class="{'is-selected': isTopicSelected(topic)}"
+									v-for="topic in recommendedTopics" :key="'official-'+topic.mid" @tap="toggleTopic(topic)">
+									<text>#{{topic.name}}</text>
+								</view>
+							</view>
+						</scroll-view>
+						<view class="topic-recommend-state" v-else>暂无推荐话题</view>
+					</view>
 					<view class="topic-picker" v-if="showTopicPicker">
 						<view class="topic-picker-list" v-if="topicOptions.length>0">
 							<view class="topic-picker-item" v-for="topic in topicOptions" :key="topic.mid"
@@ -239,6 +252,9 @@
 				if (this.type === 4) return hasText && Boolean(this.pic)
 				if (this.type === 0) return textLength >= 4 || this.picList.length > 0
 				return true
+			},
+			recommendedTopics() {
+				return (this.topicCenter.official || []).filter(topic => topic && topic.mid && topic.name)
 			},
 			topicOptions() {
 				const result = []
@@ -2279,6 +2295,57 @@
 		font-size: 20rpx;
 	}
 
+	.topic-recommend {
+		display: flex;
+		align-items: center;
+		gap: 14rpx;
+		margin-top: 16rpx;
+		min-width: 0;
+	}
+
+	.topic-recommend-label {
+		flex: 0 0 auto;
+		font-size: 22rpx;
+		color: #8b9497;
+	}
+
+	.topic-recommend-scroll {
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
+	}
+
+	.topic-recommend-track {
+		display: inline-flex;
+		align-items: center;
+		gap: 10rpx;
+		padding-right: 8rpx;
+	}
+
+	.topic-recommend-chip {
+		display: inline-flex;
+		align-items: center;
+		height: 48rpx;
+		padding: 0 15rpx;
+		border: 1rpx solid #dde3e2;
+		border-radius: 8rpx;
+		background: #f7f9f8;
+		font-size: 23rpx;
+		color: #687274;
+		transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+	}
+
+	.topic-recommend-chip.is-selected {
+		border-color: #9fc8bc;
+		background: #e9f3f0;
+		color: #246b5b;
+	}
+
+	.topic-recommend-state {
+		font-size: 22rpx;
+		color: #9aa1a3;
+	}
+
 	.topic-picker {
 		margin-top: 18rpx;
 		border: 1rpx solid #e1e6e7;
@@ -2421,6 +2488,23 @@
 	}
 
 	.campus-editor-page.campus-night .topic-chip {
+		background: #263531;
+		color: #9dc9bc;
+	}
+
+	.campus-editor-page.campus-night .topic-recommend-label,
+	.campus-editor-page.campus-night .topic-recommend-state {
+		color: #7f898b;
+	}
+
+	.campus-editor-page.campus-night .topic-recommend-chip {
+		border-color: #303738;
+		background: #1a1f20;
+		color: #9aa3a5;
+	}
+
+	.campus-editor-page.campus-night .topic-recommend-chip.is-selected {
+		border-color: #477d6f;
 		background: #263531;
 		color: #9dc9bc;
 	}
