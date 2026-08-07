@@ -32,6 +32,9 @@ legacy:
 # production runtime environment after the UniApp app id/client id pairing is verified.
 unipush:
   enabled: ${UNIPUSH_ENABLED:false}
+  # v1 = UniPush 1.0 (GeTui REST v1, auth_sign + push_single), v2 = GeTui REST v2.
+  # This app is packaged with UniPush 1.0, so production must set UNIPUSH_PROTOCOL=v1.
+  protocol: ${UNIPUSH_PROTOCOL:v2}
   app-id: ${UNIPUSH_APP_ID:}
   app-key: ${UNIPUSH_APP_KEY:}
   app-secret: ${UNIPUSH_APP_SECRET:}

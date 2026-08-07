@@ -1,6 +1,7 @@
 package cn.lcxqy.starfree.space;
 
 import cn.lcxqy.starfree.security.LegacyTokenService;
+import cn.lcxqy.starfree.push.UniPushService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -791,6 +792,114 @@ class SpaceServiceTest {
         verify(release).executeQuery();
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void successfulLikeWritesInboxAndPushToOwner() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Connection connection = mock(Connection.class);
+        PreparedStatement lock = statementWithSingleIntResult(1);
+        PreparedStatement target = mock(PreparedStatement.class);
+        ResultSet targetResult = mock(ResultSet.class);
+        when(target.executeQuery()).thenReturn(targetResult);
+        when(targetResult.next()).thenReturn(true);
+        when(targetResult.getLong("uid")).thenReturn(8L);
+        when(targetResult.getInt("status")).thenReturn(1);
+        when(targetResult.getInt("onlyMe")).thenReturn(0);
+        when(targetResult.getString("text")).thenReturn("hello world");
+        PreparedStatement duplicate = statementWithSingleIntResult(0);
+        PreparedStatement insert = mock(PreparedStatement.class);
+        ResultSet generatedKeys = mock(ResultSet.class);
+        when(insert.executeUpdate()).thenReturn(1);
+        when(insert.getGeneratedKeys()).thenReturn(generatedKeys);
+        when(generatedKeys.next()).thenReturn(true);
+        when(generatedKeys.getLong(1)).thenReturn(55L);
+        PreparedStatement update = mock(PreparedStatement.class);
+        when(update.executeUpdate()).thenReturn(1);
+        PreparedStatement release = mock(PreparedStatement.class);
+        ResultSet released = mock(ResultSet.class);
+        when(release.executeQuery()).thenReturn(released);
+
+        when(connection.prepareStatement(startsWith("SELECT GET_LOCK"))).thenReturn(lock);
+        when(connection.prepareStatement(startsWith("SELECT uid,status"))).thenReturn(target);
+        when(connection.prepareStatement(startsWith("SELECT COUNT(*) FROM starfree_userlog")))
+                .thenReturn(duplicate);
+        when(connection.prepareStatement(startsWith("INSERT INTO starfree_userlog"),
+                eq(Statement.RETURN_GENERATED_KEYS))).thenReturn(insert);
+        when(connection.prepareStatement(startsWith("UPDATE starfree_space SET likes")))
+                .thenReturn(update);
+        when(connection.prepareStatement(startsWith("SELECT RELEASE_LOCK"))).thenReturn(release);
+        when(fixture.jdbc.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<Integer> callback = invocation.getArgument(0);
+            return callback.doInConnection(connection);
+        });
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "token");
+        request.put("id", "11");
+
+        assertThat(fixture.service.like(request)).isEqualTo(1);
+
+        verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
+                eq("spaceLike"), eq(7L), contains("\u8d5e\u4e86\u4f60\u7684\u52a8\u6001"), eq(8L),
+                eq(0), eq(11L), anyLong(), eq(0));
+        verify(fixture.push).sendComment(eq(8L), eq("\u52a8\u6001\u70b9\u8d5e"),
+                contains("\u8d5e\u4e86\u4f60\u7684\u52a8\u6001"), eq("spaceComment:11"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void likingOwnSpaceDoesNotNotify() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Connection connection = mock(Connection.class);
+        PreparedStatement lock = statementWithSingleIntResult(1);
+        PreparedStatement target = mock(PreparedStatement.class);
+        ResultSet targetResult = mock(ResultSet.class);
+        when(target.executeQuery()).thenReturn(targetResult);
+        when(targetResult.next()).thenReturn(true);
+        when(targetResult.getLong("uid")).thenReturn(7L);
+        when(targetResult.getInt("status")).thenReturn(1);
+        when(targetResult.getInt("onlyMe")).thenReturn(0);
+        when(targetResult.getString("text")).thenReturn("my own dynamic");
+        PreparedStatement duplicate = statementWithSingleIntResult(0);
+        PreparedStatement insert = mock(PreparedStatement.class);
+        ResultSet generatedKeys = mock(ResultSet.class);
+        when(insert.executeUpdate()).thenReturn(1);
+        when(insert.getGeneratedKeys()).thenReturn(generatedKeys);
+        when(generatedKeys.next()).thenReturn(true);
+        when(generatedKeys.getLong(1)).thenReturn(56L);
+        PreparedStatement update = mock(PreparedStatement.class);
+        when(update.executeUpdate()).thenReturn(1);
+        PreparedStatement release = mock(PreparedStatement.class);
+        ResultSet released = mock(ResultSet.class);
+        when(release.executeQuery()).thenReturn(released);
+
+        when(connection.prepareStatement(startsWith("SELECT GET_LOCK"))).thenReturn(lock);
+        when(connection.prepareStatement(startsWith("SELECT uid,status"))).thenReturn(target);
+        when(connection.prepareStatement(startsWith("SELECT COUNT(*) FROM starfree_userlog")))
+                .thenReturn(duplicate);
+        when(connection.prepareStatement(startsWith("INSERT INTO starfree_userlog"),
+                eq(Statement.RETURN_GENERATED_KEYS))).thenReturn(insert);
+        when(connection.prepareStatement(startsWith("UPDATE starfree_space SET likes")))
+                .thenReturn(update);
+        when(connection.prepareStatement(startsWith("SELECT RELEASE_LOCK"))).thenReturn(release);
+        when(fixture.jdbc.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
+            ConnectionCallback<Integer> callback = invocation.getArgument(0);
+            return callback.doInConnection(connection);
+        });
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "token");
+        request.put("id", "11");
+
+        assertThat(fixture.service.like(request)).isEqualTo(1);
+
+        verify(fixture.jdbc, never()).update(startsWith("INSERT INTO starfree_inbox"),
+                any(Object[].class));
+        verify(fixture.push, never()).sendComment(anyLong(), anyString(), anyString(), anyString());
+    }
+
     private static PreparedStatement statementWithSingleIntResult(int value) throws Exception {
         PreparedStatement statement = mock(PreparedStatement.class);
         ResultSet result = mock(ResultSet.class);
@@ -860,8 +969,9 @@ class SpaceServiceTest {
         private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
         private final LegacyTokenService tokens = mock(LegacyTokenService.class);
         private final LegacySpaceAbuseGuard abuseGuard = mock(LegacySpaceAbuseGuard.class);
+        private final UniPushService push = mock(UniPushService.class);
         private final SpaceService service = new SpaceService(
-                jdbc, new ObjectMapper(), tokens, abuseGuard);
+                jdbc, new ObjectMapper(), tokens, abuseGuard, push);
 
         private Fixture() {
             when(abuseGuard.reservePost(anyLong(), anyBoolean(), anyInt(), anyInt()))

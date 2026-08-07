@@ -85,6 +85,9 @@
 															<block v-if="item.type=='spaceComment'">
 																<text class="userlv bg-green">动态评论</text>
 															</block>
+															<block v-if="item.type=='spaceLike'">
+																<text class="userlv bg-blue">动态点赞</text>
+															</block>
 												</view>
 												<view class="text-content text-df break-all">
 													<rich-text :nodes="markHtml(item.text)"></rich-text>
@@ -94,7 +97,7 @@
 											<view>{{item.contenTitle}}</view>
 											</view>
 															</view>
-											<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='spaceComment'">
+											<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='spaceComment' || item.type=='spaceLike'">
 												<view v-if="item.spaceState=='deleted'">原动态已删除</view>
 												<view v-else-if="item.spaceState=='hidden'">原动态不可见</view>
 												<view v-else>动态：{{item.spaceInfo && item.spaceInfo.text ? subText(item.spaceInfo.text, 80) : '查看动态'}}</view>
@@ -401,7 +404,7 @@
 				if(data.type=="comment"){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
 				}
-				if(data.type=="spaceComment" && data.spaceState=="visible"){
+				if((data.type=="spaceComment" || data.type=="spaceLike") && data.spaceState=="visible"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
 					uni.navigateTo({

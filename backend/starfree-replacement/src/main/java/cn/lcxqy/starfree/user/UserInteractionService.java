@@ -68,7 +68,7 @@ public class UserInteractionService {
         }
         if ("comment".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 "
-                    + "AND type IN ('comment', 'postComment', 'spaceComment')", uid);
+                    + "AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike')", uid);
         }
         if ("finance".equals(type) || "system".equals(type) || "fan".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 AND type = ?",
@@ -172,24 +172,29 @@ public class UserInteractionService {
                 result.put("contentsInfo", new LinkedHashMap<>(content));
             }
         }
-        if ("spaceComment".equals(String.valueOf(row.get("type")))) {
-            List<Map<String, Object>> spaces = jdbc.queryForList(
-                    "SELECT id,uid,text,type,status,onlyMe FROM starfree_space WHERE id = ? LIMIT 1",
-                    number(row.get("value")));
-            if (spaces.isEmpty()) {
-                result.put("spaceState", "deleted");
-                result.put("spaceInfo", null);
-            } else {
-                Map<String, Object> space = spaces.get(0);
-                long ownerUid = number(space.get("uid"));
-                long status = number(space.get("status"));
-                long onlyMe = number(space.get("onlyMe"));
-                boolean visible = ownerUid == viewerUid || (status == 1 && onlyMe == 0);
-                result.put("spaceState", visible ? "visible" : "hidden");
-                result.put("spaceInfo", visible ? new LinkedHashMap<>(space) : null);
-            }
+        String type = String.valueOf(row.get("type"));
+        if ("spaceComment".equals(type) || "spaceLike".equals(type)) {
+            enrichSpaceReference(result, number(row.get("value")), viewerUid);
         }
         return result;
+    }
+
+    private void enrichSpaceReference(Map<String, Object> result, long spaceId, long viewerUid) {
+        List<Map<String, Object>> spaces = jdbc.queryForList(
+                "SELECT id,uid,text,type,status,onlyMe FROM starfree_space WHERE id = ? LIMIT 1",
+                spaceId);
+        if (spaces.isEmpty()) {
+            result.put("spaceState", "deleted");
+            result.put("spaceInfo", null);
+            return;
+        }
+        Map<String, Object> space = spaces.get(0);
+        long ownerUid = number(space.get("uid"));
+        long status = number(space.get("status"));
+        long onlyMe = number(space.get("onlyMe"));
+        boolean visible = ownerUid == viewerUid || (status == 1 && onlyMe == 0);
+        result.put("spaceState", visible ? "visible" : "hidden");
+        result.put("spaceInfo", visible ? new LinkedHashMap<>(space) : null);
     }
 
     private Map<String, Object> publicUser(long uid) {
@@ -224,7 +229,7 @@ public class UserInteractionService {
             return "";
         }
         if ("comment".equals(type)) {
-            return " AND type IN ('comment', 'postComment', 'spaceComment')";
+            return " AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike')";
         }
         filters.add(type);
         return " AND type = ?";

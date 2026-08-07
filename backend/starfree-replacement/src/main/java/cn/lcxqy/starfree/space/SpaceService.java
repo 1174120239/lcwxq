@@ -439,6 +439,7 @@ public class SpaceService {
          * serializes the check/insert/counter sequence because these legacy tables are
          * MyISAM and a Spring transaction cannot make that sequence atomic.
          */
+        final Map<String, Object>[] likedTarget = new Map[1];
         Integer result = jdbc.execute((ConnectionCallback<Integer>) connection -> {
             String lockName = "starfree:spaceLike:" + viewer.uid + ":" + id;
             if (!acquireLock(connection, lockName)) {
@@ -456,6 +457,7 @@ public class SpaceService {
                     throw new IllegalArgumentException("\u4f60\u5df2\u7ecf\u70b9\u8d5e\u8fc7\u4e86");
                 }
 
+                likedTarget[0] = target;
                 long logId = insertLikeLog(connection, viewer.uid, id);
                 try (PreparedStatement update = connection.prepareStatement(
                         "UPDATE starfree_space SET likes = COALESCE(likes, 0) + 1 WHERE id = ?")) {
@@ -473,7 +475,34 @@ public class SpaceService {
                 releaseLock(connection, lockName);
             }
         });
+        if (result != null && result == 1 && likedTarget[0] != null) {
+            notifySpaceLike(viewer.uid, number(get(likedTarget[0], "uid")), id,
+                    String.valueOf(get(likedTarget[0], "text")));
+        }
         return result == null ? 0 : result;
+    }
+
+    /**
+     * Notifies the dynamic owner of a new like. Runs after the MyISAM lock is released and
+     * never turns a successful like into a client-visible failure; the inbox row is the
+     * authoritative copy and the push call is best-effort.
+     */
+    private void notifySpaceLike(long fromUid, long toUid, long spaceId, String spaceText) {
+        if (toUid <= 0 || toUid == fromUid) {
+            return;
+        }
+        try {
+            String text = "\u8d5e\u4e86\u4f60\u7684\u52a8\u6001\uff1a" + previewText(spaceText);
+            jdbc.update("INSERT INTO starfree_inbox "
+                            + "(type,uid,text,touid,isread,value,created,cid) VALUES (?,?,?,?,?,?,?,?)",
+                    "spaceLike", fromUid, text, toUid, 0, spaceId,
+                    Instant.now().getEpochSecond(), 0);
+            if (push != null) {
+                push.sendComment(toUid, "\u52a8\u6001\u70b9\u8d5e", text, "spaceComment:" + spaceId);
+            }
+        } catch (DataAccessException error) {
+            LOG.error("Could not write space like notice for uid {}", toUid, error);
+        }
     }
 
     public SpacePage followed(int page, int limit, String token) {
@@ -1114,7 +1143,7 @@ public class SpaceService {
     private Map<String, Object> loadLikeTarget(java.sql.Connection connection, long id)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT uid,status,onlyMe FROM starfree_space WHERE id = ? LIMIT 1")) {
+                "SELECT uid,status,onlyMe,text FROM starfree_space WHERE id = ? LIMIT 1")) {
             statement.setLong(1, id);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
@@ -1124,6 +1153,7 @@ public class SpaceService {
                 target.put("uid", result.getLong("uid"));
                 target.put("status", result.getInt("status"));
                 target.put("onlyMe", result.getInt("onlyMe"));
+                target.put("text", result.getString("text"));
                 return target;
             }
         }
