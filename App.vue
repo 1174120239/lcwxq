@@ -129,7 +129,7 @@
 						})
 					}, 1000)
 				}
-				if(payload.indexOf("comment")!=-1 || payload=="spaceComment"){
+				if (typeof payload === 'string' && payload.toLowerCase().indexOf("comment") !== -1){
 					setTimeout(function() {
 						uni.navigateTo({
 							url: '/pages/user/inbox'

@@ -784,6 +784,12 @@
 			}
 			that.userStatus();
 			// #ifdef APP-PLUS
+			// 已登录用户每次回到首页都向服务端校准推送 clientId，换设备或重装后也能继续收到通知。
+			if (that.token) {
+				that.getCID();
+			}
+			// #endif
+			// #ifdef APP-PLUS
 
 			//外部启动APP处理
 			var args = plus.runtime.arguments;

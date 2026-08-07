@@ -86,10 +86,9 @@
 														<text class="userlv" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
 													</block>
 												</block>
-												
-												
-													
-													
+													</block>
+													<block v-if="item.type=='spaceComment'">
+														<text class="userlv bg-green">动态评论</text>
 													</block>
 												</view>
 												<view class="text-content text-df break-all">
@@ -100,6 +99,11 @@
 														<view>{{item.contenTitle}}</view>
 														
 													</view>
+												</view>
+												<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='spaceComment'">
+													<view v-if="item.spaceState=='deleted'">原动态已删除</view>
+													<view v-else-if="item.spaceState=='hidden'">原动态不可见</view>
+													<view v-else>动态：{{item.spaceInfo && item.spaceInfo.text ? subText(item.spaceInfo.text, 80) : '查看动态'}}</view>
 												</view>
 												<view class="margin-top-sm flex justify-between message-meta">
 													<view class="text-gray text-df">{{formatDate(item.created)}}</view>
@@ -271,6 +275,7 @@
 				owoList:[],
 				
 				chatLoading:null,
+				pushRefreshHandler:null,
 				
 			}
 		},
@@ -291,6 +296,10 @@
 		},
 		onUnload() {
 			this.stopCampusThemeClock();
+			if (this.pushRefreshHandler) {
+				uni.$off('campus:push', this.pushRefreshHandler);
+				this.pushRefreshHandler = null;
+			}
 		},
 		onReachBottom() {
 		    //触底后执行的方法，比如无限加载之类的
@@ -340,6 +349,13 @@
 		},
 		onLoad() {
 			var that = this;
+			that.pushRefreshHandler = function() {
+				if (that.type == "inbox" && that.token) {
+					that.page = 1;
+					that.getInboxList(false);
+				}
+			};
+			uni.$on('campus:push', that.pushRefreshHandler);
 			
 			// #ifdef APP-PLUS || MP
 			that.NavBar = this.CustomBar;
@@ -410,6 +426,10 @@
 			replaceAll(string, search, replace) {
 			  return string.split(search).join(replace);
 			},
+			subText(text, num) {
+				var value = text == null ? '' : String(text);
+				return value.length > num ? value.substring(0, num) + '...' : value;
+			},
 			toInfo(cid,title){
 				var that = this;
 				clearInterval(that.chatLoading);
@@ -422,6 +442,13 @@
 				var that = this;
 				if(data.type=="comment"){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
+				}
+				if(data.type=="spaceComment" && data.spaceState=="visible"){
+					clearInterval(that.chatLoading);
+					that.chatLoading = null;
+					uni.navigateTo({
+						url: '/pages/space/info?id='+data.value
+					});
 				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);

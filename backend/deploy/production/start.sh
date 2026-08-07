@@ -46,6 +46,18 @@ export LEGACY_REDIS_ENABLED="${LEGACY_REDIS_ENABLED:-true}"
 export LEGACY_REDIS_PREFIX="${LEGACY_REDIS_PREFIX:-$(read_property web.prefix)}"
 export LEGACY_REDIS_SESSION_TTL="${LEGACY_REDIS_SESSION_TTL:-$(read_property webinfo.usertime)}"
 
+# UniPush is opt-in. When enabled on the server, the operator adds these keys to
+# /opt/application.properties (unipush.enabled=true, unipush.app-id, unipush.app-key,
+# unipush.app-secret) or exports the matching environment variables. Empty values
+# keep the service running with push disabled; credentials never live in Git.
+UNIPUSH_ENABLED_VALUE="${UNIPUSH_ENABLED:-$(read_property unipush.enabled)}"
+if [[ -n "$UNIPUSH_ENABLED_VALUE" ]]; then
+    export UNIPUSH_ENABLED="$UNIPUSH_ENABLED_VALUE"
+fi
+export UNIPUSH_APP_ID="${UNIPUSH_APP_ID:-$(read_property unipush.app-id)}"
+export UNIPUSH_APP_KEY="${UNIPUSH_APP_KEY:-$(read_property unipush.app-key)}"
+export UNIPUSH_APP_SECRET="${UNIPUSH_APP_SECRET:-$(read_property unipush.app-secret)}"
+
 
 if [[ -z "$DB_USERNAME" || -z "$DB_PASSWORD" ]]; then
     echo "Database credentials could not be read from $LEGACY_PROPERTIES" >&2
