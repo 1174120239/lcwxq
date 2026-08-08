@@ -131,6 +131,32 @@
 				</view>
 			</view>
 		</view>
+		<!-- 匿名动态（ng_music 插件本土化） -->
+		<view class="data-box" v-if="group=='administrator'">
+			<view class="module-title">匿名动态</view>
+			<view class="index-sort grid col-4">
+				<view class="index-sort-box">
+					<waves itemClass="butclass">
+						<view class="index-sort-main" @tap="toLink('/pages/plugins/ng_music/manage/config')">
+							<view class="index-sort-i">
+								<text class="cuIcon-edit"></text>
+							</view>
+							<view class="index-sort-text">匿名动态配置</view>
+						</view>
+					</waves>
+				</view>
+				<view class="index-sort-box">
+					<waves itemClass="butclass">
+						<view class="index-sort-main" @tap="toLink('/pages/manage/space')">
+							<view class="index-sort-i">
+								<text class="cuIcon-notice"></text>
+							</view>
+							<view class="index-sort-text">匿名动态审核</view>
+						</view>
+					</waves>
+				</view>
+			</view>
+		</view>
 		<!-- 聊一论坛开发组维护 -->
 		<!-- 允许用于合法的商业运营用途，但请保留版权信息。-->
 		<!-- 运营管理 -->

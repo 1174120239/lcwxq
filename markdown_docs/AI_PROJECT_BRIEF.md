@@ -1,6 +1,6 @@
 # 聊一论坛项目技术手册
 
-> 更新日期：2026-08-05
+> 更新日期：2026-08-08
 >
 > 适用仓库：1174120239/lcwxq
 >
@@ -14,7 +14,7 @@
 - 新后端位于 backend/starfree-replacement，使用 Spring Boot 2.7.18，编译为 Java 8 兼容字节码。
 - 生产环境保留旧闭源 Java API；仓库中的 `backend/legacy-api/dist/StarFreeApi.jar` 是从生产服务器核验的可部署副本，新后端通过 Nginx 精确路由逐步接管接口。
 - PHP admin 管理后台继续使用，不重建。
-- 插件功能不在重建范围，动态 type=6 明确拒绝。
+- 除匿名动态（原 ng_music 插件功能，2026-08-08 按用户要求原生实现）外，插件功能不在重建范围，动态 type=6 明确拒绝。
 - 充值、验证码发送、文件上传、聊天和部分第三方登录仍使用旧后端。
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
@@ -245,6 +245,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | ads | 广告读写、购买、审核、续费和奖励回调 |
 | economy | 积分、经验、余额、签到、奖励、提现、财务记录 |
 | shop | 商品、商城、VIP 和购买 |
+| anonymous | 匿名动态：公开配置、匿名发布、归属查询、管理端配置 |
 | proxy | 未迁移接口和受控旧端委托 |
 
 ### 8.2 混合处理
@@ -260,7 +261,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 - upload/full。
 - 私聊、群聊和聊天管理。
 - 官方支付创建、卡密和原支付回调。
-- 插件接口和未知插件内容。
+- 插件接口和未知插件内容（匿名动态已在新后端原生实现，不依赖 PHP 插件）。
 
 详细逐路径状态以 [API_USAGE_GUIDE.md](API_USAGE_GUIDE.md) 为准。
 
@@ -291,6 +292,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 - 推荐、置顶、轮播字段由内容扩展接口维护。
 - 后台话题管理复用 tag/meta 管理页；校区和年级使用独立的稳定选项目录。
 - PHP admin 配置接口仍直接访问 admin.lcxqy.cn。
+- 匿名动态入口在首页发布面板，复用动态发布页（`?anonymous=1`），支持图片、视频和最多 3 个话题；匿名动态以专用匿名账号发布，真实发布者只存服务端映射表，公开接口不返回映射；管理端“匿名动态”模块可配置匿名账号与审核开关。
 
 ### 9.3 消息和聊天
 
@@ -323,13 +325,13 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 199
+Tests run: 231
 Failures: 0
 Errors: 0
 Skipped: 0
 ~~~
 
-测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托和经济操作。
+测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托、匿名动态权限与隐私边界和经济操作。
 
 ### 11.2 本地集成脚本
 

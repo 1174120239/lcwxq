@@ -21,7 +21,12 @@
 							<text class="publish-option-label">发布动态</text>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
-						<text class="publish-option-hint">更多发布方式，敬请期待</text>
+						<view class="publish-option" @tap="goPublish('/pages/space/post?anonymous=1')">
+							<view class="publish-option-icon anonymous-icon"><text class="cuIcon-notice"></text></view>
+							<text class="publish-option-label">匿名动态</text>
+							<text class="publish-option-arrow cuIcon-right"></text>
+						</view>
+						<text class="publish-option-hint">匿名动态不展示真实身份，请遵守社区规范</text>
 					</view>
 				</view>
 			</scroll-view>

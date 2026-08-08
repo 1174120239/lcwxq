@@ -1,6 +1,6 @@
 # LCXQY API 调用手册
 
-更新时间：2026-08-05
+更新时间：2026-08-08
 
 本手册面向前端、管理端、自动化脚本和集成开发，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **140 个唯一 API 路径**，并额外记录支付回调和内部兼容路径，区分新后端、公网切流、混合委托和旧端能力。
 
@@ -323,7 +323,28 @@ form_post("SFreeSpace/spaceList", {
 
 上例只返回同时包含话题 12 和 18 的动态；数组为空或未传话题条件时返回普通全量动态。
 
-### 5.3 广告
+### 5.3 匿名动态
+
+匿名动态是原 StarPro `ng_music` 插件功能的本土化实现（用户要求加入，非旧插件重建）。匿名
+动态仍是 `starfree_space` 的普通动态，只是 uid 指向运营配置的专用匿名账号；真实发布者只
+保存在 `starfree_anonymous_posts` 映射表，任何公开接口都不输出映射关系。
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeAnonymous/config` | GET/POST / 无 | 无 | 公网新 | 只返回 `data.enabled`，不泄露匿名账号身份；`enabled=false` 时前端直接提示未开放。 |
+| `SFreeAnonymous/post` | POST / token | `token,type,text,pic,topicIds` | 公网新 | 与 addSpace 同一套动态校验（经验门槛、实名/蓝V、违禁词、防刷、发布限额，均按真实用户计算）；type 仅 0/4，onlyMe/toid 强制为 0；`review=1` 或全局动态审核开启时 status=0（待审核），否则 status=1；成功 `data={status}`。不发放动态经验。 |
+| `SFreeAnonymous/owner` | GET/POST / 动态主人或 staff | `token,sid`（兼容 `id/cid`） | 公网新 | 非匿名动态返回“该动态不是匿名动态”；只有动态主人或 staff 能查到真实 `uid`，避免匿名身份被枚举。 |
+| `SFreeAnonymous/admin/config` | GET/POST / administrator | `token,fid,review` | 公网新 | GET 返回完整配置及匿名账号 `anonymousName/anonymousExists`；POST 校验匿名账号存在、`review∈{0,1}` 后更新。 |
+
+配置字段：
+
+- `fid`：匿名发布账号 UID，`0` 表示未开放匿名动态。
+- `review`：`1` 匿名动态进入待审核，`0` 按全局动态审核规则直接发布。
+
+前端入口：首页发布面板“匿名动态”，复用 `pages/space/post` 发布页（`?anonymous=1`）。
+数据库迁移：`backend/database/migrations/005_ng_music_anonymous.sql`。
+
+### 5.4 广告
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|

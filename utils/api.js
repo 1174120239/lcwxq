@@ -351,6 +351,19 @@ module.exports = {
 	contentsAdd:function(){
 		return API_URL + 'SFreeContents/contentsAdd';
 	},
+	//匿名动态（ng_music 插件本土化）
+	anonymousConfig:function(){
+		return API_URL + 'SFreeAnonymous/config';
+	},
+	anonymousPost:function(){
+		return API_URL + 'SFreeAnonymous/post';
+	},
+	anonymousOwner:function(){
+		return API_URL + 'SFreeAnonymous/owner';
+	},
+	anonymousAdminConfig:function(){
+		return API_URL + 'SFreeAnonymous/admin/config';
+	},
 	
 	contentsUpdate:function(){
 		return API_URL + 'SFreeContents/contentsUpdate';

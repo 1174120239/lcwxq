@@ -7,7 +7,8 @@
 				</view>
 				<view class="content text-bold" :style="[{top:StatusBar + 'px'}]">
 					<block v-if="postType=='add'">
-						发布动态
+						<block v-if="anonymousMode">匿名动态</block>
+						<block v-else>发布动态</block>
 					</block>
 					<block v-else>
 						编辑动态
@@ -54,6 +55,11 @@
 					</view>
 				</view>
 				<!--  #endif -->
+
+				<view class="anonymous-tip" v-if="anonymousMode">
+					<text class="cuIcon-notice"></text>
+					<text>匿名发布：动态将以匿名账号展示，其他用户无法看到你的身份。</text>
+				</view>
 
 				<view class="media-section" v-if="type==0||type==4">
 					<view class="media-grid">
@@ -170,6 +176,7 @@
 				
 				id:0,
 				postType:"add",
+				anonymousMode:false,
 				type:0,
 				text:"",
 				toid:0,
@@ -321,6 +328,10 @@
 			
 			if(res.postType){
 				that.postType = res.postType;
+			}
+			if(res.anonymous){
+				that.anonymousMode = true;
+				that.postType = "add";
 			}
 			if(res.id){
 				that.id = res.id;
@@ -774,7 +785,7 @@
 				});
 				that.$Net.request({
 					
-					url: that.$API.addSpace(),
+					url: that.anonymousMode ? that.$API.anonymousPost() : that.$API.addSpace(),
 					data:that.$API.removeObjectEmptyKey(data),
 					header:{
 						'Content-Type':'application/x-www-form-urlencoded'
@@ -884,7 +895,7 @@
 				});
 				that.$Net.request({
 					
-					url: that.$API.addSpace(),
+					url: that.anonymousMode ? that.$API.anonymousPost() : that.$API.addSpace(),
 					data:that.$API.removeObjectEmptyKey(data),
 					header:{
 						'Content-Type':'application/x-www-form-urlencoded'
@@ -1652,6 +1663,23 @@
 		width: 100%;
 		max-width: 760px;
 		margin: 0 auto;
+	}
+
+	.anonymous-tip {
+		display: flex;
+		align-items: center;
+		margin: 16rpx 28rpx 0;
+		padding: 16rpx 20rpx;
+		border-radius: 16rpx;
+		background: #f0f9ff;
+		color: #2a7fb8;
+		font-size: 24rpx;
+		line-height: 1.5;
+	}
+
+	.anonymous-tip .cuIcon-notice {
+		margin-right: 10rpx;
+		font-size: 32rpx;
 	}
 
 	.post-editor-surface {

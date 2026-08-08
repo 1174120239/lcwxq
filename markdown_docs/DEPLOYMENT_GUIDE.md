@@ -236,6 +236,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 002 | 002_space_views.sql | 动态浏览量字段 |
 | 003 | 003_space_topics.sql | 动态话题、关注和关系表 |
 | 004 | 004_campus_identity.sql | 校区/入学年份选项和用户引用列 |
+| 005 | 005_ng_music_anonymous.sql | 匿名动态映射与配置表（ng_music 插件功能原生实现） |
 
 规则：
 
@@ -249,6 +250,10 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 `starfree_users`，确认 001-003 已完成，再执行一次 004；执行后检查两个新增索引、四个种子选项
 以及用户表新增列。读取用户资料和处理注册的新 JAR 依赖这些结构，因此 **不能在未执行 004 时部署该 JAR**。
 停用选项不会清空已有用户引用，回滚 JAR 时也不要自动删除新表或新列。
+
+005 只新增两张 InnoDB 表并写入一行默认配置（`fid=0` 表示匿名动态未开放），不修改现有表，
+可随时在发布新 JAR 前执行；执行后应确认两张表存在且配置行 id=1。回滚 JAR 时不要删除这两张表。
+上线后在管理端“匿名动态配置”里填写匿名账号 UID 与审核开关。
 
 001 可使用：
 
@@ -308,7 +313,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）。脚本都只增加对应精确 location，并逐个校验 `X-Starfree-Backend` 响应头。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`。脚本都只增加对应精确 location，并逐个校验 `X-Starfree-Backend` 响应头。
 
 ### 9.2 当前边界
 
@@ -318,6 +323,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 内容详情，以及普通帖子/视频的新增和更新。
 - 动态读取、发布、编辑、审核、锁定、删除、点赞、关注、浏览量和话题。
 - 站内通知读取、未读数与已读标记（inbox/unreadNum/setRead）。
+- 匿名动态：公开配置、匿名发布、归属查询和管理端配置（SFreeAnonymous/*）。
 - 用户注册、资料维护和部分管理操作。
 - 积分、签到、奖励、提现、商城、VIP、广告购买及广告奖励。
 
@@ -327,7 +333,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - upload/full 文件上传。
 - 聊天和群聊。
 - 官方充值、支付创建、卡密及支付回调的原始实现。
-- 插件接口和未知插件内容。
+- 插件接口和未知插件内容（匿名动态已原生实现，不依赖 PHP 插件）。
 - API 手册中标为“旧端”或“待抓包确认”的其他路径。
 
 部分新接口会主动委托旧端处理不支持的付费、草稿、商品关联或未知类型请求。不能只看 URL 判断最终写入者。
@@ -368,6 +374,7 @@ HTTP 200 不代表业务成功，还要检查响应 JSON 的 code 和 msg。
 | 经济 | verify-economy.sh |
 | 广告奖励 | verify-ads-reward.sh |
 | 注册与账号 | verify-user-registration.sh、verify-account-maintenance.sh |
+| 匿名动态 | verify-anonymous.sh |
 
 ## 11. 回滚
 

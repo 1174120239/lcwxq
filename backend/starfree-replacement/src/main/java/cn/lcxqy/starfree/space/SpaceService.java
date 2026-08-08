@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
@@ -200,6 +202,116 @@ public class SpaceService {
         }
         if (type == 3 && status == 1 && replyTarget != null) {
             notifySpaceComment(viewer.uid, replyTarget, now, text);
+        }
+        return status == 0;
+    }
+
+    /**
+     * 匿名动态发布（ng_music 插件功能的本土化实现）。
+     *
+     * <p>复用 {@link #add(Map, String)} 的全部动态校验（类型、字数、媒体、话题、经验门槛、
+     * 实名/蓝V 门槛、违禁词、防刷和发布限额，均按真实用户计算），但把
+     * {@code starfree_space.uid} 写成配置的专用匿名账号，onlyMe/toid 强制为公开普通动态。
+     * 审核状态取“全局动态审核”与“匿名审核开关”的严格值；真实发布者写入
+     * {@code starfree_anonymous_posts}，该表不对外输出；匿名动态不发放发帖经验。
+     * 返回 {@code true} 表示待审核。
+     */
+    public boolean addAnonymous(Map<String, String> request, String ip,
+                                long anonymousUid, boolean reviewRequired) {
+        Viewer viewer = requireViewer(request);
+        int type = validateType(RequestValues.integer(request, "type", 0));
+        if (type != 0 && type != 4) {
+            throw new IllegalArgumentException("\u53c2\u6570\u4e0d\u6b63\u786e");
+        }
+        String pic = nullableText(request, "pic");
+        if (type == 4 && (pic == null || pic.isEmpty())) {
+            throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
+        }
+        boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
+        String text = validateText(request.get("text"), mediaAllowsEmptyText);
+        List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
+        SpaceConfig config = config();
+
+        Map<String, Object> user = viewer.user;
+        abuseGuard.requireNotSilenced(viewer.uid);
+        abuseGuard.checkRobotBurst(viewer.uid, config.banRobots == 1, config.silenceTime);
+        validateForbidden(viewer.uid, config, text);
+        int experience = (int) number(get(user, "experience"));
+        if (experience < config.spaceMinExp) {
+            throw new IllegalArgumentException("\u53d1\u5e03\u52a8\u6001\u6700\u4f4e\u8981\u6c42\u7ecf\u9a8c\u503c\u4e3a"
+                    + config.spaceMinExp + "\uff0c\u4f60\u5f53\u524d\u7ecf\u9a8c\u503c" + experience);
+        }
+        if (config.identifysmPost == 1) {
+            throw new IllegalArgumentException("\u8bf7\u5148\u5b8c\u6210\u5b9e\u540d\u8ba4\u8bc1");
+        }
+        if (config.identifylvPost == 1) {
+            throw new IllegalArgumentException("\u8bf7\u5148\u5b8c\u6210\u84ddV\u8ba4\u8bc1");
+        }
+
+        long now = Instant.now().getEpochSecond();
+        int status = (config.spaceAudit == 1 || reviewRequired) ? 0 : 1;
+        int recentPosts = requireWithinPostLimit(viewer, config);
+        LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
+                viewer.uid, viewer.staff, config.postMax, recentPosts);
+        long spaceId = 0;
+        try {
+            String sql = "INSERT INTO starfree_space "
+                    + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            final String contentText = text.replace("||rn||", "\r\n");
+            final String contentPic = pic;
+            final int contentType = type;
+            final int contentStatus = status;
+            jdbc.update(connection -> {
+                PreparedStatement statement = connection.prepareStatement(
+                        sql, Statement.RETURN_GENERATED_KEYS);
+                int i = 1;
+                statement.setLong(i++, anonymousUid);
+                statement.setLong(i++, now);
+                statement.setLong(i++, now);
+                statement.setString(i++, contentText);
+                statement.setString(i++, contentPic);
+                statement.setInt(i++, contentType);
+                statement.setInt(i++, 0);
+                statement.setInt(i++, 0);
+                statement.setInt(i++, contentStatus);
+                statement.setInt(i++, 0);
+                return statement;
+            }, keyHolder);
+            if (keyHolder.getKey() == null) {
+                throw new IllegalStateException("Anonymous space insert did not return an id");
+            }
+            spaceId = keyHolder.getKey().longValue();
+        } finally {
+            if (spaceId == 0) {
+                reservation.cancel();
+            }
+        }
+
+        if (!topicIds.isEmpty()) {
+            try {
+                topics.replace(spaceId, topicIds);
+            } catch (RuntimeException error) {
+                // The MyISAM Space row already exists. Do not make the client retry and create a
+                // duplicate; log the missing secondary relation for operational repair instead.
+                LOG.error("Anonymous space {} was published but topic relations could not be saved for uid {}",
+                        spaceId, viewer.uid, error);
+            }
+        }
+        try {
+            jdbc.update("INSERT INTO starfree_anonymous_posts (uid, sid, created) VALUES (?, ?, ?)",
+                    viewer.uid, spaceId, now);
+        } catch (RuntimeException error) {
+            LOG.error("Anonymous space {} was published but owner mapping could not be saved for uid {}",
+                    spaceId, viewer.uid, error);
+        }
+        try {
+            jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
+                    now, ip == null ? "" : ip, viewer.uid);
+        } catch (RuntimeException error) {
+            LOG.error("Anonymous space {} was published but user activity fields could not be updated for uid {}",
+                    spaceId, viewer.uid, error);
         }
         return status == 0;
     }

@@ -581,6 +581,10 @@
 		{
 			"path": "pages/plugins/sy_appbox/tipList",
 			"style": {}
+		},
+		{
+			"path": "pages/plugins/ng_music/manage/config",
+			"style": {}
 		}
 
 
