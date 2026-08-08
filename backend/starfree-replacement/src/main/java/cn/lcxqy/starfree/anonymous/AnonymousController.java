@@ -37,8 +37,8 @@ public class AnonymousController {
         return ApiResponse.success("请求成功", service.publicConfig());
     }
 
-    /** POST {@code /SFreeAnonymous/post}：匿名发布文章。 */
-    @PostMapping("/post")
+    /** ANY {@code /SFreeAnonymous/post}：匿名发布动态（兼容旧前端的 GET 表单）。 */
+    @RequestMapping("/post")
     public ApiResponse post(@RequestParam MultiValueMap<String, String> form,
                             HttpServletRequest request) {
         Map<String, String> params = new LinkedHashMap<>();
