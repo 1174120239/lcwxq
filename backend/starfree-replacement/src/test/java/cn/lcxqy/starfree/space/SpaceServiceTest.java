@@ -795,7 +795,7 @@ class SpaceServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void successfulLikeWritesInboxAndPushToOwner() throws Exception {
+    void successfulLikeCountsWithoutNotifications() throws Exception {
         Fixture fixture = new Fixture();
         fixture.login(7L, "contributor");
         Connection connection = mock(Connection.class);
@@ -807,7 +807,6 @@ class SpaceServiceTest {
         when(targetResult.getLong("uid")).thenReturn(8L);
         when(targetResult.getInt("status")).thenReturn(1);
         when(targetResult.getInt("onlyMe")).thenReturn(0);
-        when(targetResult.getString("text")).thenReturn("hello world");
         PreparedStatement duplicate = statementWithSingleIntResult(0);
         PreparedStatement insert = mock(PreparedStatement.class);
         ResultSet generatedKeys = mock(ResultSet.class);
@@ -834,8 +833,6 @@ class SpaceServiceTest {
             ConnectionCallback<Integer> callback = invocation.getArgument(0);
             return callback.doInConnection(connection);
         });
-        when(fixture.jdbc.queryForObject(anyString(), eq(String.class), any()))
-                .thenReturn("cloud@example.com");
 
         Map<String, String> request = new HashMap<>();
         request.put("token", "token");
@@ -843,13 +840,11 @@ class SpaceServiceTest {
 
         assertThat(fixture.service.like(request)).isEqualTo(1);
 
-        verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
-                eq("spaceLike"), eq(7L), contains("\u8d5e\u4e86\u4f60\u7684\u52a8\u6001"), eq(8L),
-                eq(0), eq(11L), anyLong(), eq(0));
-        verify(fixture.push).sendComment(eq(8L), eq("\u52a8\u6001\u70b9\u8d5e"),
-                contains("\u8d5e\u4e86\u4f60\u7684\u52a8\u6001"), eq("spaceComment:11"));
-        verify(fixture.email).sendDynamicNotice(eq("cloud@example.com"),
-                contains("LCYZ"), contains("\u8d5e\u4e86\u4f60\u7684\u52a8\u6001"));
+        // Likes only persist the durable log and counter; no inbox, push, or email.
+        verify(fixture.jdbc, never()).update(startsWith("INSERT INTO starfree_inbox"),
+                any(Object[].class));
+        verify(fixture.push, never()).sendComment(anyLong(), anyString(), anyString(), anyString());
+        verify(fixture.email, never()).sendDynamicNotice(anyString(), anyString(), anyString());
     }
 
     @Test
