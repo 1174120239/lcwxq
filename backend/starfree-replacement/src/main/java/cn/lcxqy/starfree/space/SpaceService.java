@@ -3,6 +3,7 @@ package cn.lcxqy.starfree.space;
 import cn.lcxqy.starfree.api.RequestValues;
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.push.UniPushService;
+import cn.lcxqy.starfree.notify.EmailNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
@@ -66,21 +67,24 @@ public class SpaceService {
     private final LegacySpaceAbuseGuard abuseGuard;
     private final SpaceTopicService topics;
     private final UniPushService push;
+    private final EmailNotificationService email;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
-        this(jdbc, mapper, tokens, abuseGuard, null);
+        this(jdbc, mapper, tokens, abuseGuard, null, null);
     }
 
     @Autowired
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
-                        LegacySpaceAbuseGuard abuseGuard, UniPushService push) {
+                        LegacySpaceAbuseGuard abuseGuard, UniPushService push,
+                        EmailNotificationService email) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tokens = tokens;
         this.abuseGuard = abuseGuard;
         this.topics = new SpaceTopicService(jdbc);
         this.push = push;
+        this.email = email;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -499,6 +503,10 @@ public class SpaceService {
                     Instant.now().getEpochSecond(), 0);
             if (push != null) {
                 push.sendComment(toUid, "\u52a8\u6001\u70b9\u8d5e", text, "spaceComment:" + spaceId);
+            }
+            if (email != null) {
+                email.sendDynamicNotice(mailOf(toUid), "\u3010LCYZ\u3011\u4f60\u7684\u52a8\u6001\u6536\u5230\u65b0\u70b9\u8d5e",
+                        text);
             }
         } catch (DataAccessException error) {
             LOG.error("Could not write space like notice for uid {}", toUid, error);
@@ -1098,9 +1106,24 @@ public class SpaceService {
             if (push != null) {
                 push.sendComment(toUid, "动态评论", text, "spaceComment:" + spaceId);
             }
+            if (email != null) {
+                email.sendDynamicNotice(mailOf(toUid), "\u3010LCYZ\u3011\u4f60\u7684\u52a8\u6001\u6536\u5230\u65b0\u8bc4\u8bba",
+                        text);
+            }
         } catch (DataAccessException error) {
             // The dynamic is already published; notification failure must not duplicate it on retry.
             LOG.error("Could not write dynamic comment notice for uid {}", toUid, error);
+        }
+    }
+
+    private String mailOf(long uid) {
+        try {
+            String mail = jdbc.queryForObject(
+                    "SELECT mail FROM starfree_users WHERE uid=? LIMIT 1", String.class, uid);
+            return mail == null ? "" : mail.trim();
+        } catch (DataAccessException error) {
+            LOG.error("Could not resolve mail for uid {}", uid, error);
+            return "";
         }
     }
 

@@ -39,3 +39,9 @@ unipush:
   app-key: ${UNIPUSH_APP_KEY:}
   app-secret: ${UNIPUSH_APP_SECRET:}
   api-base: ${UNIPUSH_API_BASE:https://restapi.getui.com}
+
+# Email notifications for dynamic comments/likes are opt-in and reuse Spring Mail
+# (spring.mail.host/username/password from the server runtime configuration).
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
