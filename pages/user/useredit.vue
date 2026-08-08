@@ -116,6 +116,7 @@
 				avatarNew:"",
 				introduce:"",
 				backif:0,
+				cacheLoaded:false,
 				modalName: null,
 				
 				token:'',
@@ -132,7 +133,7 @@
 			plus.navigator.setStatusBarStyle(that.$store.state.AppStyle === 'campus-night' ? "light" : "dark")
 			// #endif
 			
-			that.getCacheInfo();
+			that.getCacheInfo(false);
 			
 			if(localStorage.getItem('toAvatar')){
 				var toAvatar = JSON.parse(localStorage.getItem('toAvatar'));
@@ -167,8 +168,11 @@
 			hideModal(e) {
 				this.modalName = null
 			},
-			getCacheInfo(){
+			getCacheInfo(force){
 				var that = this;
+				if(that.cacheLoaded && !force){
+					return false;
+				}
 				if(localStorage.getItem('userinfo')){
 					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
 					that.uid=userInfo.uid;
@@ -179,6 +183,7 @@
 					that.token=userInfo.token;
 					that.avatar=userInfo.avatar;
 					that.introduce = userInfo.introduce;
+					that.cacheLoaded = true;
 				}
 			},
 			userEdit() {
@@ -243,7 +248,7 @@
 									clearTimeout('timer')
 								}, 1000)
 							}else{
-								var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+								var userInfo = JSON.parse(localStorage.getItem('userinfo') || '{}');
 								userInfo.screenName=that.screenName;
 								userInfo.userBg=that.userBg;
 								userInfo.introduce = that.introduce;
@@ -252,7 +257,8 @@
 								}
 								that.avatarNew = '';
 								localStorage.setItem('userinfo',JSON.stringify(userInfo));
-								that.getCacheInfo();
+								that.cacheLoaded = false;
+								that.getCacheInfo(true);
 							}
 							if(that.backif==1){
 								that.back();
