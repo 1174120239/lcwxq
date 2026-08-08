@@ -126,6 +126,8 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 002_space_views.sql | 动态浏览量 |
 | 003_space_topics.sql | 动态话题、关注和关联 |
 | 004_campus_identity.sql | 校区/入学年份选项及用户稳定引用 id |
+| 005_ng_music_anonymous.sql | 匿名动态专用账号、真实发布者映射与后台配置 |
+| 006_qqbot_dynamic_ai.sql | NapCat 个人 QQ 动态助手配置、绑定、群同步、幂等和投递日志 |
 
 ## 5. 请求和响应约定
 
@@ -246,6 +248,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | economy | 积分、经验、余额、签到、奖励、提现、财务记录 |
 | shop | 商品、商城、VIP 和购买 |
 | anonymous | 匿名动态：公开配置、匿名发布、归属查询、管理端配置 |
+| bot | NapCat 个人 QQ 动态助手：DeepSeek 聊天代理、QQ 绑定、发动态、资料修改、积分/签到状态、签到和群动态同步 |
 | proxy | 未迁移接口和受控旧端委托 |
 
 ### 8.2 混合处理
@@ -293,6 +296,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 - 后台话题管理复用 tag/meta 管理页；校区和年级使用独立的稳定选项目录。
 - PHP admin 配置接口仍直接访问 admin.lcxqy.cn。
 - 匿名动态入口在首页发布面板，复用动态发布页（`?anonymous=1`），支持图片、视频和最多 3 个话题；匿名动态以专用匿名账号发布，真实发布者只存服务端映射表，公开接口不返回映射；管理端“匿名动态”模块可配置匿名账号与审核开关。
+- QQ 动态助手使用个人 QQ 号登录 NapCat，再通过 OneBot v11 反向 WebSocket 接 AstrBot；不是 QQ 官方机器人号。后端 `SFreeBot/*` 只开放动态工具，不开放帖子/文章能力。
 
 ### 9.3 消息和聊天
 

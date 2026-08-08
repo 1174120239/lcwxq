@@ -287,7 +287,7 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/followSpace` | GET/POST / token | `page,limit` | 公网新 | 只读已关注用户的公开、非回复动态。前端别名见下一行。 |
 | `SFreeSpace/myFollowSpace` | GET/POST / token | `page,limit` | 公网新 | `followSpace` 的前端别名；仅当前页 count。 |
 | `SFreeSpace/spaceDelete` | GET/POST / 作者或 staff | `id` | 公网新 | 只删主行，不级联历史回复、转发、spaceLike，不扣经验。 |
-| `SFreeSpace/spaceLikes` | GET/POST / token | `id` | 公网新 | uid+space id 持久去重；没有取消点赞接口。 |
+| `SFreeSpace/spaceLikes` | GET/POST / token | `id` | 公网新 | uid+space id 持久切换点赞状态；返回 data=1 表示已点赞，data=0 表示已取消点赞。 |
 | `SFreeSpace/spaceReview` | GET/POST / staff | `id,type` | 公网新 | `type=1` 通过，`0` 拒绝并删主行，写系统通知。 |
 | `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发。 |
 | `SFreeSpace/topicList` | GET/POST / 可选 token | `token,searchKey` | 公网新 | 按名称/描述关键词模糊搜索，返回 `data.all/hot/official/followed`；每项含动态数、关注数和当前用户关注状态。关注列表只在登录后返回。 |
@@ -296,6 +296,27 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
+
+### QQ 动态助手（NapCat 个人账号）
+
+以下接口由 AstrBot 插件调用，插件运行在 NapCat 个人 QQ 账号接入链路上，不是 QQ 官方机器人号。统一使用 `botSecret` + `platform=qq`，除绑定页外返回旧协议 `{code,msg,data}`。Bot 只开放动态能力，不暴露帖子/文章接口。
+
+| 接口 | 方法/权限 | 参数 | 落点 | 说明 |
+|---|---|---|---|---|
+| `SFreeBot/config` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 Bot 开关、工具开关、DeepSeek 模型、群同步配置；不返回 DeepSeek Key。 |
+| `SFreeBot/chat` | POST / Bot secret | `message` 或 `messages` JSON | 公网新 | 后端代理 DeepSeek Chat Completions，DeepSeek Key 只在后台配置表。 |
+| `SFreeBot/bindChallenge` | GET/POST / Bot secret | `qqUserId,platform` | 公网新 | 生成短期一次性 QQ 绑定链接。 |
+| `SFreeBot/bindPage` | GET / 无 | `token` | 公网新 | 独立 HTML 登录页；只用于绑定 QQ，不创建普通登录态。 |
+| `SFreeBot/bindLogin` | POST / 无 | `token,account,password` | 公网新 | 校验论坛账号密码并写 `lcxqy_bot_bindings`；不调用 userLogin、不改 `authCode`、不写 Redis session。 |
+| `SFreeBot/meStatus` | GET/POST / Bot secret | `qqUserId,platform` | 公网新 | 返回绑定状态、脱敏用户快照、积分/经验/余额和签到连续天数。 |
+| `SFreeBot/signin` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId` | 公网新 | 对绑定 uid 执行签到；沿用 uid+日期幂等。 |
+| `SFreeBot/addSpace` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId,text,pic,topicIds,onlyMe` | 公网新 | 仅发布普通动态 `type=0,toid=0`，复用 `SpaceService` 审核、违禁词、经验门槛、防刷和奖励逻辑。 |
+| `SFreeBot/updateProfile` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId,screenName,introduce,avatar,campusId,gradeId` | 公网新 | 只允许普通资料白名单字段；不允许改密码、邮箱、手机、积分、余额、经验、VIP、角色。 |
+| `SFreeBot/registerGroup` | GET/POST / Bot secret | `groupId,groupName,unifiedMsgOrigin` | 公网新 | 登记 QQ 群动态同步目标，后台可继续启停和调整摘要策略。 |
+| `SFreeBot/latestSpaces` | GET/POST / Bot secret | `groupId,afterId,limit` | 公网新 | 拉取公开、已审核、非私密、非回复动态，返回 H5 链接、摘要、图片和作者信息。 |
+| `SFreeBot/delivery` | GET/POST / Bot secret | `groupId,spaceId,status,messageId,error` | 公网新 | 记录群投递结果；只有 `status=success` 推进群游标。 |
+
+数据库迁移：`backend/database/migrations/006_qqbot_dynamic_ai.sql`。
 
 发布动态并绑定话题示例：
 

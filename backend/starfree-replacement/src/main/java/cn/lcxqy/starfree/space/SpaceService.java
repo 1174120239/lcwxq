@@ -90,7 +90,21 @@ public class SpaceService {
     }
 
     public boolean add(Map<String, String> request, String ip) {
-        Viewer viewer = requireViewer(request);
+        return addForViewer(requireViewer(request), request, ip);
+    }
+
+    /**
+     * Publishes a normal dynamic for an already authenticated forum uid.
+     *
+     * <p>This is used by the QQ bot binding flow. It deliberately reuses the same
+     * validation, audit, anti-abuse and reward logic as the public token endpoint,
+     * but does not create or consume a login token.
+     */
+    public boolean addForBotUid(long uid, Map<String, String> request, String ip) {
+        return addForViewer(requireViewerByUid(uid), request, ip);
+    }
+
+    private boolean addForViewer(Viewer viewer, Map<String, String> request, String ip) {
         int type = validateType(RequestValues.integer(request, "type", 0));
         int toid = RequestValues.integer(request, "toid", 0);
         validateTargetParameter(type, toid);
@@ -960,6 +974,19 @@ public class SpaceService {
                     "\u7528\u6237\u672a\u767b\u5f55\u6216Token\u9a8c\u8bc1\u5931\u8d25");
         }
         return viewer;
+    }
+
+    private Viewer requireViewerByUid(long uid) {
+        if (uid <= 0) {
+            throw new IllegalArgumentException(
+                    "\u7528\u6237\u672a\u767b\u5f55\u6216Token\u9a8c\u8bc1\u5931\u8d25");
+        }
+        Map<String, Object> user = tokens.userById(uid);
+        if (user == null) {
+            throw new IllegalArgumentException("\u7528\u6237\u4e0d\u5b58\u5728");
+        }
+        boolean staff = isStaff(value(get(user, "group")));
+        return new Viewer(uid, user, staff, false);
     }
 
     private Viewer requireStaff(Map<String, String> request) {

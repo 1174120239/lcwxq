@@ -50,6 +50,11 @@ public class SigninService {
 
     public Map<String, Object> streak(Map<String, String> request) {
         long uid = requireUser(request);
+        return streakForUid(uid);
+    }
+
+    public Map<String, Object> streakForUid(long uid) {
+        requireUserByUid(uid);
         Integer value = jdbc.query(
                 "SELECT continuous FROM starfree_admin_Signinlog "
                         + "WHERE uid=? ORDER BY time DESC,id DESC LIMIT 1",
@@ -61,6 +66,11 @@ public class SigninService {
 
     public Map<String, Object> signin(Map<String, String> request) {
         final long uid = requireUser(request);
+        return signinForUid(uid);
+    }
+
+    public Map<String, Object> signinForUid(long uid) {
+        requireUserByUid(uid);
         final LocalDate today = LocalDate.now();
         final String operationKey = journal.fixedKey("seven-day-signin-" + today, uid);
         return lock.execute(connection -> signinLocked(connection, uid, today, operationKey));
@@ -168,6 +178,13 @@ public class SigninService {
                     "\u7528\u6237\u672a\u767b\u5f55\u6216Token\u9a8c\u8bc1\u5931\u8d25");
         }
         return uid;
+    }
+
+    private void requireUserByUid(long uid) {
+        if (uid <= 0 || tokens.userById(uid) == null) {
+            throw new IllegalArgumentException(
+                    "\u7528\u6237\u672a\u767b\u5f55\u6216Token\u9a8c\u8bc1\u5931\u8d25");
+        }
     }
 
     private Map<String, Object> fail(Connection connection, String operationKey,

@@ -144,6 +144,13 @@ $adminpw = "123456";
                             </a>
                         </li>
                         <li class="side-nav-item right_10">
+                            <a href="<?php echo $ADMIN_PATH;?>/qqBot.php" class="side-nav-link">
+                                <i class="dripicons-message"></i>
+                                <span>QQ Bot设置</span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                        </li>
+                        <li class="side-nav-item right_10">
                             <a  href="<?php echo $ADMIN_PATH;?>/setAd.php" class="side-nav-link">
                                 <i class="dripicons-broadcast"></i>   
                                 <span>广告配置</span>
