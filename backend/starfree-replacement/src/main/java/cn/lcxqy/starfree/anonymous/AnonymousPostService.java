@@ -106,8 +106,9 @@ public class AnonymousPostService {
 
     /**
      * 查询匿名动态的真实发布者；仅动态主人或 staff 可见，避免匿名身份被枚举。
+     * 返回 {@code {uid, name, screenName}}。
      */
-    public long owner(String token, long sid) {
+    public Map<String, Object> owner(String token, long sid) {
         if (sid <= 0) {
             throw new IllegalArgumentException("无效的ID参数");
         }
@@ -127,7 +128,12 @@ public class AnonymousPostService {
         if (requester != ownerUid && !isStaff) {
             throw new IllegalArgumentException("无权查看");
         }
-        return ownerUid;
+        Map<String, Object> publisher = tokens.userById(ownerUid);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("uid", ownerUid);
+        result.put("name", publisher == null ? "" : String.valueOf(publisher.get("name")));
+        result.put("screenName", publisher == null ? "" : String.valueOf(publisher.get("screenName")));
+        return result;
     }
 
     private Map<String, Object> configRow() {

@@ -333,7 +333,7 @@ form_post("SFreeSpace/spaceList", {
 |---|---|---|---|---|
 | `SFreeAnonymous/config` | GET/POST / 无 | 无 | 公网新 | 只返回 `data.enabled`，不泄露匿名账号身份；`enabled=false` 时前端直接提示未开放。 |
 | `SFreeAnonymous/post` | GET/POST / token | `token,type,text,pic,topicIds` | 公网新 | 兼容旧前端 GET 表单；与 addSpace 同一套动态校验（经验门槛、实名/蓝V、违禁词、防刷、发布限额，均按真实用户计算）；type 仅 0/4，onlyMe/toid 强制为 0；`review=1` 或全局动态审核开启时 status=0（待审核），否则 status=1；成功 `data={status}`。不发放动态经验。 |
-| `SFreeAnonymous/owner` | GET/POST / 动态主人或 staff | `token,sid`（兼容 `id/cid`） | 公网新 | 非匿名动态返回“该动态不是匿名动态”；只有动态主人或 staff 能查到真实 `uid`，避免匿名身份被枚举。 |
+| `SFreeAnonymous/owner` | GET/POST / 动态主人或 staff | `token,sid`（兼容 `id/cid`） | 公网新 | 非匿名动态返回“该动态不是匿名动态”；只有动态主人或 staff 能查到真实发布者，返回 `data={uid,name,screenName}`，避免匿名身份被枚举。App“动态管理”页的“真实发布者”按钮即调用此接口。 |
 | `SFreeAnonymous/admin/config` | GET/POST / administrator | `token,fid,review` | 公网新 | GET 返回完整配置及匿名账号 `anonymousName/anonymousExists`；POST 校验匿名账号存在、`review∈{0,1}` 后更新。 |
 
 配置字段：

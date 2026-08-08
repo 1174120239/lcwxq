@@ -117,7 +117,10 @@ class AnonymousPostServiceTest {
         when(fixture.jdbc.query(anyString(), any(Object[].class), any(RowMapper.class)))
                 .thenReturn(Collections.singletonList(7L));
 
-        assertThat(fixture.service.owner("user-token", 11L)).isEqualTo(7L);
+        Map<String, Object> result = fixture.service.owner("user-token", 11L);
+
+        assertThat(result).containsEntry("uid", 7L);
+        assertThat(result).containsEntry("screenName", "匿名小号");
     }
 
     @Test
@@ -188,6 +191,7 @@ class AnonymousPostServiceTest {
     private static Map<String, Object> user(long uid) {
         Map<String, Object> row = new HashMap<>();
         row.put("uid", uid);
+        row.put("name", "anonym-owner");
         row.put("screenName", "匿名小号");
         row.put("group", "contributor");
         return row;

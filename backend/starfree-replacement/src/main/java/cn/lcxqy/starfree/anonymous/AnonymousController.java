@@ -52,10 +52,8 @@ public class AnonymousController {
     public ApiResponse owner(@RequestParam Map<String, String> params) {
         long sid = RequestValues.integer(params, "sid",
                 RequestValues.integer(params, "id", RequestValues.integer(params, "cid", 0)));
-        long uid = service.owner(RequestValues.text(params, "token"), sid);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("uid", uid);
-        return ApiResponse.success("查询成功", data);
+        return ApiResponse.success("查询成功",
+                service.owner(RequestValues.text(params, "token"), sid));
     }
 
     /** ANY {@code /SFreeAnonymous/admin/config}：管理员读取匿名配置。 */

@@ -184,6 +184,7 @@
 						<block v-if="item.status==2">
 							<text class="bg-black cu-btn xs radius" @tap="toLock(item.id,1,index)"><text class="cuIcon-unlock"></text>解除锁定</text>
 						</block>
+						<text class="bg-blue cu-btn xs radius margin-left" @tap="showOwner(item)"><text class="cuIcon-attention"></text>真实发布者</text>
 						<text class="bg-red cu-btn xs radius margin-left" @tap="toDelete(item.id)"><text class="cuIcon-delete"></text>删除</text>
 					</view>
 				</view>
@@ -645,6 +646,60 @@
 						} else if (res.cancel) {
 							console.log('用户点击取消');
 						}
+					}
+				});
+			},
+			showOwner(item){
+				var that = this;
+				var token = "";
+				if(localStorage.getItem('userinfo')){
+					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+					token = userInfo.token;
+				}
+				if(!item || !item.id){
+					return false;
+				}
+				uni.showLoading({
+					title: "加载中"
+				});
+				that.$Net.request({
+					url: that.$API.anonymousOwner(),
+					data: {
+						"sid": item.id,
+						"token": token
+					},
+					header: {
+						'Content-Type': 'application/x-www-form-urlencoded'
+					},
+					method: "get",
+					dataType: 'json',
+					success: function(res) {
+						setTimeout(function() {
+							uni.hideLoading();
+						}, 1000);
+						if (res.data.code == 1) {
+							var publisher = res.data.data || {};
+							var name = publisher.screenName || publisher.name || "";
+							uni.showModal({
+								title: '真实发布者',
+								content: 'UID：' + publisher.uid + (name ? '\n昵称：' + name : ''),
+								showCancel: false
+							});
+						} else {
+							uni.showToast({
+								title: res.data.msg || '该动态不是匿名动态',
+								icon: 'none'
+							});
+						}
+					},
+					fail: function() {
+						setTimeout(function() {
+							uni.hideLoading();
+						}, 1000);
+						uni.showToast({
+							title: "网络不太好哦",
+							icon: 'none'
+						});
 					}
 				});
 			},
