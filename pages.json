@@ -1,7 +1,11 @@
 {
 	"easycom": {
 		"^tn-(.*)": "@/uni_modules/tuniao-ui/components/tn-$1/tn-$1.vue",
-		"^u-(.*)": "@/uni_modules/uview-ui/components/u-$1/u-$1.vue"
+		"^u-(.*)": "@/uni_modules/uview-ui/components/u-$1/u-$1.vue",
+		"^campus-avatar$": "@/components/campus-avatar/campus-avatar.vue",
+		"^space-reply-thread$": "@/components/space-reply-thread/space-reply-thread.vue",
+		"^qa-question-card$": "@/components/qa-question-card/qa-question-card.vue",
+		"^qa-comment-thread$": "@/components/qa-comment-thread/qa-comment-thread.vue"
 	},
 	"pages": [{
 			"path": "pages/home/home",
@@ -416,6 +420,10 @@
 			"style": { "navigationStyle": "custom" }
 		},
 		{
+			"path": "pages/manage/questions",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
 			"path": "pages/manage/withdraw",
 			"style": {
 				"enablePullDownRefresh": true
@@ -529,6 +537,13 @@
 		{
 			"path": "pages/space/info",
 			"style": {
+				"enablePullDownRefresh": true
+			}
+		},
+		{
+			"path": "pages/qa/info",
+			"style": {
+				"navigationStyle": "custom",
 				"enablePullDownRefresh": true
 			}
 		},

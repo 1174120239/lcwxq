@@ -64,7 +64,7 @@
 								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
 									<view class="cu-list menu-avatar comment campus-message-row" @tap="goInbox(item)">
 										<view class="cu-item">
-											<view class="cu-avatar round" :style="item.style"></view>
+											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'"></campus-avatar>
 											<view class="content">
 												<view class="text-black">
 													<block v-if="item.userJson.isvip>0">
@@ -85,9 +85,15 @@
 															<block v-if="item.type=='spaceComment'">
 																<text class="userlv bg-green">动态评论</text>
 															</block>
-															<block v-if="item.type=='spaceLike'">
-																<text class="userlv bg-blue">动态点赞</text>
-															</block>
+													<block v-if="item.type=='spaceLike'">
+														<text class="userlv bg-blue">动态点赞</text>
+													</block>
+													<block v-if="item.type=='qaAnswer'">
+														<text class="userlv bg-green">问答回答</text>
+													</block>
+													<block v-if="item.type=='qaComment'">
+														<text class="userlv bg-blue">问答评论</text>
+													</block>
 												</view>
 												<view class="text-content text-df break-all">
 													<rich-text :nodes="markHtml(item.text)"></rich-text>
@@ -102,6 +108,11 @@
 												<view v-else-if="item.spaceState=='hidden'">原动态不可见</view>
 												<view v-else>动态：{{item.spaceInfo && item.spaceInfo.text ? subText(item.spaceInfo.text, 80) : '查看动态'}}</view>
 															</view>
+											<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='qaAnswer' || item.type=='qaComment'">
+												<view v-if="item.questionState=='deleted'">原问题已删除</view>
+												<view v-else-if="item.questionState=='hidden'">原问题已停用</view>
+												<view v-else>问题：{{item.questionInfo && item.questionInfo.title ? item.questionInfo.title : '查看问答'}}</view>
+											</view>
 												<view class="margin-top-sm flex justify-between message-meta">
 													<view class="text-gray text-df">{{formatDate(item.created)}}</view>
 													<view>
@@ -129,7 +140,7 @@
 				<view class="cu-list menu-avatar"  style="border-radius: 20px;" v-if="chatList.length>0">
 					<block v-for="(item,index) in chatList" :key="index">
 					<view class="cu-item" @tap="goChat(item)">
-						<view class="cu-avatar round lg" :style="'background-image:url('+item.userJson.avatar+');'"></view>
+						<campus-avatar class="cu-avatar round lg" :src="item.userJson.avatar" :name="item.userJson.name"></campus-avatar>
 						<view class="content">
 							<view><view class="text-cut">{{item.userJson.name}}</view></view>
 							<view class="text-gray text-sm flex">
@@ -219,6 +230,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import featureFlags from '@/utils/featureFlags.js'
+	import { normalizeUser } from '@/utils/avatar.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -411,6 +423,11 @@
 						url: '/pages/space/info?id='+data.value
 					});
 				}
+				if((data.type=="qaAnswer" || data.type=="qaComment") && data.questionState=="visible"){
+					clearInterval(that.chatLoading);
+					that.chatLoading = null;
+					uni.navigateTo({ url: '/pages/qa/info?id=' + data.value });
+				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null
@@ -495,7 +512,7 @@
 								var inboxList = [];
 								for(var i in list){
 									var arr = list[i];
-									arr.style = "background-image:url("+list[i].userJson.avatar+");"
+									arr.userJson = normalizeUser(arr.userJson, arr.type == 'system' ? '系统通知' : '已注销用户');
 									inboxList.push(arr);
 								}
 								if(isPage){
@@ -574,6 +591,7 @@
 								var chatList = [];
 								for(var i in list){
 									var arr = list[i];
+									arr.userJson = normalizeUser(arr.userJson);
 									arr.isNew =0;
 									arr.unRead =0;
 									chatList.push(arr);

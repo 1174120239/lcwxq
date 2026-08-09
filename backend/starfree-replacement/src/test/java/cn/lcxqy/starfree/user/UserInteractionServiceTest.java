@@ -76,6 +76,7 @@ class UserInteractionServiceTest {
 
         assertThat(changed).isEqualTo(3);
         verify(jdbc).update(contains("'spaceComment'"), eq(7L));
+        verify(jdbc).update(contains("'qaComment'"), eq(7L));
     }
 
     @Test
@@ -92,6 +93,7 @@ class UserInteractionServiceTest {
         new UserInteractionService(jdbc, tokens).inbox(request);
 
         verify(jdbc).queryForObject(contains("'spaceComment'"), eq(Integer.class), any());
+        verify(jdbc).queryForObject(contains("'qaComment'"), eq(Integer.class), any());
     }
 
     @Test
@@ -184,5 +186,81 @@ class UserInteractionServiceTest {
         assertThat(data).hasSize(1);
         assertThat(data.get(0)).containsEntry("spaceState", "deleted");
         assertThat(data.get(0).get("spaceInfo")).isNull();
+    }
+
+    @Test
+    void inboxUsesRenderablePlaceholderWhenActorNoLongerExists() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(8L);
+        when(tokens.userById(7L)).thenReturn(null);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", 1L);
+        row.put("type", "system");
+        row.put("uid", 7L);
+        row.put("text", "notification");
+        row.put("touid", 8L);
+        row.put("isread", 0);
+        row.put("value", 0L);
+        row.put("created", 1700000000L);
+        row.put("cid", 0L);
+        when(jdbc.queryForList(startsWith("SELECT id,type,uid,text,touid,isread,value,created,cid"),
+                any(Object.class))).thenReturn(Collections.singletonList(row));
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+
+        Map<String, Object> notification = new UserInteractionService(jdbc, tokens)
+                .inbox(request).getData().get(0);
+
+        assertThat((Map<String, Object>) notification.get("userJson"))
+                .containsEntry("uid", 7L)
+                .containsEntry("name", "已注销用户")
+                .containsEntry("avatar", "");
+    }
+
+    @Test
+    void inboxEnrichesVisibleQuestionNotification() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(8L);
+        when(tokens.userById(7L)).thenReturn(Collections.<String, Object>singletonMap("name", "Answerer"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", 1L);
+        row.put("type", "qaComment");
+        row.put("uid", 7L);
+        row.put("text", "评论了你的回答");
+        row.put("touid", 8L);
+        row.put("isread", 0);
+        row.put("value", 44L);
+        row.put("created", 1700000000L);
+        row.put("cid", 55L);
+        when(jdbc.queryForList(startsWith("SELECT id,type,uid,text,touid,isread,value,created,cid"),
+                any(Object.class))).thenReturn(Collections.singletonList(row));
+        when(jdbc.queryForList(startsWith("SELECT id,title,status FROM starfree_qa_questions"),
+                eq(44L))).thenReturn(Collections.singletonList(row(
+                        "id", 44L, "title", "校园问题", "status", 1)));
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+
+        Map<String, Object> notification = new UserInteractionService(jdbc, tokens)
+                .inbox(request).getData().get(0);
+
+        assertThat(notification).containsEntry("questionState", "visible");
+        assertThat((Map<String, Object>) notification.get("questionInfo"))
+                .containsEntry("title", "校园问题");
+    }
+
+    private static Map<String, Object> row(Object... values) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (int index = 0; index + 1 < values.length; index += 2) {
+            result.put(String.valueOf(values[index]), values[index + 1]);
+        }
+        return result;
     }
 }

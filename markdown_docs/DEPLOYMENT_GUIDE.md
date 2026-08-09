@@ -242,6 +242,8 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 003 | 003_space_topics.sql | 动态话题、关注和关系表 |
 | 004 | 004_campus_identity.sql | 校区/入学年份选项和用户引用列 |
 | 005 | 005_ng_music_anonymous.sql | 匿名动态映射与配置表（ng_music 插件功能原生实现） |
+| 006 | 006_qqbot_dynamic_ai.sql | QQBot 绑定、群同步、配置和幂等日志表 |
+| 007 | 007_campus_qa.sql | 校园问答的问题、回答、点赞和评论表 |
 
 规则：
 
@@ -259,6 +261,14 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 005 只新增两张 InnoDB 表并写入一行默认配置（`fid=0` 表示匿名动态未开放），不修改现有表，
 可随时在发布新 JAR 前执行；执行后应确认两张表存在且配置行 id=1。回滚 JAR 时不要删除这两张表。
 上线后在管理端“匿名动态配置”里填写匿名账号 UID 与审核开关。
+
+006 新增 QQBot 使用的六张 InnoDB 表，并以幂等方式写入默认配置，不修改论坛原有表。执行前先查询
+`lcxqy_bot_%` 表是否存在；若生产已运行该功能，只备份这些表并保留现有配置值，不要用默认值覆盖密钥或开关。
+
+007 只新增 `starfree_qa_questions`、`starfree_qa_answers`、`starfree_qa_answer_likes` 和
+`starfree_qa_comments` 四张独立 InnoDB 表，不修改现有用户、帖子或动态表。执行前查询这四张表是否已存在；
+若存在任意一张则先定向备份全部已存在的 Q&A 表，再执行幂等建表语句。执行后核对四张表、主键和索引，
+再部署依赖这些表的 JAR。回滚 JAR 时保留 Q&A 表，避免丢失上线后产生的问答数据。
 
 001 可使用：
 

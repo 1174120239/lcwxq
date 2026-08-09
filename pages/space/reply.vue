@@ -10,7 +10,7 @@
 				</view>
 				<!--  #ifdef H5 || APP-PLUS -->
 				<view class="action">
-					<text class="reply-submit-button padding-lr-sm padding-tb-xs round text-shojo" @tap="reply()" style="background-color: #cffff2;">回复</text>
+					<text class="reply-submit-button padding-lr-sm padding-tb-xs round text-shojo" :class="{'is-disabled': replySubmitting}" @tap="reply()" style="background-color: #cffff2;">{{replySubmitting ? '发送中' : '回复'}}</text>
 				</view>
 				<!--  #endif -->
 			</view>
@@ -51,7 +51,7 @@
 			<!--  #ifdef MP -->
 			<view class="all-btn">
 				<view class="user-btn flex flex-direction">
-					<button class="cu-btn bg-cyan margin-tb-sm lg" @tap="reply">提交回复</button>
+					<button class="cu-btn bg-cyan margin-tb-sm lg" :disabled="replySubmitting" @tap="reply">{{replySubmitting ? '发送中' : '提交回复'}}</button>
 					
 				</view>
 			</view>
@@ -91,6 +91,7 @@
 				owo:owo,
 				owoList:[],
 				OwOtype:"paopao",
+				replySubmitting:false,
 				
 			}
 		},
@@ -134,6 +135,13 @@
 			},
 			reply(){
 				var that = this;
+				if(that.replySubmitting){
+					return false;
+				}
+				if(!that.text || !that.text.trim()){
+					uni.showToast({title:'请输入回复内容',icon:'none'});
+					return false;
+				}
 				if(that.token==""){
 					uni.showToast({
 					    title:"请先登录",
@@ -160,13 +168,11 @@
 				}
 				var data = {
 					type:3,
-					text:that.text,
+					text:that.text.trim(),
 					toid:that.id,
-					token:that.token
+					 token:that.token
 				}
-				uni.showLoading({
-					title: "加载中"
-				});
+				that.replySubmitting = true;
 				that.$Net.request({
 					
 					url: that.$API.addSpace(),
@@ -176,10 +182,9 @@
 					},
 					method: "get",
 					dataType: 'json',
+					timeout: 15000,
 					success: function(res) {
-						setTimeout(function () {
-							uni.hideLoading();
-						}, 1000);
+						that.replySubmitting = false;
 						uni.showToast({
 							title: res.data.msg,
 							icon: 'none'
@@ -187,14 +192,12 @@
 						if(res.data.code==1){
 							var timer = setTimeout(function() {
 								that.back();
-							}, 1000)
+							}, 500)
 							
 						}
 					},
 					fail: function(res) {
-						setTimeout(function () {
-							uni.hideLoading();
-						}, 1000);
+						that.replySubmitting = false;
 						uni.showToast({
 							title: "网络不太好哦~",
 							icon: 'none'
@@ -270,6 +273,10 @@
 	font-weight: 700;
 	line-height: 58rpx;
 	box-sizing: border-box;
+}
+
+.campus-reply-page .reply-submit-button.is-disabled {
+	opacity: 0.55;
 }
 
 .campus-reply-page .reply-input-group {

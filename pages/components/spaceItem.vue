@@ -7,9 +7,7 @@
 				<view class="cu-item cu-item2" :class="{'is-entering': index < 3}" :style="index < 3 ? {'animation-delay': (index * 55) + 'ms'} : null" @tap="toInfo(item.id,index)">
 					<view class="cu-list menu-avatar">
 						<view class="cu-item cu-item2">
-							<view class="cu-avatar round lg" :style="'background-image:url('+item.userJson.avatar+');'" @tap.stop="toUserContents(item.userJson)">
-
-							</view>
+							<campus-avatar class="cu-avatar round lg" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content flex-sub space-author-content">
 								<view class="space-author-line"><text class="space-author-name" :class="{'is-vip': item.userJson.isvip>0}">{{item.userJson.name}}</text>
 								<text class="space-campus-badge" v-if="item.userJson.campus">{{item.userJson.campus}}</text>
@@ -51,7 +49,7 @@
 						<view class="space-read-more" v-if="isLongText(item.text)" @tap.stop="toInfo(item.id,index)">
 							<text>查看全文</text><text class="cuIcon-right margin-left-xs"></text>
 						</view>
-						<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
+						<view class="space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
 							<view class="bg-img" :style="'background-image:url('+data+');'"
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
@@ -515,17 +513,10 @@
 					});
 					return false;
 				}
-				if(that.spaceList[index].isLikes==1){
-					uni.showToast({
-						title: "你已经点赞过了",
-						icon: 'none'
-					});
-					return false;
-				}else{
-					that.spaceList[index].isLikes = 1;
-				}
-				
-				that.spaceList[index].likes += 1;
+				var wasLiked = that.spaceList[index].isLikes == 1;
+				var oldLikes = Number(that.spaceList[index].likes || 0);
+				that.spaceList[index].isLikes = wasLiked ? 0 : 1;
+				that.spaceList[index].likes = wasLiked ? Math.max(0, oldLikes - 1) : oldLikes + 1;
 				var data = {
 					token:token,
 					id:id,
@@ -552,7 +543,10 @@
 							icon: 'none'
 						})
 						if(res.data.code==0){
-							that.spaceList[index].isLikes = 0;
+							that.spaceList[index].isLikes = wasLiked ? 1 : 0;
+							that.spaceList[index].likes = oldLikes;
+						}else if(res.data.data === 0 || res.data.data === 1){
+							that.spaceList[index].isLikes = res.data.data;
 						}
 						
 					},
@@ -564,6 +558,8 @@
 							title: "网络开小差了哦",
 							icon: 'none'
 						})
+						that.spaceList[index].isLikes = wasLiked ? 1 : 0;
+						that.spaceList[index].likes = oldLikes;
 						
 					}
 				})

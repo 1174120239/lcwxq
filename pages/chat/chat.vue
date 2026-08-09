@@ -12,10 +12,7 @@
 					</block>
 				</view>
 				<view class="action">
-					<view class="cu-avatar round"  @tap="showModal" data-target="chatInfo" :style="avatarstyle" v-if="avatarstyle!=''"></view>
-					<view class="cu-avatar round" v-else>
-						<text class="home-noLogin"></text>
-					</view>
+					<campus-avatar class="cu-avatar round" :src="avatar" :name="name" @tap="showModal" data-target="chatInfo"></campus-avatar>
 				</view>
 			</view>
 		</view>
@@ -31,8 +28,7 @@
 			<block v-for="(item,index) in msgList">
 				<view class="date text-center" style="color: #727272;font-size: 12px;">{{formatDate(item.created)}}  </view>
 				<view class="justify-start margin-left-sm">
-					<view class="cu-avatar radius" @tap="toUserContents(item.userJson)"  v-if="item.uid!=uid" :style="'background-image:url('+item.userJson.avatar+');background-color:rgb(0,0,0,0);width:80upx;height:80upx;'">
-					</view>
+					<campus-avatar class="cu-avatar radius chat-user-avatar" :src="item.userJson.avatar" :name="item.userJson.name" @tap="toUserContents(item.userJson)" v-if="item.uid!=uid"></campus-avatar>
 					<text class="text-black margin-left-sm" v-if="item.userJson.uid!=uid">
 						<block v-if="item.userJson.isvip>0">
 						<text class="text-shojo2">
@@ -58,7 +54,7 @@
 							<image :src="item.url" @tap="previewImage(item.url)" mode="widthFix"></image>
 						</block>
 					</view>
-					<view class="cu-avatar radius"  v-if="item.uid==uid" :style="'background-image:url('+item.userJson.avatar+');background-color:rgb(0,0,0,0)'"></view>
+					<campus-avatar class="cu-avatar radius" v-if="item.uid==uid" :src="item.userJson.avatar" :name="item.userJson.name"></campus-avatar>
 					<view class="date">
 					 
 					<block  v-if="group=='administrator'||group=='editor'">
@@ -192,6 +188,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import featureFlags from '@/utils/featureFlags.js'
+	import { normalizeUser } from '@/utils/avatar.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -530,7 +527,10 @@
 						that.isLoad=0;
 						that.moreText="获取更多";
 						if(res.data.code==1){
-							var list = res.data.data;
+							var list = res.data.data.map(function(item) {
+								item.userJson = normalizeUser(item.userJson);
+								return item;
+							});
 							if(list.length>0){
 								//that.contentsList = list;
 								
@@ -1189,5 +1189,9 @@ page{
 }
 .cu-bar.foot{
 	z-index: 998;
+}
+.chat-user-avatar{
+	width: 80upx;
+	height: 80upx;
 }
 </style>

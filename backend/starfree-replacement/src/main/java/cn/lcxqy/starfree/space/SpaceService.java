@@ -114,7 +114,7 @@ public class SpaceService {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
         boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
-        String text = validateText(request.get("text"), mediaAllowsEmptyText);
+        String text = validateText(request.get("text"), mediaAllowsEmptyText, type == 3 ? 1 : 4);
         List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
         SpaceConfig config = config();
 
@@ -152,6 +152,9 @@ public class SpaceService {
         }
 
         long now = Instant.now().getEpochSecond();
+        if (type == 3 && recentDuplicateReply(viewer.uid, toid, text, now)) {
+            return false;
+        }
         int status = config.spaceAudit == 1 ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
@@ -220,6 +223,20 @@ public class SpaceService {
         return status == 0;
     }
 
+    private boolean recentDuplicateReply(long uid, int toid, String text, long now) {
+        try {
+            List<Map<String, Object>> duplicates = jdbc.queryForList(
+                    "SELECT id FROM starfree_space WHERE uid=? AND type=3 AND toid=? "
+                            + "AND text=? AND created>=? ORDER BY id DESC LIMIT 1",
+                    uid, toid, text.replace("||rn||", "\r\n"), now - 20);
+            return !duplicates.isEmpty();
+        } catch (DataAccessException error) {
+            LOG.warn("Could not check recent duplicate reply for uid {} and target {}", uid, toid,
+                    error);
+            return false;
+        }
+    }
+
     /**
      * 匿名动态发布（ng_music 插件功能的本土化实现）。
      *
@@ -242,7 +259,7 @@ public class SpaceService {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
         boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
-        String text = validateText(request.get("text"), mediaAllowsEmptyText);
+        String text = validateText(request.get("text"), mediaAllowsEmptyText, 4);
         List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
         SpaceConfig config = config();
 
@@ -360,7 +377,8 @@ public class SpaceService {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
         boolean mediaAllowsEmptyText = currentType == 0 && pic != null && !pic.isEmpty();
-        String text = validateText(request.get("text"), mediaAllowsEmptyText);
+        String text = validateText(request.get("text"), mediaAllowsEmptyText,
+                currentType == 3 ? 1 : 4);
         List<Integer> topicIds = request.containsKey("topicIds")
                 ? topics.validateIds(RequestValues.text(request, "topicIds")) : null;
         SpaceConfig editConfig = config();
@@ -583,7 +601,23 @@ public class SpaceService {
                     throw new IllegalArgumentException("\u52a8\u6001\u4e0d\u5b58\u5728\u6216\u65e0\u6743\u67e5\u770b");
                 }
                 if (hasLike(connection, viewer.uid, id)) {
-                    throw new IllegalArgumentException("\u4f60\u5df2\u7ecf\u70b9\u8d5e\u8fc7\u4e86");
+                    int deleted = deleteLikeLog(connection, viewer.uid, id);
+                    if (deleted < 1) {
+                        throw new IllegalStateException("Space like log delete failed");
+                    }
+                    try (PreparedStatement update = connection.prepareStatement(
+                            "UPDATE starfree_space SET likes = CASE WHEN COALESCE(likes, 0) > 0 "
+                                    + "THEN COALESCE(likes, 0) - 1 ELSE 0 END WHERE id = ?")) {
+                        update.setLong(1, id);
+                        if (update.executeUpdate() != 1) {
+                            insertLikeLog(connection, viewer.uid, id);
+                            throw new IllegalStateException("Space unlike counter update failed");
+                        }
+                    } catch (SQLException error) {
+                        insertLikeLog(connection, viewer.uid, id);
+                        throw error;
+                    }
+                    return 0;
                 }
 
                 long logId = insertLikeLog(connection, viewer.uid, id);
@@ -1032,7 +1066,7 @@ public class SpaceService {
         return onlyMe;
     }
 
-    private String validateText(String text, boolean mediaPresent) {
+    private String validateText(String text, boolean mediaPresent, int minimumLength) {
         if (text == null) {
             if (mediaPresent) return "";
             throw new IllegalArgumentException("\u53c2\u6570\u4e0d\u6b63\u786e");
@@ -1041,7 +1075,7 @@ public class SpaceService {
             if (mediaPresent) return "";
             throw new IllegalArgumentException("\u52a8\u6001\u5185\u5bb9\u4e0d\u80fd\u4e3a\u7a7a");
         }
-        if (!mediaPresent && text.trim().length() < 4) {
+        if (!mediaPresent && text.trim().length() < minimumLength) {
             throw new IllegalArgumentException("纯文字动态至少需要4个字");
         }
         if (text.length() > MAX_TEXT_LENGTH) {
@@ -1318,6 +1352,16 @@ public class SpaceService {
                 }
                 return keys.getLong(1);
             }
+        }
+    }
+
+    private int deleteLikeLog(java.sql.Connection connection, long uid, long id)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM starfree_userlog WHERE uid = ? AND cid = ? AND type = 'spaceLike'")) {
+            statement.setLong(1, uid);
+            statement.setLong(2, id);
+            return statement.executeUpdate();
         }
     }
 

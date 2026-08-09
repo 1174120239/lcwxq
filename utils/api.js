@@ -348,6 +348,46 @@ module.exports = {
 	getContentsInfo:function(){
 		return API_URL + 'SFreeContents/contentsInfo';
 	},
+	// 校园问答
+	qaQuestionList:function(){
+		return API_URL + 'SFreeQa/questionList';
+	},
+	qaQuestionInfo:function(){
+		return API_URL + 'SFreeQa/questionInfo';
+	},
+	qaAnswerList:function(){
+		return API_URL + 'SFreeQa/answerList';
+	},
+	qaAnswerAdd:function(){
+		return API_URL + 'SFreeQa/answerAdd';
+	},
+	qaAnswerEdit:function(){
+		return API_URL + 'SFreeQa/answerEdit';
+	},
+	qaAnswerDelete:function(){
+		return API_URL + 'SFreeQa/answerDelete';
+	},
+	qaAnswerLike:function(){
+		return API_URL + 'SFreeQa/answerLike';
+	},
+	qaCommentList:function(){
+		return API_URL + 'SFreeQa/commentList';
+	},
+	qaCommentAdd:function(){
+		return API_URL + 'SFreeQa/commentAdd';
+	},
+	qaCommentDelete:function(){
+		return API_URL + 'SFreeQa/commentDelete';
+	},
+	qaQuestionManage:function(){
+		return API_URL + 'SFreeQa/questionManage';
+	},
+	qaQuestionSave:function(){
+		return API_URL + 'SFreeQa/questionSave';
+	},
+	qaQuestionStatus:function(){
+		return API_URL + 'SFreeQa/questionStatus';
+	},
 	contentsAdd:function(){
 		return API_URL + 'SFreeContents/contentsAdd';
 	},

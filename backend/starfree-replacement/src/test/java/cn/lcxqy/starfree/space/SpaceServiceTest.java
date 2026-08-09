@@ -255,6 +255,52 @@ class SpaceServiceTest {
     }
 
     @Test
+    void oneCharacterDynamicCommentIsAccepted() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Map<String, Object> parent = space(11L, 7L, 1, 0, 0);
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid,created"), eq(11L)))
+                .thenReturn(Collections.singletonList(parent));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
+                eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
+        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
+                eq(7L), anyLong(), anyLong(), eq("好"), isNull(), eq(3), eq(0),
+                eq(11), eq(1), eq(0))).thenReturn(1);
+        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
+                eq(Long.class), eq(7L), anyLong())).thenReturn(21L);
+
+        Map<String, String> request = addRequest("好");
+        request.put("type", "3");
+        request.put("toid", "11");
+
+        assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+    }
+
+    @Test
+    void repeatedDynamicCommentWithinTwentySecondsIsNotInsertedAgain() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+        Map<String, Object> parent = space(11L, 8L, 1, 0, 0);
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid,created"), eq(11L)))
+                .thenReturn(Collections.singletonList(parent));
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForList(startsWith("SELECT id FROM starfree_space WHERE uid=? AND type=3"),
+                eq(7L), eq(11), eq("same reply"), anyLong()))
+                .thenReturn(Collections.singletonList(Collections.<String, Object>singletonMap("id", 21L)));
+
+        Map<String, String> request = addRequest("same reply");
+        request.put("type", "3");
+        request.put("toid", "11");
+
+        assertThat(fixture.service.add(request, "127.0.0.1")).isFalse();
+        verify(fixture.jdbc, never()).update(startsWith("INSERT INTO starfree_space"),
+                any(Object[].class));
+    }
+
+    @Test
     void replyToDynamicCommentNotifiesOwnerAndRepliedUser() {
         Fixture fixture = new Fixture();
         fixture.login(7L, "contributor");
@@ -750,7 +796,7 @@ class SpaceServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void existingLikeLogRejectsDuplicateWithoutCounterWriteAndReleasesLock() throws Exception {
+    void existingLikeLogTogglesOffAndDecrementsCounterAndReleasesLock() throws Exception {
         Fixture fixture = new Fixture();
         fixture.login(7L, "contributor");
         Connection connection = mock(Connection.class);
@@ -763,6 +809,10 @@ class SpaceServiceTest {
         when(targetResult.getInt("status")).thenReturn(1);
         when(targetResult.getInt("onlyMe")).thenReturn(0);
         PreparedStatement duplicate = statementWithSingleIntResult(1);
+        PreparedStatement delete = mock(PreparedStatement.class);
+        when(delete.executeUpdate()).thenReturn(1);
+        PreparedStatement update = mock(PreparedStatement.class);
+        when(update.executeUpdate()).thenReturn(1);
         PreparedStatement release = mock(PreparedStatement.class);
         ResultSet released = mock(ResultSet.class);
         when(release.executeQuery()).thenReturn(released);
@@ -771,6 +821,10 @@ class SpaceServiceTest {
         when(connection.prepareStatement(startsWith("SELECT uid,status"))).thenReturn(target);
         when(connection.prepareStatement(startsWith("SELECT COUNT(*) FROM starfree_userlog")))
                 .thenReturn(duplicate);
+        when(connection.prepareStatement(startsWith("DELETE FROM starfree_userlog WHERE uid")))
+                .thenReturn(delete);
+        when(connection.prepareStatement(startsWith("UPDATE starfree_space SET likes = CASE")))
+                .thenReturn(update);
         when(connection.prepareStatement(startsWith("SELECT RELEASE_LOCK"))).thenReturn(release);
         when(fixture.jdbc.execute(any(ConnectionCallback.class))).thenAnswer(invocation -> {
             ConnectionCallback<Integer> callback = invocation.getArgument(0);
@@ -781,15 +835,16 @@ class SpaceServiceTest {
         request.put("token", "token");
         request.put("id", "11");
 
-        assertThatThrownBy(() -> fixture.service.like(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("\u4f60\u5df2\u7ecf\u70b9\u8d5e\u8fc7\u4e86");
+        assertThat(fixture.service.like(request)).isEqualTo(0);
 
-        // A durable legacy log is authoritative: no second log and no counter change.
+        verify(delete).setLong(1, 7L);
+        verify(delete).setLong(2, 11L);
+        verify(delete).executeUpdate();
+        verify(update).setLong(1, 11L);
+        verify(update).executeUpdate();
         verify(connection, never()).prepareStatement(
                 startsWith("INSERT INTO starfree_userlog"),
                 eq(Statement.RETURN_GENERATED_KEYS));
-        verify(connection, never()).prepareStatement(startsWith("UPDATE starfree_space SET likes"));
         verify(release).executeQuery();
     }
 

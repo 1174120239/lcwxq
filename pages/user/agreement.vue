@@ -14,7 +14,7 @@
 		<scroll-view scroll-y class="agreement" :style="{height: 'calc(100vh - ' + CustomBar + 'px)'}">
 			<view class="agreement-brand"><CampusAuthBrand caption="1942 · 聊城一中论坛社区规则" :compact="true"></CampusAuthBrand></view>
 			<view class="agreement-title">一、关于我们</view>
-			<view class="agreement-text">本社区是一站式技术服务社区。本协议中的您与用户指任何使用和/或访问本服务的个人。</view>
+			<view class="agreement-text">本社区是面向聊城一中校园用户的论坛社区。本协议中的您与用户指任何使用和/或访问本服务的个人。</view>
 			<view class="agreement-title">二、协议目的</view>
 			<view class="agreement-text">本用户协议、隐私政策及本服务发布的其他 政策（以下合称本协议）是我们为您提供本服务 以供使用及访问所依据的条款。通过本协议，您将了解本社区向您提供本服务的方式、本服务所允 许或禁止的活动、应用问题及其他重要信息，以及相关方的权利义务内容。请您仔细阅读本协议，若您使用本服务，则视为您已经与本社区达成具有法律约束力的协议。若您不接受本协议，请勿使用本服务。</view>
 			<view class="agreement-title">三、使用资格</view>
@@ -28,12 +28,12 @@
 			<view class="agreement-text">5.4您不应将账号、密码转让、出售或出借予 他人使用，若您授权他人使用账户，应对被授权人 在该账户下发生所有行为负全部责任。</view>
 			<view class="agreement-text">5.5本社区的隐私权保护声明说明了本社区 如何收集和使用用户信息。您保证已经充分了解 并同意本社区可以据此处理您的信息。</view>
 			<view class="agreement-title">六、服务内容</view>
-			<view class="agreement-text">6.1视频观看及增值服务：提供视频浏览及其它增值服务。</view>
+			<view class="agreement-text">6.1社区内容服务：提供动态、帖子、评论、话题、个人主页、消息通知等校园交流功能。</view>
 			<view class="agreement-text">6.2除非本协议另有其它明示规定，本社区 所推出的新产品、新功能、新服务，均受到本协议 之规范。</view>
-			<view class="agreement-text">6.3第三方内容：本应用所呈现的跳转到第三方平台后提供的免费阅读书籍等部分内容由第 三方图书馆及其他公司提供，如果该部分电子书内容（服务）存在版权及其他权属争议，本应用不 承担任何责任，请联系第三方内容（服务）提供商解决。</view>
-			<view class="agreement-title">七、购买</view>
-			<view class="agreement-text">会员购买：充值成为会员，享受会员服务。</view>
-			<view class="agreement-text">单次购买：按服务内容显示价格单次结算购买。</view>
+			<view class="agreement-text">6.3第三方内容：用户通过外部链接访问的第三方页面或服务，由对应第三方负责。本社区会尽力维护入口安全，但不对第三方内容作额外承诺。</view>
+			<view class="agreement-title">七、社区服务</view>
+			<view class="agreement-text">部分功能可能需要积分、等级、审核状态或管理员配置满足条件后使用，具体以页面提示为准。</view>
+			<view class="agreement-text">如社区后续提供付费能力，会在对应页面明确展示价格、权益、有效期和使用规则。</view>
 			<view class="agreement-title">八、使用规则</view>
 			<view class="agreement-text">8.1用户在使用本社区服务时，应基于合法道德之目的，必须遵守中华人民共和国相关法律法规的规定，用户应同意将不会利用本服务进行 任何违法或不正当的活动，包括但不限于下列行 为：</view>
 			<view class="agreement-text">8.1.1上传、展示、张贴、传播或以其它方式传送含有下列内容之一的信息：</view>
@@ -168,6 +168,10 @@
 			},
 			GetLink(){
 				var that = this;
+				if (!API.CRlink) {
+					that.email = that.email || '请在应用内反馈入口联系管理员';
+					return;
+				}
 				Net.request({
 					url: API.CRlink(),
 					header:{

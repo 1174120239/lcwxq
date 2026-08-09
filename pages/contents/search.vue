@@ -314,6 +314,7 @@
 				that.page=1;
 				that.moreText="加载更多";
 				that.isLoad=0;
+				that.clearCurrentList(i);
 				if(i==0){
 					that.getContentsList(false);
 				}else if(i==1){
@@ -366,8 +367,9 @@
 			searchTag(){
 				var that = this;
 				that.changeLoading = 0;
-				var searchText = that.searchText;
 				that.page=1;
+				that.moreText="加载更多";
+				that.clearCurrentList(that.type);
 				if(that.type==0){
 					that.getContentsList();
 				}else if(that.type==1){
@@ -385,6 +387,8 @@
 				var that = this;
 				that.searchText = "";
 				that.page=1;
+				that.moreText="加载更多";
+				that.clearCurrentList(that.type);
 				if(that.type==0){
 					that.getContentsList();
 				}else if(that.type==1){
@@ -393,6 +397,19 @@
 					that.getUserList()
 				}else{
 					that.getSpaceList()
+				}
+			},
+			clearCurrentList(type){
+				if(type==0){
+					this.contentsList = [];
+				}else if(type==1){
+					this.commentsList = [];
+				}else if(type==2){
+					this.userList = [];
+				}else if(type==5){
+					this.appList = [];
+				}else{
+					this.spaceList = [];
 				}
 			},
 			getContentsList(isPage){
@@ -436,6 +453,7 @@
 								
 							}else{
 								that.moreText="没有更多数据了";
+								if(!isPage) that.contentsList = [];
 							}
 						}
 						var timer = setTimeout(function() {
@@ -628,6 +646,7 @@
 								}
 							}else{
 								that.moreText="没有更多数据了";
+								if(!isPage) that.commentsList = [];
 							}
 							
 						}
@@ -689,6 +708,7 @@
 								}
 							}else{
 								that.moreText="没有更多数据了";
+								if(!isPage) that.userList = [];
 							}
 						}
 						var timer = setTimeout(function() {
@@ -771,6 +791,7 @@
 								
 							}else{
 								that.moreText="没有更多动态了";
+								if(!isPage) that.spaceList = [];
 							}
 						}
 						var timer = setTimeout(function() {

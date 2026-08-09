@@ -132,17 +132,17 @@ public class SpaceController {
     }
 
     /**
-     * ANY {@code /SFreeSpace/spaceLikes}：为动态点赞。
+     * ANY {@code /SFreeSpace/spaceLikes}：点赞或取消动态点赞。
      *
      * <p>必填 {@code token/id}，目标必须对当前用户可见。去重键是持久化的
      * {@code uid + spaceId + type='spaceLike'}，没有 24 小时过期，也不使用 IP/User-Agent；
-     * 因而新旧后端可以共享点赞历史。服务用 MySQL named lock 串行执行“查重、写日志、加计数”，
-     * 计数失败时补偿删除日志。重复点赞返回业务失败，当前没有取消点赞接口。
+     * 因而新旧后端可以共享点赞历史。服务用 MySQL named lock 串行切换状态：未点赞时写日志并加计数，
+     * 已点赞时删除日志并扣回计数。
      */
     @RequestMapping("/spaceLikes")
     public ApiResponse like(@RequestParam Map<String, String> params) {
         int changed = spaces.like(params);
-        return ApiResponse.success("\u70b9\u8d5e\u6210\u529f", changed);
+        return ApiResponse.success(changed == 1 ? "\u70b9\u8d5e\u6210\u529f" : "\u5df2\u53d6\u6d88\u70b9\u8d5e", changed);
     }
 
     /**

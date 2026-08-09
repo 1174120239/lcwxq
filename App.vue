@@ -115,6 +115,14 @@
 			// 点击系统通知的推送跳转到消息中心
 			plus.push.addEventListener("click", function(msg) {
 				var payload = campusPushPayload(msg);
+				if (typeof payload === 'string' && payload.indexOf('qa:') === 0) {
+					var questionId = parseInt(payload.substring(3), 10);
+					if (questionId > 0) {
+						setTimeout(function() {
+							uni.navigateTo({ url: '/pages/qa/info?id=' + questionId })
+						}, 1000)
+					}
+				}
 				if(payload=="finance"){
 					setTimeout(function() {
 						uni.navigateTo({

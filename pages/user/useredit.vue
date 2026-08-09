@@ -49,7 +49,7 @@
 				<view class="title">个人简介</view>
 				<view class="introduce-editor">
 					<textarea v-model="introduce" maxlength="255" placeholder="输入个人简介，支持换行"></textarea>
-					<text class="introduce-count">{{introduce.length}}/255</text>
+					<text class="introduce-count">{{introduceCount}}/255</text>
 				</view>
 			</view>
 			<view class="cu-form-group margin-top">
@@ -122,6 +122,11 @@
 				token:'',
 			}
 		},
+		computed: {
+			introduceCount() {
+				return (this.introduce || '').length
+			}
+		},
 		onPullDownRefresh(){
 			var that = this;
 			
@@ -175,14 +180,14 @@
 				}
 				if(localStorage.getItem('userinfo')){
 					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					that.uid=userInfo.uid;
-					that.screenName=userInfo.screenName;
-					that.name=userInfo.name;
-					that.mail=userInfo.mail;
-					that.userBg=userInfo.userBg;
-					that.token=userInfo.token;
-					that.avatar=userInfo.avatar;
-					that.introduce = userInfo.introduce;
+					that.uid=userInfo.uid || 0;
+					that.screenName=userInfo.screenName || '';
+					that.name=userInfo.name || '';
+					that.mail=userInfo.mail || '';
+					that.userBg=userInfo.userBg || '';
+					that.token=userInfo.token || '';
+					that.avatar=userInfo.avatar || '';
+					that.introduce = userInfo.introduce || '';
 					that.cacheLoaded = true;
 				}
 			},

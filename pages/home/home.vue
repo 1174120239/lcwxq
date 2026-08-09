@@ -62,6 +62,12 @@
 					<view v-if="hometop==1"><block v-for="(item,index) in topContents" :key="'top-new'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view>
 					<view v-if="act_of==1">
 						<block v-for="(item,index) in contentsList" :key="item.cid || ('feed'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
+						<view class="qa-home-section" v-if="questionList.length>0">
+							<view class="qa-home-heading"><text>校园问答</text><text class="qa-home-subtitle">一起把问题说清楚</text></view>
+							<view class="qa-home-list">
+								<qa-question-card v-for="item in questionList" :key="item.id" :question="item" :night="weatherTheme.isDark" @open="openQuestion"></qa-question-card>
+							</view>
+						</view>
 						<view class="load-more" @tap="loadMore" v-if="dataLoad"><text>{{moreText}}</text></view>
 						<view class="dataLoad" v-if="!dataLoad"><view class="campus-loader"></view></view>
 					</view>
@@ -615,6 +621,7 @@
 				topList: [],
 				tagList: [],
 				recommendList: [],
+				questionList: [],
 				ads: "",
 				noLogin: false,
 				latestUserAvatar: [],
@@ -1090,6 +1097,7 @@
 				// Discovery data waits until the route transition has settled.
 				that.deferredHomeTimer = setTimeout(function() {
 					that.getRecommend();
+					that.getQuestionList();
 					that.getTopList();
 					that.getMetaList();
 					that.getTagList();
@@ -1464,6 +1472,9 @@
 				}
 				if (localStorage.getItem('recommendList')) {
 					that.recommendList = that.readCache('recommendList', []);
+				}
+				if (localStorage.getItem('qaQuestionList')) {
+					that.questionList = that.readCache('qaQuestionList', []);
 				}
 				if (localStorage.getItem('find_metaList')) {
 					that.metaList = that.readCache('find_metaList', []);
@@ -1942,6 +1953,30 @@
 						that.moreText = "加载更多";
 						that.isLoad = 0;
 					}
+				})
+			},
+			getQuestionList() {
+				var that = this;
+				that.$Net.request({
+					url: that.$API.qaQuestionList(),
+					data: {
+						limit: 4,
+						page: 1
+					},
+					method: 'get',
+					dataType: 'json',
+					success: function(res) {
+						if (res.data && res.data.code == 1) {
+							that.questionList = Array.isArray(res.data.data) ? res.data.data : [];
+							localStorage.setItem('qaQuestionList', JSON.stringify(that.questionList));
+						}
+					}
+				})
+			},
+			openQuestion(item) {
+				if (!item || !item.id) return;
+				uni.navigateTo({
+					url: '/pages/qa/info?id=' + item.id
 				})
 			},
 			getMetaContents(isPage, meta) {
@@ -2484,6 +2519,33 @@
 </script>
 
 <style scoped>
+	.qa-home-section {
+		margin: 22rpx 0 8rpx;
+	}
+
+	.qa-home-heading {
+		display: flex;
+		align-items: baseline;
+		gap: 18rpx;
+		padding: 8rpx 22rpx 18rpx;
+		color: var(--campus-card-text, #20302d);
+		font-size: 32rpx;
+		font-weight: 600;
+	}
+
+	.qa-home-subtitle {
+		color: var(--campus-card-muted, #77837f);
+		font-size: 23rpx;
+		font-weight: 400;
+	}
+
+	.qa-home-list {
+		overflow: hidden;
+		border: 1rpx solid var(--campus-card-border, #e9eeec);
+		border-radius: 16rpx;
+		background: var(--campus-card, #ffffff);
+	}
+
 	.tab-wrap-index {
 		color: #454545;
 		position: relative;

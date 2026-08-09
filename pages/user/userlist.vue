@@ -20,7 +20,7 @@
 				<text class="cuIcon-text"></text>暂时没有数据
 			</view>
 			<view class="cu-item" v-for="(item,index) in userList" :key="index" @tap="toUserContents(item)">
-				<view class="cu-avatar round lg" :style="item.style"></view>
+				<campus-avatar class="cu-avatar round lg" :src="item.avatar" :name="item.screenName || item.name"></campus-avatar>
 				<view class="content">
 					<view class="text-black">
 						<block v-if="item.isvip>0">

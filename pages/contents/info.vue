@@ -333,8 +333,11 @@
 						<text class="cuIcon-add"></text><text>发布评论</text>
 					</view> -->
 				</view>
-				<view class="no-data" v-if="commentsList.length==0">
+				<view class="no-data" v-if="commentsLoaded && commentsList.length==0 && commentsNum==0">
 					暂时没有评论
+				</view>
+				<view class="no-data" v-else-if="commentsLoaded && commentsList.length==0 && commentsNum>0">
+					评论加载中，请稍后刷新
 				</view>
 				<view class="cu-card dynamic no-card info-comment">
 					<block v-for="(item,index) in commentsList" :key="index" v-if="commentsList.length>0">
@@ -473,6 +476,7 @@
 				level: 0,
 				 needRefresh: false,
 				commentsNum: 0,
+				commentsLoaded: false,
 				category: [{'name':'未知','slug':'0'}],
 				created: '',
 				markdownData: {},
@@ -1119,6 +1123,9 @@
 			},
 			getCommentsList(isPage, id) {
 				var that = this;
+				if (!isPage) {
+					that.commentsLoaded = false;
+				}
 				var data = {
 					"cid": id,
 					"status": "approved"
@@ -1142,6 +1149,7 @@
 					success: function(res) {
 						uni.stopPullDownRefresh();
 						that.isLoad = 0;
+						that.commentsLoaded = true;
 						if (res.data.code == 1) {
 							var list = res.data.data;
 							if (list.length > 0) {
@@ -1174,6 +1182,7 @@
 					},
 					fail: function(res) {
 						uni.stopPullDownRefresh();
+						that.commentsLoaded = true;
 						uni.showToast({
 							title: "网络不太好哦~",
 							icon: 'none'

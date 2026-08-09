@@ -29,9 +29,9 @@
 		<form>
 			<view class="post-compose">
 				<view class="post-editor-surface">
-					<textarea class="post-editor-input" maxlength="-1" v-model="text" placeholder="分享校园里的新鲜事…"></textarea>
+					<textarea class="post-editor-input" :maxlength="maxTextLength" v-model="text" placeholder="分享校园里的新鲜事…" @input="limitTextInput"></textarea>
 					<view class="post-editor-status" :class="{'is-error': publishReason && !isUploading}">
-						<text>{{textCount}}/1500</text>
+						<text>{{textCount}}/{{maxTextLength}}</text>
 						<text>{{publishReason}}</text>
 					</view>
 				</view>
@@ -179,6 +179,7 @@
 				anonymousMode:false,
 				type:0,
 				text:"",
+				maxTextLength:1500,
 				toid:0,
 				pic:"",
 				picList:[],
@@ -243,6 +244,7 @@
 			publishReason() {
 				if (this.isUploading) return '图片正在上传，请稍候'
 				if (this.failedUploads.length) return '有图片上传失败，请重试或删除'
+				if (this.textCount > this.maxTextLength) return '动态正文不能超过' + this.maxTextLength + '字'
 				if (this.type === 4) {
 					if (!this.pic) return '请先上传视频'
 					if (!this.stripImageMarker(this.text).trim()) return '视频动态需要填写说明'
@@ -254,6 +256,7 @@
 			},
 			canPublish() {
 				if (this.isUploading || this.failedUploads.length) return false
+				if (this.textCount > this.maxTextLength) return false
 				const textLength = this.stripImageMarker(this.text).trim().length
 				const hasText = textLength > 0
 				if (this.type === 4) return hasText && Boolean(this.pic)
@@ -509,6 +512,16 @@
 			stripImageMarker(text) {
 				return (text || '').replace(/\s*#图集#\s*$/, '')
 			},
+			limitTextInput(e) {
+				const value = e && e.detail ? e.detail.value : this.text
+				if ((value || '').length <= this.maxTextLength) return
+				this.text = (value || '').slice(0, this.maxTextLength)
+			},
+			showPublishReason() {
+				if (!this.publishReason) return false
+				uni.showToast({ title: this.publishReason, icon: 'none' })
+				return true
+			},
 			imagePayloadText(text) {
 				return this.stripImageMarker(text)
 			},
@@ -558,6 +571,7 @@
 				})
 			},
 			publishSpace() {
+				if (!this.canPublish && this.showPublishReason()) return
 				this.commitPendingTopic(() => {
 					if (this.type === 4) {
 						this.addSpace2()
@@ -598,7 +612,7 @@
 			setOwO(data){
 				var that = this;
 				var text = data.data;
-				that.text+=text;
+				that.text = (that.text + text).slice(0, that.maxTextLength);
 			},
 			OwO(){
 				var that = this;
@@ -928,6 +942,7 @@
 			},
 			editSpace(){
 				var that = this;
+				if (!that.canPublish && that.showPublishReason()) return false;
 				if(that.token==""){
 					uni.showToast({
 					    title:"请先登录",

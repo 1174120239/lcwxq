@@ -25,9 +25,7 @@
 			<view class="cu-item">
 				<view class="cu-list menu-avatar" v-if="spaceInfo.userJson">
 					<view class="cu-item">
-						<view class="cu-avatar round lg"  :style="'background-image:url('+spaceInfo.userJson.avatar+');'">
-						
-						</view>
+						<campus-avatar class="cu-avatar round lg" :src="spaceInfo.userJson.avatar" :name="spaceInfo.userJson.name"></campus-avatar>
 						<view class="content flex-sub">
 							<view>{{spaceInfo.userJson.name}}
 							<text class="space-detail-campus" v-if="spaceInfo.userJson.campus">{{spaceInfo.userJson.campus}}</text>
@@ -52,7 +50,7 @@
 				
 				<block  v-if="spaceInfo.type==0">
 					
-					<view class="grid flex-sub padding-lr col-3 grid-square space-image-grid space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
+					<view class="space-image-grid space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
 						<view class="bg-img" v-for="(data,i) in spaceInfo.picList" :key="data+i" @tap="previewImage(spaceInfo.picList,data)">
 							<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
 							<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)">
@@ -104,7 +102,7 @@
 				<view class="space-reply-list">
 					<view class="cu-list menu-avatar comment" v-for="(item,index) in replyList" :key="index">
 						<view class="cu-item">
-							<view class="cu-avatar round" :style="'background-image:url('+item.userJson.avatar+');'" @tap="toUserContents(item.userJson)"></view>
+							<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content">
 								<view class="text-grey">
 									{{item.userJson.name}}
@@ -117,19 +115,35 @@
 								<view class="text-content text-df break-all">
 									<rich-text :nodes="markHtml(item.text)"></rich-text>
 								</view>
-								<view class="space-reply-num padding-xs radius margin-top-sm  text-sm" v-if="item.reply>0" @tap="toReplyInfo(item.id)">
-									<text class="text-blue">共{{item.reply}}条回复<text class="cuIcon-right margin-left-xs"></text></text>
+								<view class="comment-action-row">
+									<text class="text-gray">{{formatDate(item.created)}}</text>
+									<text class="comment-action" @tap="openReplyComposer(item)">回复</text>
+									<text class="comment-action" :class="item.isLikes==1?'text-blue':''" @tap="toggleReplyLike(item)">
+										<text class="cuIcon-appreciate"></text>{{formatNumber(item.likes) || ''}}
+									</text>
 								</view>
-								<view class="margin-top-sm flex justify-between">
-									<view class="text-gray text-df">{{formatDate(item.created)}}</view>
-									<view>
-										<text class="cuIcon-message text-gray margin-left-xl" @tap="goReply(item.id)">
-											{{formatNumber(item.reply) || ''}}
-										</text>
-										<text class="cuIcon-appreciate  margin-left-xl" @tap="toListLike(item.id,'reply',index)" :class="item.isLikes==1?'text-blue':'text-gray'">
-											{{formatNumber(item.likes) || ''}}
-										</text>
+								<view class="space-reply-num" v-if="item.reply>0 && !item._expanded" @tap="toggleReplyThread(item)">
+									<text v-if="item._loading">正在加载…</text>
+									<block v-else><text>显示{{item.reply}}条回复</text><text class="cuIcon-unfold margin-left-xs"></text></block>
+								</view>
+								<view class="comment-thread-wrap" v-if="item._expanded">
+									<space-reply-thread
+										:items="item._children"
+										:night="campusNight"
+										:current-uid="uid"
+										:group="group"
+										@reply="openReplyComposer"
+										@like="toggleReplyLike"
+										@delete="deleteThreadReply"
+										@toggle="toggleReplyThread"
+										@more="loadMoreReplyThread"
+										@user="toUserContents"
+									></space-reply-thread>
+									<view class="space-reply-num" v-if="item._childMore" @tap="loadMoreReplyThread(item)">
+										<text v-if="item._loading">正在加载…</text>
+										<block v-else><text>显示更多回复</text><text class="cuIcon-unfold margin-left-xs"></text></block>
 									</view>
+									<view class="space-reply-num is-collapse" @tap="toggleReplyThread(item)"><text>收起回复</text><text class="cuIcon-fold margin-left-xs"></text></view>
 								</view>
 								<view class="comment-operation">
 									<block v-if="item.userJson.uid!=0&&item.userJson.uid==uid">
@@ -147,9 +161,9 @@
 						
 						<text class="cuIcon-text"></text>
 						
-						暂时没有消息
+						暂时没有评论
 						<view class="text-center margin-top-sm">
-							<text class="cu-btn bg-blue" @tap="goReply(spaceInfo.id)">发布评论</text>
+							<text class="cu-btn bg-blue" @tap="openReplyComposer(spaceInfo)">发布评论</text>
 						</view>
 						
 					</view>
@@ -163,7 +177,7 @@
 				<view class="space-reply-list">
 					<view class="cu-list menu-avatar comment" v-for="(item,index) in forwardList" :key="index">
 						<view class="cu-item">
-							<view class="cu-avatar round" :style="'background-image:url('+item.userJson.avatar+');'" @tap="toUserContents(item.userJson)"></view>
+							<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content">
 								<view class="text-grey">
 									{{item.userJson.name}}
@@ -219,13 +233,37 @@
 		</view>
 		<view class="space-footer grid " :class="replyType==0?'col-2':'col-2'" v-if="spaceInfo.status==1">
 			
-			<view class="space-footer-box" @tap="goReply(spaceInfo.id)">
+			<view class="space-footer-box" @tap="openReplyComposer(spaceInfo)">
 				<text class="cuIcon-message"></text>
 				评论
 			</view>
 			<view class="space-footer-box" @tap="toLike(spaceInfo.id)">
 				<text class="cuIcon-appreciate"  :class="spaceInfo.isLikes==1?'text-blue':''"></text>
 				点赞
+			</view>
+		</view>
+		<view class="reply-composer-mask" v-if="replyComposerVisible" @tap="closeReplyComposer">
+			<view class="reply-composer" :class="{'is-night': campusNight}" @tap.stop>
+				<view class="reply-composer-head">
+					<text class="reply-composer-cancel" @tap="closeReplyComposer">取消</text>
+					<view class="reply-composer-title">
+						<text>{{replyTargetName ? '回复评论' : '发表评论'}}</text>
+						<text class="reply-composer-target" v-if="replyTargetName">@{{replyTargetName}}</text>
+					</view>
+					<view class="reply-composer-send" :class="{'is-disabled': !canSubmitReply}" @tap="submitReply">
+						{{replySubmitting ? '发送中' : '发送'}}
+					</view>
+				</view>
+				<textarea
+					class="reply-composer-input"
+					v-model="replyText"
+					:focus="replyInputFocus"
+					:placeholder="replyTargetName ? '回复 @' + replyTargetName : '友善交流，分享你的想法'"
+					maxlength="1500"
+					:adjust-position="true"
+					:cursor-spacing="24"
+				></textarea>
+				<view class="reply-composer-meta"><text>{{replyText.length}}/1500</text></view>
 			</view>
 		</view>
 		<view class="videoPlay" v-if="isPlay">
@@ -251,6 +289,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { normalizeUser } from '@/utils/avatar.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -313,11 +352,24 @@
 				uid:0,
 				imageFailures:{},
 				imageRetryVersions:{},
+				replyComposerVisible:false,
+				replyInputFocus:false,
+				replyText:'',
+				replyTarget:null,
+				replySubmitting:false,
+				replyListRefreshPending:false,
 			}
 		},
 		computed: {
 			campusNight() {
 				return resolveCampusNight(this.campusThemeMode, isDongchangfuNight(this.campusThemeClock))
+			},
+			replyTargetName() {
+				if (!this.replyTarget || this.replyTarget.id == this.spaceInfo.id) return '';
+				return this.replyTarget.userJson ? this.replyTarget.userJson.name : '';
+			},
+			canSubmitReply() {
+				return !this.replySubmitting && this.replyText.trim().length > 0;
 			}
 		},
 		onPullDownRefresh(){
@@ -434,12 +486,11 @@
 				var that = this;
 				that.moreText="正在加载中...";
 				if(that.isLoad==0){
-					that.getReplyList(true);
 					if(that.infoType==0){
-						that.getReplyList(false)
+						that.getReplyList(true)
 					}
 					if(that.infoType==1){
-						that.getForwardList(false);
+						that.getForwardList(true);
 					}
 				}
 			},
@@ -656,9 +707,11 @@
 				return userlvStyle;
 			},
 			goReply(id){
-				uni.navigateTo({
-				    url: '/pages/space/reply?id='+id
-				});
+				var target = this.spaceInfo;
+				if(id != this.spaceInfo.id){
+					target = this.findReplyById(this.replyList, id) || {id:id, userJson:{name:''}};
+				}
+				this.openReplyComposer(target);
 			},
 			forward(id){
 				var that = this;
@@ -681,6 +734,11 @@
 				if(isPage){
 					page++;
 				}
+				if(that.isLoad==1){
+					if(!isPage) that.replyListRefreshPending = true;
+					return;
+				}
+				that.isLoad=1;
 				that.$Net.request({
 					url: that.$API.spaceList(),
 					data:{
@@ -702,6 +760,7 @@
 							var list = res.data.data;
 							var replyList = [];
 							for(var i in list){
+								list[i] = that.prepareReplyItem(list[i]);
 								if(list[i].type==0){
 									if(list[i].pic){
 										var pic = list[i].pic;
@@ -732,6 +791,9 @@
 								
 							}else{
 								that.moreText="没有更多数据了";
+								if(!isPage){
+									that.replyList = [];
+								}
 							}
 						}
 					},
@@ -739,8 +801,162 @@
 						
 						that.moreText="加载更多";
 						that.isLoad=0;
+					},
+					complete: function() {
+						that.isLoad=0;
+						if(that.replyListRefreshPending){
+							that.replyListRefreshPending = false;
+							that.getReplyList(false);
+						}
 					}
 				})
+			},
+			prepareReplyItem(item){
+				item = item || {};
+				item.userJson = normalizeUser(item.userJson);
+				item.renderedText = this.markHtml(item.text || '');
+				item.displayTime = this.formatDate(item.created || 0);
+				item._children = Array.isArray(item._children) ? item._children : [];
+				item._expanded = item._expanded === true;
+				item._loaded = item._loaded === true;
+				item._loading = false;
+				item._childPage = Number(item._childPage || 0);
+				item._childMore = item._childMore === true;
+				return item;
+			},
+			findReplyById(items,id){
+				for(var i=0;i<items.length;i++){
+					if(items[i].id == id) return items[i];
+					var nested = this.findReplyById(items[i]._children || [],id);
+					if(nested) return nested;
+				}
+				return null;
+			},
+			openReplyComposer(target){
+				if(!this.token){
+					uni.showToast({title:'请先登录',icon:'none'});
+					setTimeout(function(){uni.navigateTo({url:'/pages/user/login'});},700);
+					return;
+				}
+				this.replyTarget = target && target.id ? target : this.spaceInfo;
+				this.replyComposerVisible = true;
+				this.replyInputFocus = false;
+				this.$nextTick(() => {
+					setTimeout(() => { this.replyInputFocus = true; },120);
+				});
+			},
+			closeReplyComposer(){
+				if(this.replySubmitting) return;
+				this.replyInputFocus = false;
+				this.replyComposerVisible = false;
+				this.replyTarget = null;
+			},
+			submitReply(){
+				var that = this;
+				if(!that.canSubmitReply) return;
+				var text = that.replyText.trim();
+				var targetId = that.replyTarget && that.replyTarget.id ? that.replyTarget.id : that.spaceInfo.id;
+				that.replySubmitting = true;
+				that.$Net.request({
+					url: that.$API.addSpace(),
+					data:{type:3,text:text,toid:targetId,token:that.token},
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					method:'post',
+					dataType:'json',
+					timeout:15000,
+					success:function(res){
+						if(res.data.code==1){
+							that.replySubmitting = false;
+							that.replyText = '';
+							that.replyInputFocus = false;
+							that.replyComposerVisible = false;
+							that.replyTarget = null;
+							that.page = 1;
+							that.getSpaceInfo();
+							that.getReplyList(false);
+							uni.showToast({title:res.data.msg || '评论成功',icon:'success'});
+						}else{
+							that.replySubmitting = false;
+							uni.showToast({title:res.data.msg || '发送失败，请重试',icon:'none'});
+						}
+					},
+					fail:function(){
+						that.replySubmitting = false;
+						uni.showToast({title:'发送失败，请检查网络后重试',icon:'none'});
+					}
+				});
+			},
+			toggleReplyThread(item){
+				if(!item || item._loading) return;
+				if(item._expanded){
+					this.$set(item,'_expanded',false);
+					return;
+				}
+				if(item._loaded){
+					this.$set(item,'_expanded',true);
+					return;
+				}
+				this.fetchReplyChildren(item,false);
+			},
+			loadMoreReplyThread(item){
+				this.fetchReplyChildren(item,true);
+			},
+			fetchReplyChildren(item,append){
+				var that = this;
+				if(!item || item._loading) return;
+				var nextPage = append ? Number(item._childPage || 1) + 1 : 1;
+				that.$set(item,'_loading',true);
+				that.$Net.request({
+					url:that.$API.spaceList(),
+					data:{
+						searchParams:JSON.stringify({toid:item.id,type:3}),
+						limit:3,
+						page:nextPage,
+						order:'created',
+						token:that.token
+					},
+					method:'get',
+					dataType:'json',
+					timeout:15000,
+					success:function(res){
+						if(res.data.code!=1){
+							uni.showToast({title:res.data.msg || '回复加载失败',icon:'none'});
+							return;
+						}
+						var children = (res.data.data || []).map(function(child){return that.prepareReplyItem(child);});
+						var merged = append ? (item._children || []).concat(children) : children;
+						that.$set(item,'_children',merged);
+						that.$set(item,'_childPage',nextPage);
+						that.$set(item,'_loaded',true);
+						that.$set(item,'_expanded',true);
+						that.$set(item,'_childMore',merged.length < Number(item.reply || 0) && children.length > 0);
+					},
+					fail:function(){
+						uni.showToast({title:'回复加载失败，请重试',icon:'none'});
+					},
+					complete:function(){that.$set(item,'_loading',false);}
+				});
+			},
+			toggleReplyLike(item){
+				var that = this;
+				if(!that.token){uni.showToast({title:'请先登录',icon:'none'});return;}
+				if(!item || item._likeSubmitting) return;
+				var wasLiked = item.isLikes == 1;
+				var oldLikes = Number(item.likes || 0);
+				that.$set(item,'_likeSubmitting',true);
+				that.$set(item,'isLikes',wasLiked ? 0 : 1);
+				that.$set(item,'likes',wasLiked ? Math.max(0,oldLikes-1) : oldLikes+1);
+				that.$Net.request({
+					url:that.$API.spaceLikes(),data:{token:that.token,id:item.id},method:'get',dataType:'json',
+					success:function(res){
+						if(res.data.code==0){that.$set(item,'isLikes',wasLiked?1:0);that.$set(item,'likes',oldLikes);}
+					},
+					fail:function(){that.$set(item,'isLikes',wasLiked?1:0);that.$set(item,'likes',oldLikes);},
+					complete:function(){that.$set(item,'_likeSubmitting',false);}
+				});
+			},
+			deleteThreadReply(item){
+				if(item && item.id) this.toDelete2(item.id);
 			},
 			getForwardList(isPage){
 				var that = this;
@@ -894,17 +1110,10 @@
 					});
 					return false;
 				}
-				if(that.spaceInfo.isLikes==1){
-					uni.showToast({
-						title: "你已经点赞过了",
-						icon: 'none'
-					});
-					return false;
-				}else{
-					that.spaceInfo.isLikes = 1;
-				}
-				
-				that.spaceInfo.likes += 1;
+				var wasLiked = that.spaceInfo.isLikes == 1;
+				var oldLikes = Number(that.spaceInfo.likes || 0);
+				that.spaceInfo.isLikes = wasLiked ? 0 : 1;
+				that.spaceInfo.likes = wasLiked ? Math.max(0, oldLikes - 1) : oldLikes + 1;
 				var data = {
 					token:token,
 					id:id,
@@ -931,7 +1140,10 @@
 							icon: 'none'
 						})
 						if(res.data.code==0){
-							that.spaceInfo.isLikes = 0;
+							that.spaceInfo.isLikes = wasLiked ? 1 : 0;
+							that.spaceInfo.likes = oldLikes;
+						}else if(res.data.data === 0 || res.data.data === 1){
+							that.spaceInfo.isLikes = res.data.data;
 						}
 						
 					},
@@ -943,6 +1155,8 @@
 							title: "网络不太好哦",
 							icon: 'none'
 						})
+						that.spaceInfo.isLikes = wasLiked ? 1 : 0;
+						that.spaceInfo.likes = oldLikes;
 						
 					}
 				})
@@ -963,30 +1177,11 @@
 					});
 					return false;
 				}
-				if(type=="forward"){
-					if(that.forwardList[index].isLikes==1){
-						uni.showToast({
-							title: "你已经点赞过了",
-							icon: 'none'
-						});
-						return false;
-					}else{
-						that.forwardList[index].isLikes = 1;
-					}
-					that.forwardList[index].likes += 1;
-				}
-				if(type=="reply"){
-					if(that.replyList[index].isLikes==1){
-						uni.showToast({
-							title: "你已经点赞过了",
-							icon: 'none'
-						});
-						return false;
-					}else{
-						that.replyList[index].isLikes = 1;
-					}
-					that.replyList[index].likes += 1;
-				}
+				var targetList = type=="forward" ? that.forwardList : that.replyList;
+				var wasListLiked = targetList[index].isLikes == 1;
+				var oldListLikes = Number(targetList[index].likes || 0);
+				targetList[index].isLikes = wasListLiked ? 0 : 1;
+				targetList[index].likes = wasListLiked ? Math.max(0, oldListLikes - 1) : oldListLikes + 1;
 				
 				
 				var data = {
@@ -1015,12 +1210,10 @@
 							icon: 'none'
 						})
 						if(res.data.code==0){
-							if(type=="forward"){
-								that.forwardList[index].isLikes = 0;
-							}
-							if(type=="reply"){
-								that.replyList[index].isLikes = 1;
-							}
+							targetList[index].isLikes = wasListLiked ? 1 : 0;
+							targetList[index].likes = oldListLikes;
+						}else if(res.data.data === 0 || res.data.data === 1){
+							targetList[index].isLikes = res.data.data;
 						}
 						
 					},
@@ -1032,6 +1225,8 @@
 							title: "网络不太好哦",
 							icon: 'none'
 						})
+						targetList[index].isLikes = wasListLiked ? 1 : 0;
+						targetList[index].likes = oldListLikes;
 						
 					}
 				})
@@ -1090,11 +1285,8 @@
 				});
 			},
 			toReplyInfo(id){
-				var that = this;
-				
-				uni.navigateTo({
-				    url: '/pages/space/info?id='+id+'&replyType=1'
-				});
+				var item = this.findReplyById(this.replyList,id);
+				if(item) this.toggleReplyThread(item);
 			},
 			toBan(uid){
 				if(uid==0){
@@ -1127,7 +1319,7 @@
 					"token":token
 				}
 				uni.showModal({
-					title: '确定要删除该动态吗',
+					title: '确定要删除该评论吗',
 					success: function (res) {
 						if (res.confirm) {
 							uni.showLoading({
@@ -1437,6 +1629,165 @@
 	background: transparent;
 }
 
+.comment-action-row {
+	display: flex;
+	align-items: center;
+	gap: 28rpx;
+	margin-top: 14rpx;
+	font-size: 24rpx;
+}
+
+.comment-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 7rpx;
+	color: #60736e;
+	font-weight: 600;
+}
+
+.space-detail-page .space-reply-num {
+	display: inline-flex;
+	align-items: center;
+	min-height: 56rpx;
+	margin-top: 8rpx;
+	padding: 0;
+	background: transparent;
+	color: #526762;
+	font-size: 25rpx;
+	font-weight: 600;
+}
+
+.space-detail-page .space-reply-num.is-collapse {
+	color: #7c8b86;
+}
+
+.comment-thread-wrap {
+	position: relative;
+	margin-top: 4rpx;
+}
+
+.reply-composer-mask {
+	position: fixed;
+	z-index: 1200;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	align-items: flex-end;
+	background: rgba(0, 0, 0, 0.42);
+	animation: reply-mask-in 160ms ease-out;
+}
+
+.reply-composer {
+	width: 100%;
+	padding: 0 24rpx calc(24rpx + env(safe-area-inset-bottom));
+	border-radius: 22rpx 22rpx 0 0;
+	background: #ffffff;
+	box-sizing: border-box;
+	animation: reply-sheet-in 190ms ease-out;
+}
+
+.reply-composer-head {
+	display: grid;
+	grid-template-columns: 100rpx 1fr 112rpx;
+	align-items: center;
+	min-height: 92rpx;
+}
+
+.reply-composer-cancel {
+	color: #71817c;
+	font-size: 27rpx;
+}
+
+.reply-composer-title {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	align-items: center;
+	color: #263a37;
+	font-size: 29rpx;
+	font-weight: 600;
+}
+
+.reply-composer-target {
+	max-width: 340rpx;
+	margin-top: 2rpx;
+	overflow: hidden;
+	color: #168c80;
+	font-size: 22rpx;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.reply-composer-send {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 58rpx;
+	border-radius: 16rpx;
+	background: #168c80;
+	color: #ffffff;
+	font-size: 26rpx;
+	font-weight: 600;
+}
+
+.reply-composer-send.is-disabled {
+	background: #dbe4e1;
+	color: #96a39f;
+}
+
+.reply-composer-input {
+	width: 100%;
+	min-height: 230rpx;
+	max-height: 430rpx;
+	padding: 20rpx;
+	border: 1rpx solid #dce6e3;
+	border-radius: 16rpx;
+	background: #f7f9f8;
+	color: #263a37;
+	font-size: 29rpx;
+	line-height: 1.6;
+	box-sizing: border-box;
+}
+
+.reply-composer-meta {
+	display: flex;
+	justify-content: flex-end;
+	padding-top: 10rpx;
+	color: #94a09c;
+	font-size: 22rpx;
+}
+
+.reply-composer.is-night {
+	background: #202728;
+}
+
+.reply-composer.is-night .reply-composer-title,
+.reply-composer.is-night .reply-composer-input {
+	color: #edf3f0;
+}
+
+.reply-composer.is-night .reply-composer-input {
+	border-color: #3b4745;
+	background: #171d1e;
+}
+
+.reply-composer.is-night .reply-composer-send.is-disabled {
+	background: #303a39;
+	color: #788681;
+}
+
+@keyframes reply-mask-in {
+	from { background: rgba(0, 0, 0, 0); }
+}
+
+@keyframes reply-sheet-in {
+	from { transform: translateY(100%); }
+	to { transform: translateY(0); }
+}
+
 .space-detail-page .space-footer {
 	height: 96rpx;
 	padding-bottom: env(safe-area-inset-bottom);
@@ -1481,6 +1832,10 @@
 .space-detail-page.campus-night .space-reply-num,
 .space-detail-page.campus-night .space-footer-box {
 	color: #b6c2be !important;
+}
+
+.space-detail-page.campus-night .comment-action {
+	color: #b6c2be;
 }
 
 .space-detail-page.campus-night .space-reply-head {

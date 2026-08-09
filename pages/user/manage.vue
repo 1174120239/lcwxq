@@ -119,6 +119,14 @@
 						</view>
 					</waves>
 				</view>
+				<view class="index-sort-box" v-if="group=='administrator'||group=='editor'">
+					<waves itemClass="butclass">
+						<view class="index-sort-main" @tap="toLink('/pages/manage/questions')">
+							<view class="index-sort-i"><text class="cuIcon-question"></text></view>
+							<view class="index-sort-text">问答管理</view>
+						</view>
+					</waves>
+				</view>
 				<view class="index-sort-box">
 					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/manage/shop')">

@@ -68,7 +68,7 @@ public class UserInteractionService {
         }
         if ("comment".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 "
-                    + "AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike')", uid);
+                    + "AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment')", uid);
         }
         if ("finance".equals(type) || "system".equals(type) || "fan".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 AND type = ?",
@@ -176,7 +176,24 @@ public class UserInteractionService {
         if ("spaceComment".equals(type) || "spaceLike".equals(type)) {
             enrichSpaceReference(result, number(row.get("value")), viewerUid);
         }
+        if ("qaAnswer".equals(type) || "qaComment".equals(type)) {
+            enrichQuestionReference(result, number(row.get("value")));
+        }
         return result;
+    }
+
+    private void enrichQuestionReference(Map<String, Object> result, long questionId) {
+        List<Map<String, Object>> questions = jdbc.queryForList(
+                "SELECT id,title,status FROM starfree_qa_questions WHERE id = ? LIMIT 1", questionId);
+        if (questions.isEmpty()) {
+            result.put("questionState", "deleted");
+            result.put("questionInfo", null);
+            return;
+        }
+        Map<String, Object> question = questions.get(0);
+        boolean visible = number(question.get("status")) == 1;
+        result.put("questionState", visible ? "visible" : "hidden");
+        result.put("questionInfo", visible ? new LinkedHashMap<>(question) : null);
     }
 
     private void enrichSpaceReference(Map<String, Object> result, long spaceId, long viewerUid) {
@@ -202,7 +219,7 @@ public class UserInteractionService {
         if (source == null) {
             Map<String, Object> removed = new LinkedHashMap<>();
             removed.put("uid", uid);
-            removed.put("name", "Deleted user");
+            removed.put("name", "已注销用户");
             removed.put("avatar", "");
             removed.put("group", "visitor");
             removed.put("groupKey", "visitor");
@@ -229,7 +246,7 @@ public class UserInteractionService {
             return "";
         }
         if ("comment".equals(type)) {
-            return " AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike')";
+            return " AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment')";
         }
         filters.add(type);
         return " AND type = ?";

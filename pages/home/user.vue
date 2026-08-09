@@ -50,7 +50,7 @@
 					<view class="profile-manage-action" v-if="group=='administrator'||group=='editor'" @tap="toManage">
 						<view><text class="cuIcon-settings"></text><text>管理中心</text></view><text>后台管理</text>
 					</view>
-					<view @tap="toLink('/pages/user/usermark')"><view><text class="cuIcon-favor"></text><text>收藏夹</text></view><text>查看内容</text></view>
+					<view @tap="toLink('/pages/user/usermark')"><view><text class="cuIcon-favor"></text><text>浏览记录</text></view><text>查看内容</text></view>
 					<view @tap="toLink('/pages/user/assets')"><view><text class="cuIcon-card"></text><text>钱包</text></view><text>点击查看</text></view>
 					<view class="profile-clock-action" :class="{'is-clocked': isClock==1}" @tap="toClock"><view><text class="cuIcon-calendar"></text><text>{{isClock==1?'已签到':'签到'}}</text></view><text>{{isClock==1?'今日已签':'每日签到'}}</text></view>
 				</view>
