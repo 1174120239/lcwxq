@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -116,6 +117,37 @@ class BotServiceTest {
                 eq(10L), eq(5));
         Map<?, ?> first = (Map<?, ?>) spaces.get(0);
         assertThat(first.get("images")).isEqualTo(Arrays.asList("a.png", "b.png"));
+    }
+
+    @Test
+    void registerGroupGeneratesOneBotOriginWhenAdminDoesNotProvideIt() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret");
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_group_sync"), any(Object[].class)))
+                .thenReturn(1);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("groupId", "638978650");
+        request.put("groupName", "聊城一中论坛");
+
+        Map<String, Object> response = fixture.service.registerGroup(request);
+
+        verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_group_sync"),
+                eq("qq"), eq("638978650"), eq("聊城一中论坛"),
+                eq("lcxqy_onebot:GroupMessage:638978650"),
+                any(java.sql.Timestamp.class), any(java.sql.Timestamp.class));
+        assertThat(response).containsEntry("unifiedMsgOrigin", "lcxqy_onebot:GroupMessage:638978650");
+    }
+
+    @Test
+    void registerGroupRejectsNonNumericQqGroupId() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret");
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("groupId", "not-a-group");
+
+        assertThatThrownBy(() -> fixture.service.registerGroup(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("QQ群号格式不正确");
     }
 
     private static Map<String, String> botRequest(String secret, String qqUserId) {

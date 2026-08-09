@@ -269,8 +269,14 @@ public class BotService {
         requireBotSecret(request);
         String platform = platform(request);
         String groupId = requiredText(request, "groupId", "缺少群号");
+        if (!groupId.matches("\\d{5,20}")) {
+            throw new IllegalArgumentException("QQ群号格式不正确");
+        }
         String groupName = safe(request.get("groupName"), 128);
         String unifiedMsgOrigin = safe(request.get("unifiedMsgOrigin"), 255);
+        if (unifiedMsgOrigin.trim().isEmpty()) {
+            unifiedMsgOrigin = oneBotGroupOrigin(groupId);
+        }
         Timestamp now = Timestamp.from(Instant.now());
         jdbc.update("INSERT INTO lcxqy_bot_group_sync "
                         + "(platform,group_id,group_name,unified_msg_origin,enabled,created_at,updated_at) "
@@ -280,8 +286,13 @@ public class BotService {
                 platform, groupId, groupName, unifiedMsgOrigin, now, now);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("groupId", groupId);
+        response.put("unifiedMsgOrigin", unifiedMsgOrigin);
         response.put("enabled", true);
         return response;
+    }
+
+    private String oneBotGroupOrigin(String groupId) {
+        return "lcxqy_onebot:GroupMessage:" + groupId;
     }
 
     public Map<String, Object> delivery(Map<String, String> request) {

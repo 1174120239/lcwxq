@@ -250,7 +250,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | economy | 积分、经验、余额、签到、奖励、提现、财务记录 |
 | shop | 商品、商城、VIP 和购买 |
 | anonymous | 匿名动态：公开配置、匿名发布、归属查询、管理端配置 |
-| bot | NapCat 个人 QQ 动态助手：DeepSeek 聊天代理、QQ 绑定、发动态、资料修改、积分/签到状态、签到和群动态同步 |
+| bot | NapCat 个人 QQ 动态助手：DeepSeek 受限意图规划与多轮聊天、持久化绑定续接、发动态、资料修改、积分/签到状态、签到和群动态同步 |
 | proxy | 未迁移接口和受控旧端委托 |
 
 ### 8.2 混合处理

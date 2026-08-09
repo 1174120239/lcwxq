@@ -147,16 +147,14 @@ if ($groupResult) {
 
                     <hr>
                     <h5 class="mb-3">群动态同步</h5>
-                    <p class="text-muted">插件可以用“绑定本群同步”自动写入群号和 unified_msg_origin；这里可启停和调整发送摘要。</p>
+                    <p class="text-muted">只需填写 QQ 群号；群名可选。平台、消息来源标识和同步游标由系统自动维护。</p>
                     <div class="table-responsive">
                         <table class="table table-centered table-sm">
                             <thead>
                             <tr>
                                 <th>启用</th>
-                                <th>平台</th>
                                 <th>群号</th>
                                 <th>群名</th>
-                                <th>unified_msg_origin</th>
                                 <th>游标</th>
                                 <th>最多图片</th>
                                 <th>摘要字数</th>
@@ -170,10 +168,8 @@ if ($groupResult) {
                                         <input type="hidden" name="group_ids[]" value="<?php echo intval($group['id']); ?>">
                                         <input type="checkbox" name="group_enabled[<?php echo intval($group['id']); ?>]" value="1" <?php echo intval($group['enabled']) === 1 ? 'checked' : ''; ?>>
                                     </td>
-                                    <td><input class="form-control form-control-sm" name="group_platform[<?php echo intval($group['id']); ?>]" value="<?php echo bot_h($group['platform']); ?>"></td>
-                                    <td><input class="form-control form-control-sm" name="group_id[<?php echo intval($group['id']); ?>]" value="<?php echo bot_h($group['group_id']); ?>"></td>
+                                    <td><input class="form-control form-control-sm" name="group_id[<?php echo intval($group['id']); ?>]" value="<?php echo bot_h($group['group_id']); ?>" inputmode="numeric" required></td>
                                     <td><input class="form-control form-control-sm" name="group_name[<?php echo intval($group['id']); ?>]" value="<?php echo bot_h($group['group_name']); ?>"></td>
-                                    <td><input class="form-control form-control-sm" name="unified_msg_origin[<?php echo intval($group['id']); ?>]" value="<?php echo bot_h($group['unified_msg_origin']); ?>"></td>
                                     <td><?php echo intval($group['cursor_space_id']); ?></td>
                                     <td><input class="form-control form-control-sm" type="number" min="0" max="9" name="group_max_images[<?php echo intval($group['id']); ?>]" value="<?php echo intval($group['max_images']); ?>"></td>
                                     <td><input class="form-control form-control-sm" type="number" min="20" max="500" name="group_summary_length[<?php echo intval($group['id']); ?>]" value="<?php echo intval($group['summary_length']); ?>"></td>
@@ -182,10 +178,8 @@ if ($groupResult) {
                             <?php } ?>
                             <tr>
                                 <td>新增</td>
-                                <td><input class="form-control form-control-sm" name="new_platform" value="qq"></td>
-                                <td><input class="form-control form-control-sm" name="new_group_id" placeholder="群号"></td>
-                                <td><input class="form-control form-control-sm" name="new_group_name" placeholder="群名"></td>
-                                <td><input class="form-control form-control-sm" name="new_unified_msg_origin" placeholder="插件可自动填"></td>
+                                <td><input class="form-control form-control-sm" name="new_group_id" placeholder="必填：QQ群号" inputmode="numeric"></td>
+                                <td><input class="form-control form-control-sm" name="new_group_name" placeholder="选填：便于识别"></td>
                                 <td>0</td>
                                 <td><input class="form-control form-control-sm" type="number" min="0" max="9" name="new_max_images" value="<?php echo bot_h($botConfig['sync_max_images']); ?>"></td>
                                 <td><input class="form-control form-control-sm" type="number" min="20" max="500" name="new_summary_length" value="<?php echo bot_h($botConfig['sync_summary_length']); ?>"></td>

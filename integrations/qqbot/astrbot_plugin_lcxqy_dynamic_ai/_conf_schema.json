@@ -15,7 +15,7 @@
     "default": "qq"
   },
   "chat_enabled": {
-    "description": "是否让插件把普通聊天转发到后端 DeepSeek 代理",
+    "description": "是否启用 DeepSeek 对话和自然语言论坛操作识别",
     "type": "bool",
     "default": true
   },
