@@ -51,7 +51,7 @@ if ($groupResult) {
                 <h4 class="header-title mb-3">QQ Bot设置</h4>
                 <p class="text-muted">
                     这里配置 NapCat / AstrBot 动态助手。Bot 只面向动态，不开放帖子或文章能力。
-                    Bot Secret 由部署配置托管，后台不显示或修改密钥原文。
+                    Bot Secret 可在此页设置；后台只显示是否已配置，不回显密钥原文。
                 </p>
                 <form class="needs-validation" action="qqBotPost.php" method="post" novalidate>
                     <div class="row">
@@ -63,10 +63,14 @@ if ($groupResult) {
                                 <label style="display:block;" for="enabled" data-on-label="开启" data-off-label="关闭"></label>
                             </div>
                             <div class="form-group mb-3">
-                                <label for="bot_secret_status">Bot Secret</label>
-                                <input class="form-control" type="text" id="bot_secret_status" readonly
-                                       value="<?php echo $botConfig['bot_secret'] === '' ? '未配置' : '已由部署托管'; ?>">
-                                <small class="form-text text-muted">轮换 Secret 需同步更新后端和 AstrBot，不在此页操作。</small>
+                                <label for="bot_secret">Bot Secret</label>
+                                <input name="bot_secret" class="form-control" type="password" id="bot_secret"
+                                       minlength="16" maxlength="128" autocomplete="new-password"
+                                       placeholder="留空保持不变；与 AstrBot 插件填写相同密码">
+                                <small class="form-text text-muted">
+                                    当前：<?php echo $botConfig['bot_secret'] === '' ? '未配置' : '已配置'; ?>。
+                                    输入新密码才会更新，后台不会回显原密码。
+                                </small>
                             </div>
                             <div class="form-group mb-3">
                                 <label for="bot_public_base_url">绑定页公网地址</label>

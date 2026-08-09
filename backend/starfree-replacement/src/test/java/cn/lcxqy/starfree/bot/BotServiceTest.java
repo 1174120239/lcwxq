@@ -32,6 +32,28 @@ import static org.mockito.Mockito.when;
 
 class BotServiceTest {
     @Test
+    void configuredBotSecretOverridesEnvironmentFallback() {
+        assertThat(BotService.selectBotSecret("admin-secret", "environment-secret"))
+                .isEqualTo("admin-secret");
+        assertThat(BotService.selectBotSecret("", "environment-secret"))
+                .isEqualTo("environment-secret");
+        assertThat(BotService.selectBotSecret("   ", "environment-secret"))
+                .isEqualTo("environment-secret");
+        assertThat(BotService.selectBotSecret(null, null)).isEmpty();
+    }
+
+    @Test
+    void configAuthenticatesWithSecretSavedByAdmin() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "admin-secret");
+
+        Map<String, Object> response = fixture.service.config(botRequest("admin-secret", "10001"));
+
+        assertThat(response).containsEntry("enabled", true)
+                .containsEntry("dynamicOnly", true);
+    }
+
+    @Test
     void bindLoginDoesNotCreateOrRevokeNormalForumLoginToken() {
         Fixture fixture = new Fixture();
         when(fixture.jdbc.queryForList(startsWith("SELECT bind_token,platform,qq_user_id"),

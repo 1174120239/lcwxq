@@ -714,16 +714,23 @@ public class BotService {
         if (provided.isEmpty()) {
             provided = RequestValues.text(request, "secret");
         }
-        String expected = System.getenv("LCXQY_QQBOT_SECRET");
-        if (expected == null || expected.trim().isEmpty()) {
-            expected = value(configValues(), "bot_secret", "");
-        }
+        String expected = selectBotSecret(
+                value(configValues(), "bot_secret", ""),
+                System.getenv("LCXQY_QQBOT_SECRET"));
         if (expected.trim().isEmpty()) {
             throw new IllegalArgumentException("Bot secret 未配置");
         }
         if (!constantEquals(provided, expected)) {
             throw new IllegalArgumentException("Bot secret 不正确");
         }
+    }
+
+    static String selectBotSecret(String configuredSecret, String environmentSecret) {
+        String configured = configuredSecret == null ? "" : configuredSecret;
+        if (!configured.trim().isEmpty()) {
+            return configured;
+        }
+        return environmentSecret == null ? "" : environmentSecret;
     }
 
     private Map<String, Object> requireActiveChallenge(String bindToken) {

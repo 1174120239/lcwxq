@@ -29,12 +29,12 @@
 
 ~~~text
 个人电脑上的 NapCat 登录个人 QQ 号
-      │ OneBot v11 反向 WebSocket（WSS + 独立 Token）
+      │ OneBot v11 反向 WebSocket（ws://127.0.0.1:8083/ws）
       ▼
-服务器 AstrBot 插件 integrations/qqbot/astrbot_plugin_lcxqy_dynamic_ai
+同一台个人电脑上的 AstrBot 插件 integrations/qqbot/astrbot_plugin_lcxqy_dynamic_ai
       │ 表单协议 + Bot Secret
       ▼
-Spring Boot /SFreeBot/*
+公网 Spring Boot /SFreeBot/*
       │
       ├─ starfree_space：动态发布与同步源
       ├─ starfree_users：论坛账号、积分、经验、资料
@@ -50,16 +50,16 @@ Spring Boot /SFreeBot/*
 
 新增表：
 
-- `lcxqy_bot_config`：Bot 开关、Bot Secret 兜底值、DeepSeek Key/Base/Model、H5 地址、同步间隔、工具开关。
+- `lcxqy_bot_config`：Bot 开关、Bot Secret、DeepSeek Key/Base/Model、H5 地址、同步间隔、工具开关。
 - `lcxqy_bot_bind_challenge`：一次性绑定 token，短期有效，只能使用一次。
 - `lcxqy_bot_bindings`：QQ 用户与论坛 uid 的持久绑定。
 - `lcxqy_bot_group_sync`：可同步群、`unified_msg_origin`、游标和摘要策略。
 - `lcxqy_bot_operation_log`：requestId 幂等日志。
 - `lcxqy_bot_delivery_log`：群投递结果；失败不推进游标。
 
-生产推荐通过环境变量 `LCXQY_QQBOT_SECRET` 设置 Bot Secret。配置表中的 `bot_secret` 仅作为没有环境变量时的兜底。
+Bot Secret 可以直接在后台 `QQ Bot设置` 中设置，输入新密码才更新，留空保持原值；后台只显示是否已配置，不回显原文。后端优先使用配置表中的 `bot_secret`，仅在配置表为空时使用环境变量 `LCXQY_QQBOT_SECRET` 兜底。设置后把同一个密码填入 AstrBot 插件的 `bot_secret`。
 
-生产后台只显示 Bot Secret 是否已配置，不回填原文，也不在普通“保存 QQ Bot 设置”操作中更新它。Secret 轮换必须作为独立运维操作，同步更新服务器 Secret、AstrBot 插件配置和后端配置，并在切换后立即验证 `/SFreeBot/config`。
+Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 DeepSeek Key。轮换时在后台设置新密码，再同步修改 AstrBot 插件并验证 `/SFreeBot/config`。
 
 ## 4. 后端接口
 
@@ -182,16 +182,16 @@ php -l admin/starfree-admin/source/admin/qqBot.php
 php -l admin/starfree-admin/source/admin/qqBotPost.php
 ~~~
 
-生产环境的 NapCat 运行在个人电脑，保留个人 QQ 的设备登录态；服务器只运行 AstrBot，不再启动第二个 NapCat。NapCat 的 WebSockets 客户端连接 `wss://api.lcxqy.cn/onebot/v11/ws`，Token 使用服务器 `/srv/lcxqy/qqbot/secrets.env` 中的 `LCXQY_ONEBOT_TOKEN`。不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key、Bot Secret 或 OneBot Token 写进仓库。
+当前运行拓扑为个人电脑上的 NapCat 连接本机 AstrBot：NapCat 客户端 `001` 使用 `ws://127.0.0.1:8083/ws`，服务器客户端 `lcxqy-astrbot` 必须保持禁用。插件通过 `https://api.lcxqy.cn` 调用论坛后端。不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key、Bot Secret 或 OneBot Token 写进仓库。
 
-如果 NapCat 需要保留其他 WebSocket 客户端，可以继续保留，但 `lcxqy_dynamic_ai` 只能在服务器 AstrBot 启用。同时在本机 AstrBot 和服务器 AstrBot 安装该插件会导致命令重复回复。
+同一个 NapCat 账号只能保留一条承担回复的 AstrBot 消息链。本机与服务器 AstrBot 同时连接时，同一条消息会得到两套回复，表现为预览、LLM 回复和错误提示交错。需要切换回服务器 AstrBot 时，必须先停用本机连接，再启用 `wss://api.lcxqy.cn/onebot/v11/ws`，不能两边同时启用。
 
 生产部署在迁移 006 和 replacement JAR 完成后，以 root 执行
 `backend/deploy/production/promote-qqbot-routes.sh`。脚本只新增 12 个
 `location = /SFreeBot/...` 精确路由，备份原 Nginx include，并在 reload 后校验
 `X-Starfree-Backend: replacement-qqbot`。
 
-服务器 AstrBot 的 6199 端口只绑定 `127.0.0.1`。本机 NapCat 需要连接时，另以 root
+服务器 AstrBot 的 6199 端口只绑定 `127.0.0.1`。只有切换回服务器 AstrBot 拓扑时，才以 root
 执行 `backend/deploy/production/promote-astrbot-onebot-route.sh`。脚本只新增
 `location = /onebot/v11/ws`，验证无 Token 返回 401、正确 Token 完成 101 WebSocket
 升级，并在失败时恢复 Nginx 备份。AstrBot 管理页 6185 不对公网开放。

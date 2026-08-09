@@ -39,7 +39,7 @@
 在 AstrBot 插件配置里设置：
 
 - `backend_base_url`：论坛后端地址。
-- `bot_secret`：与后端 `LCXQY_QQBOT_SECRET` 或后台 QQ Bot 设置一致。
+- `bot_secret`：与后台 QQ Bot 设置中的 Bot Secret 完全一致；后台未设置时才使用服务器环境变量 `LCXQY_QQBOT_SECRET`。
 - `chat_in_groups`：默认关闭，避免群里每句话都触发 AI。
 
 后端后台 `QQ Bot设置` 里维护 DeepSeek Key、工具开关、同步群和 H5 链接。新增同步群时只需填写群号，群名可选；平台固定为 `qq`，消息来源自动生成 `lcxqy_onebot:GroupMessage:<群号>`，游标自动推进。这里的“Bot”指 NapCat 登录的个人 QQ 号自动化助手，不是官方 QQBot。

@@ -61,6 +61,15 @@ function qqbot_group_origin($groupId) {
 }
 
 try {
+    $newBotSecret = qqbot_post_value('bot_secret');
+    if ($newBotSecret !== '') {
+        $secretLength = strlen($newBotSecret);
+        if ($secretLength < 16 || $secretLength > 128) {
+            throw new Exception("Bot Secret 长度必须为 16 到 128 个字符");
+        }
+        qqbot_save_config('bot_secret', $newBotSecret);
+    }
+
     $configs = array(
         'enabled' => qqbot_bool('enabled'),
         'bot_public_base_url' => qqbot_post_value('bot_public_base_url'),
