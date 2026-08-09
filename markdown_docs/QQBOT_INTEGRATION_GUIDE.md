@@ -27,10 +27,10 @@
 ## 2. 组件结构
 
 ~~~text
-个人 QQ 号登录 NapCat
-      │ OneBot v11 反向 WebSocket
+个人电脑上的 NapCat 登录个人 QQ 号
+      │ OneBot v11 反向 WebSocket（WSS + 独立 Token）
       ▼
-AstrBot 插件 integrations/qqbot/astrbot_plugin_lcxqy_dynamic_ai
+服务器 AstrBot 插件 integrations/qqbot/astrbot_plugin_lcxqy_dynamic_ai
       │ 表单协议 + Bot Secret
       ▼
 Spring Boot /SFreeBot/*
@@ -143,9 +143,14 @@ AstrBot 插件配置：
 }
 ~~~
 
-NapCat 侧按 OneBot v11 反向 WebSocket 接入 AstrBot；不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key 或 Bot Secret 写进仓库。
+生产环境的 NapCat 运行在个人电脑，保留个人 QQ 的设备登录态；服务器只运行 AstrBot，不再启动第二个 NapCat。NapCat 的 WebSockets 客户端连接 `wss://api.lcxqy.cn/onebot/v11/ws`，Token 使用服务器 `/srv/lcxqy/qqbot/secrets.env` 中的 `LCXQY_ONEBOT_TOKEN`。不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key、Bot Secret 或 OneBot Token 写进仓库。
 
 生产部署在迁移 006 和 replacement JAR 完成后，以 root 执行
 `backend/deploy/production/promote-qqbot-routes.sh`。脚本只新增 12 个
 `location = /SFreeBot/...` 精确路由，备份原 Nginx include，并在 reload 后校验
 `X-Starfree-Backend: replacement-qqbot`。
+
+服务器 AstrBot 的 6199 端口只绑定 `127.0.0.1`。本机 NapCat 需要连接时，另以 root
+执行 `backend/deploy/production/promote-astrbot-onebot-route.sh`。脚本只新增
+`location = /onebot/v11/ws`，验证无 Token 返回 401、正确 Token 完成 101 WebSocket
+升级，并在失败时恢复 Nginx 备份。AstrBot 管理页 6185 不对公网开放。
