@@ -59,7 +59,6 @@ function qqbot_group_text($arrayKey, $id, $default = '') {
 try {
     $configs = array(
         'enabled' => qqbot_bool('enabled'),
-        'bot_secret' => qqbot_post_value('bot_secret'),
         'bot_public_base_url' => qqbot_post_value('bot_public_base_url'),
         'h5_base_url' => qqbot_post_value('h5_base_url', 'https://prev.lcxqy.cn'),
         'forum_register_url' => qqbot_post_value('forum_register_url', 'https://prev.lcxqy.cn/#/pages/user/register'),

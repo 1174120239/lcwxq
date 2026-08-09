@@ -58,6 +58,8 @@ Spring Boot /SFreeBot/*
 
 生产推荐通过环境变量 `LCXQY_QQBOT_SECRET` 设置 Bot Secret。配置表中的 `bot_secret` 仅作为没有环境变量时的兜底。
 
+生产后台只显示 Bot Secret 是否已配置，不回填原文，也不在普通“保存 QQ Bot 设置”操作中更新它。Secret 轮换必须作为独立运维操作，同步更新服务器 Secret、AstrBot 插件配置和后端配置，并在切换后立即验证 `/SFreeBot/config`。
+
 ## 4. 后端接口
 
 所有插件调用都带 `botSecret` 和 `platform=qq`，使用 `application/x-www-form-urlencoded`，返回旧协议 `{code,msg,data}`。

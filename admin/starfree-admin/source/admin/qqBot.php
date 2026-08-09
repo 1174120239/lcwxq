@@ -51,7 +51,7 @@ if ($groupResult) {
                 <h4 class="header-title mb-3">QQ Bot设置</h4>
                 <p class="text-muted">
                     这里配置 NapCat / AstrBot 动态助手。Bot 只面向动态，不开放帖子或文章能力。
-                    生产环境建议用环境变量 <code>LCXQY_QQBOT_SECRET</code> 保存 Bot Secret；这里的值用于没有环境变量时兜底。
+                    Bot Secret 由部署配置托管，后台不显示或修改密钥原文。
                 </p>
                 <form class="needs-validation" action="qqBotPost.php" method="post" novalidate>
                     <div class="row">
@@ -63,9 +63,10 @@ if ($groupResult) {
                                 <label style="display:block;" for="enabled" data-on-label="开启" data-off-label="关闭"></label>
                             </div>
                             <div class="form-group mb-3">
-                                <label for="bot_secret">Bot Secret</label>
-                                <input name="bot_secret" class="form-control" type="password" id="bot_secret"
-                                       placeholder="用于插件调用 SFreeBot 接口" value="<?php echo bot_h($botConfig['bot_secret']); ?>">
+                                <label for="bot_secret_status">Bot Secret</label>
+                                <input class="form-control" type="text" id="bot_secret_status" readonly
+                                       value="<?php echo $botConfig['bot_secret'] === '' ? '未配置' : '已由部署托管'; ?>">
+                                <small class="form-text text-muted">轮换 Secret 需同步更新后端和 AstrBot，不在此页操作。</small>
                             </div>
                             <div class="form-group mb-3">
                                 <label for="bot_public_base_url">绑定页公网地址</label>
