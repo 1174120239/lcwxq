@@ -144,3 +144,8 @@ AstrBot 插件配置：
 ~~~
 
 NapCat 侧按 OneBot v11 反向 WebSocket 接入 AstrBot；不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key 或 Bot Secret 写进仓库。
+
+生产部署在迁移 006 和 replacement JAR 完成后，以 root 执行
+`backend/deploy/production/promote-qqbot-routes.sh`。脚本只新增 12 个
+`location = /SFreeBot/...` 精确路由，备份原 Nginx include，并在 reload 后校验
+`X-Starfree-Backend: replacement-qqbot`。

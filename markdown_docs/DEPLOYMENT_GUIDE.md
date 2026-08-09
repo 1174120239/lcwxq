@@ -318,7 +318,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`。脚本都只增加对应精确 location，并逐个校验 `X-Starfree-Backend` 响应头。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；NapCat/AstrBot 动态助手的 12 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`。脚本都只增加对应精确 location，并校验 `X-Starfree-Backend` 响应头。
 
 ### 9.2 当前边界
 
@@ -329,6 +329,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 动态读取、发布、编辑、审核、锁定、删除、点赞、关注、浏览量和话题。
 - 站内通知读取、未读数与已读标记（inbox/unreadNum/setRead）。
 - 匿名动态：公开配置、匿名发布、归属查询和管理端配置（SFreeAnonymous/*）。
+- NapCat/AstrBot 动态助手：绑定、聊天、发动态、签到、资料修改和群同步（SFreeBot/*）。
 - 用户注册、资料维护和部分管理操作。
 - 积分、签到、奖励、提现、商城、VIP、广告购买及广告奖励。
 
