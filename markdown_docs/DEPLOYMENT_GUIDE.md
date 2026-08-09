@@ -143,6 +143,11 @@ sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/ins
 - `$db_prefix`、`$redis_prefix` 与现有数据库和 Redis 数据一致。
 - `$ADMIN_PATH` 与后台访问路径一致。
 
+生产站点的 `.user.ini` 可能带 immutable 属性。admin 安装脚本会保留目标目录中已有的
+`.user.ini`，不会尝试覆盖或递归修改它；若失败发布导致 `Config_DB.php` 缺失，脚本会从
+`/srv/lcxqy/backups/*-admin/admin.tar.gz` 中最近一个包含该配置的受控备份恢复运行时文件，
+再覆盖安装仓库源码。
+
 ### 3.6 配置 Nginx 和 PHP-FPM
 
 参考 `admin/starfree-admin/deploy/nginx-admin.conf` 创建站点配置，替换域名、证书路径和 PHP-FPM 版本。aaPanel 当前环境可以继续使用 `include enable-php-72.conf;`，不要把生产证书提交到仓库。

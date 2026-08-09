@@ -24,6 +24,23 @@ if ! lint_output="$(find "$SOURCE_DIR" -type f -name '*.php' -print0 | xargs -0 
 fi
 
 install -d -m 0755 "$TARGET_DIR"
+
+if [[ ! -f "$TARGET_DIR/Config_DB.php" && -d /srv/lcxqy/backups ]]; then
+    target_name="$(basename "$TARGET_DIR")"
+    while IFS= read -r archive; do
+        [[ -n "$archive" ]] || continue
+        if tar -tzf "$archive" | grep -Fxq "$target_name/Config_DB.php"; then
+            tar --no-same-owner --no-same-permissions \
+                --exclude="$target_name/.user.ini" \
+                -xzf "$archive" -C "$(dirname "$TARGET_DIR")"
+            echo "Recovered admin runtime files from $archive."
+            break
+        fi
+    done < <(find /srv/lcxqy/backups -mindepth 2 -maxdepth 2 \
+        -type f -name admin.tar.gz -printf '%T@ %p\n' 2>/dev/null \
+        | sort -nr | cut -d' ' -f2-)
+fi
+
 if [[ -f "$TARGET_DIR/Config_DB.php" ]]; then
     cp -p "$TARGET_DIR/Config_DB.php" "$TARGET_DIR/Config_DB.php.backup-${TIMESTAMP}"
 fi
@@ -33,7 +50,11 @@ if [[ -d "$TARGET_DIR" ]] && find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -type f 
     cp -a "$TARGET_DIR"/. "$backup_dir"/
 fi
 
-cp -a "$SOURCE_DIR"/. "$TARGET_DIR"/
+if [[ -e "$TARGET_DIR/.user.ini" ]]; then
+    tar -C "$SOURCE_DIR" --exclude='./.user.ini' -cf - . | tar -C "$TARGET_DIR" -xf -
+else
+    cp -a "$SOURCE_DIR"/. "$TARGET_DIR"/
+fi
 if [[ ! -f "$TARGET_DIR/Config_DB.php" ]]; then
     install -m 0600 "$SOURCE_DIR/Config_DB.example.php" "$TARGET_DIR/Config_DB.php"
     echo "Created $TARGET_DIR/Config_DB.php from the safe template."
@@ -45,9 +66,10 @@ if grep -q 'CHANGE_ME' "$TARGET_DIR/Config_DB.php"; then
     exit 2
 fi
 
-chown -R "$WEB_USER:$WEB_GROUP" "$TARGET_DIR"
+find "$TARGET_DIR" -mindepth 1 ! -path "$TARGET_DIR/.user.ini" \
+    -exec chown "$WEB_USER:$WEB_GROUP" {} +
 find "$TARGET_DIR" -type d -exec chmod 0755 {} +
-find "$TARGET_DIR" -type f -exec chmod 0644 {} +
+find "$TARGET_DIR" -type f ! -path "$TARGET_DIR/.user.ini" -exec chmod 0644 {} +
 chmod 0600 "$TARGET_DIR/Config_DB.php"
 
 echo "Admin files installed at $TARGET_DIR."
