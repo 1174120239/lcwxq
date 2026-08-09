@@ -28,9 +28,27 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具和群同步。",
-    "0.1.0",
+    "0.1.1",
 )
 class LcxqyDynamicAiPlugin(Star):
+    _COMMAND_NAMES = (
+        "动态助手",
+        "绑定论坛",
+        "绑定",
+        "bind",
+        "我的状态",
+        "积分",
+        "状态",
+        "签到状态",
+        "签到",
+        "sign",
+        "signin",
+        "发动态",
+        "动态",
+        "修改资料",
+        "绑定本群同步",
+    )
+
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
         self.config = config or {}
@@ -51,6 +69,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("动态助手")
     async def help(self, event: AstrMessageEvent):
+        event.stop_event()
         yield event.plain_result(
             "我是聊一下动态助手。可用命令：\n"
             "/绑定论坛\n"
@@ -65,6 +84,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("绑定论坛", alias={"绑定", "bind"})
     async def bind_forum(self, event: AstrMessageEvent):
+        event.stop_event()
         try:
             data = await self._api("/SFreeBot/bindChallenge", {
                 "qqUserId": self._sender_id(event),
@@ -80,6 +100,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("我的状态", alias={"积分", "状态", "签到状态"})
     async def my_status(self, event: AstrMessageEvent):
+        event.stop_event()
         try:
             data = await self._api("/SFreeBot/meStatus", {"qqUserId": self._sender_id(event)})
             if not data.get("bound"):
@@ -101,6 +122,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("签到", alias={"sign", "signin"})
     async def signin(self, event: AstrMessageEvent):
+        event.stop_event()
         try:
             data = await self._api("/SFreeBot/signin", {
                 "qqUserId": self._sender_id(event),
@@ -118,6 +140,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("发动态", alias={"动态"})
     async def prepare_space(self, event: AstrMessageEvent):
+        event.stop_event()
         text = self._command_tail(event, ("发动态", "动态")).strip()
         images = self._images_from_event(event)
         if not text and not images:
@@ -140,6 +163,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("修改资料")
     async def prepare_profile(self, event: AstrMessageEvent):
+        event.stop_event()
         tail = self._command_tail(event, ("修改资料",)).strip()
         field, value = self._parse_profile_update(tail)
         if not field:
@@ -159,6 +183,7 @@ class LcxqyDynamicAiPlugin(Star):
 
     @filter.command("绑定本群同步")
     async def register_group(self, event: AstrMessageEvent):
+        event.stop_event()
         group_id = self._group_id(event)
         if not group_id:
             yield event.plain_result("这个命令需要在 QQ 群里使用。")
@@ -189,12 +214,16 @@ class LcxqyDynamicAiPlugin(Star):
         if not text:
             return
         if text in ("取消", "算了", "取消发布", "取消修改"):
+            event.stop_event()
             if self._pending.pop(self._pending_key(event), None):
                 yield event.plain_result("已取消。")
             return
         if text in ("确认发布", "确认修改"):
+            event.stop_event()
             async for item in self._confirm(event, text):
                 yield item
+            return
+        if self._is_command_text(text):
             return
         if text.startswith(("/", "／", "!", "！")):
             return
@@ -202,6 +231,7 @@ class LcxqyDynamicAiPlugin(Star):
             return
         if self._group_id(event) and not self._cfg_bool("chat_in_groups", False):
             return
+        event.stop_event()
         try:
             data = await self._api("/SFreeBot/chat", {
                 "qqUserId": self._sender_id(event),
@@ -397,6 +427,13 @@ class LcxqyDynamicAiPlugin(Star):
             if normalized.startswith(name):
                 return normalized[len(name):].strip()
         return ""
+
+    def _is_command_text(self, text: str) -> bool:
+        normalized = text.lstrip("/／!！").strip()
+        return any(
+            normalized == name or normalized.startswith(name + " ")
+            for name in self._COMMAND_NAMES
+        )
 
     def _images_from_event(self, event: AstrMessageEvent) -> List[str]:
         message = getattr(event.message_obj, "message", None) or []

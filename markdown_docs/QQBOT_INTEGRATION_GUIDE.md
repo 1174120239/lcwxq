@@ -1,6 +1,6 @@
 # NapCat 个人 QQ / AstrBot 动态助手实现说明
 
-> 更新日期：2026-08-08
+> 更新日期：2026-08-09
 >
 > 当前状态：后端、PHP 后台配置页、AstrBot/NapCat 插件已在本仓库实现；生产发布仍需按部署手册单独执行。
 
@@ -111,6 +111,8 @@ Spring Boot /SFreeBot/*
 
 普通聊天默认可在私聊中启用；群聊普通聊天默认关闭，避免群内每句话触发 AI。群同步不依赖普通聊天开关。
 
+插件处理私聊、确认操作或功能命令时会终止 AstrBot 默认 LLM 事件链，避免一条 QQ 消息同时获得论坛助手和默认模型的两次回复。无斜杠命令（如 `发动态`）也不再进入普通聊天分支。
+
 ## 7. 群同步规则
 
 - 只同步 `starfree_space.status=1` 且 `onlyMe=0` 的公开动态。
@@ -144,6 +146,8 @@ AstrBot 插件配置：
 ~~~
 
 生产环境的 NapCat 运行在个人电脑，保留个人 QQ 的设备登录态；服务器只运行 AstrBot，不再启动第二个 NapCat。NapCat 的 WebSockets 客户端连接 `wss://api.lcxqy.cn/onebot/v11/ws`，Token 使用服务器 `/srv/lcxqy/qqbot/secrets.env` 中的 `LCXQY_ONEBOT_TOKEN`。不要按 QQ 官方 Bot 号能力设计，也不要使用官方 Bot AppId/Secret 流程。不要把 QQ 密码、论坛用户密码、DeepSeek Key、Bot Secret 或 OneBot Token 写进仓库。
+
+如果 NapCat 需要保留其他 WebSocket 客户端，可以继续保留，但 `lcxqy_dynamic_ai` 只能在服务器 AstrBot 启用。同时在本机 AstrBot 和服务器 AstrBot 安装该插件会导致命令重复回复。
 
 生产部署在迁移 006 和 replacement JAR 完成后，以 root 执行
 `backend/deploy/production/promote-qqbot-routes.sh`。脚本只新增 12 个
