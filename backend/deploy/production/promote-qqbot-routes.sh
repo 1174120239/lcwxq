@@ -24,7 +24,7 @@ ROUTES=(
     delivery
 )
 
-for required in cat cp curl grep mktemp nginx printf rm; do
+for required in cat cp curl grep mktemp nginx printf rm sleep; do
     command -v "$required" >/dev/null 2>&1 || {
         echo "Required command not found: $required" >&2
         exit 2
@@ -92,35 +92,39 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
-    -D "$headers" -o "$body" -X POST "https://$VERIFY_HOST/SFreeBot/config"; then
-    echo "QQBot config route probe failed." >&2
-    rollback
-    exit 6
-fi
-if ! grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null; then
+config_ready=false
+for attempt in {1..15}; do
+    if curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
+        -D "$headers" -o "$body" -X POST "https://$VERIFY_HOST/SFreeBot/config" \
+        && grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null \
+        && grep -F '"code"' "$body" >/dev/null; then
+        config_ready=true
+        break
+    fi
+    sleep 1
+done
+if [[ "$config_ready" != true ]]; then
     echo "QQBot config route header is missing." >&2
     cat "$headers" >&2
     rollback
-    exit 7
-fi
-if ! grep -F '"code"' "$body" >/dev/null; then
-    echo "QQBot config route response is not a JSON envelope." >&2
-    rollback
-    exit 8
+    exit 6
 fi
 
-if ! curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
-    -D "$headers" -o "$body" "https://$VERIFY_HOST/SFreeBot/bindPage?token=invalid"; then
-    echo "QQBot bind page route probe failed." >&2
-    rollback
-    exit 9
-fi
-if ! grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null; then
+bind_ready=false
+for attempt in {1..15}; do
+    if curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
+        -D "$headers" -o "$body" "https://$VERIFY_HOST/SFreeBot/bindPage?token=invalid" \
+        && grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null; then
+        bind_ready=true
+        break
+    fi
+    sleep 1
+done
+if [[ "$bind_ready" != true ]]; then
     echo "QQBot bind page route header is missing." >&2
     cat "$headers" >&2
     rollback
-    exit 10
+    exit 7
 fi
 
 echo "QQBot routes promoted; backup: $BACKUP"
