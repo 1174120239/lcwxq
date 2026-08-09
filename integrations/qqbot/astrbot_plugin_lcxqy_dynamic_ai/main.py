@@ -8,7 +8,7 @@ import urllib.request
 from typing import Any, Dict, Iterable, List, Optional
 
 from astrbot.api import AstrBotConfig, logger
-from astrbot.api.event import AstrMessageEvent, MessageEventResult, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, MessageEventResult, filter
 from astrbot.api.star import Context, Star, register
 
 try:
@@ -36,6 +36,8 @@ class LcxqyDynamicAiPlugin(Star):
         self.config = config or {}
         self._pending: Dict[str, Dict[str, Any]] = {}
         self._sync_task: Optional[asyncio.Task] = None
+
+    async def initialize(self):
         if self._cfg_bool("sync_enabled", True):
             self._sync_task = asyncio.create_task(self._sync_loop())
 
@@ -290,16 +292,19 @@ class LcxqyDynamicAiPlugin(Star):
     def _space_chain(self, space: Dict[str, Any]) -> Any:
         text = self._space_text(space)
         images = [str(item) for item in (space.get("images") or []) if item]
-        if Comp is None or not images:
-            return text + ("\n" + "\n".join(images) if images else "")
-        chain: List[Any] = [Comp.Plain(text)]
+        if Comp is None:
+            chain = MessageChain().message(text)
+            for image_url in images:
+                chain.message("\n" + image_url)
+            return chain
+        components: List[Any] = [Comp.Plain(text)]
         for image_url in images:
             image_factory = getattr(Comp.Image, "fromURL", None) or getattr(Comp.Image, "from_url", None)
             if image_factory:
-                chain.append(image_factory(image_url))
+                components.append(image_factory(image_url))
             else:
-                chain.append(Comp.Plain("\n" + image_url))
-        return chain
+                components.append(Comp.Plain("\n" + image_url))
+        return MessageChain(components)
 
     def _space_text(self, space: Dict[str, Any]) -> str:
         author = space.get("author") or {}
