@@ -29,7 +29,7 @@ if [[ ! -f "$TARGET_DIR/Config_DB.php" && -d /srv/lcxqy/backups ]]; then
     target_name="$(basename "$TARGET_DIR")"
     while IFS= read -r archive; do
         [[ -n "$archive" ]] || continue
-        if tar -tzf "$archive" | grep -Fxq "$target_name/Config_DB.php"; then
+        if tar -tzf "$archive" | grep -Fx "$target_name/Config_DB.php" >/dev/null; then
             tar --no-same-owner --no-same-permissions \
                 --exclude="$target_name/.user.ini" \
                 -xzf "$archive" -C "$(dirname "$TARGET_DIR")"
