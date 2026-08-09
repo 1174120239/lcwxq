@@ -5,7 +5,7 @@ set -euo pipefail
 # backend. Run after migration 006 and the replacement JAR are deployed.
 
 CONF=${CONF:-/www/server/panel/vhost/nginx/extension/api.lcxqy.cn/starfree-replacement-public.conf}
-PUBLIC_URL=${PUBLIC_URL:-https://api.lcxqy.cn}
+VERIFY_HOST=${VERIFY_HOST:-api.lcxqy.cn}
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$CONF.rollback-qqbot-$STAMP"
 HEADER=replacement-qqbot
@@ -92,24 +92,33 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! curl -skS -D "$headers" -o "$body" -X POST "$PUBLIC_URL/SFreeBot/config"; then
+if ! curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
+    -D "$headers" -o "$body" -X POST "https://$VERIFY_HOST/SFreeBot/config"; then
+    echo "QQBot config route probe failed." >&2
     rollback
     exit 6
 fi
 if ! grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null; then
+    echo "QQBot config route header is missing." >&2
+    cat "$headers" >&2
     rollback
     exit 7
 fi
 if ! grep -F '"code"' "$body" >/dev/null; then
+    echo "QQBot config route response is not a JSON envelope." >&2
     rollback
     exit 8
 fi
 
-if ! curl -skS -D "$headers" -o "$body" "$PUBLIC_URL/SFreeBot/bindPage?token=invalid"; then
+if ! curl -skS --resolve "$VERIFY_HOST:443:127.0.0.1" \
+    -D "$headers" -o "$body" "https://$VERIFY_HOST/SFreeBot/bindPage?token=invalid"; then
+    echo "QQBot bind page route probe failed." >&2
     rollback
     exit 9
 fi
 if ! grep -Fi "X-Starfree-Backend: $HEADER" "$headers" >/dev/null; then
+    echo "QQBot bind page route header is missing." >&2
+    cat "$headers" >&2
     rollback
     exit 10
 fi
