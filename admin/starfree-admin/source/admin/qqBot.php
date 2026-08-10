@@ -362,8 +362,9 @@ if ($groupResult) {
                         </table>
                     </div>
                     <div class="form-group mb-3 text_right">
-                        <button class="btn btn-warning mr-2" type="submit" name="action" value="publish_now">立刻发布最新一批</button>
+                        <button class="btn btn-warning mr-2" type="submit" name="action" value="publish_now">立刻发布未同步动态</button>
                         <button class="btn btn-success" type="submit" name="action" value="save">保存 QQ Bot 设置</button>
+                        <small class="form-text text-muted">只发布空间游标之后未发过的动态；不足批量上限时按实际数量发布。</small>
                     </div>
                 </form>
             </div>

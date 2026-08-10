@@ -367,8 +367,10 @@ public class BotService {
         List<Map<String, Object>> data = new ArrayList<>();
         if (enabled) {
             List<Map<String, Object>> rows;
-            boolean publishNowPending = Boolean.TRUE.equals(settings.get("publishNowPending"));
-            if (cursor > 0 && !publishNowPending) {
+            // Every normal and manual run consumes the same cursor. The immediate
+            // button bypasses only the daily schedule, never the de-duplication
+            // boundary; replaying the latest batch would publish old dynamics again.
+            if (cursor > 0) {
                 rows = jdbc.queryForList(dynamicSelect()
                                 + "WHERE s.id>? AND s.status=1 AND s.onlyMe=0 AND s.type<>3 "
                                 + "ORDER BY s.id ASC LIMIT ?",

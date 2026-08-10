@@ -310,7 +310,9 @@ class BotServiceTest {
 
         Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
 
-        Map<?, ?> space = (Map<?, ?>) ((List<?>) response.get("spaces")).get(0);
+        List<?> spaces = (List<?>) response.get("spaces");
+        assertThat(spaces).hasSize(1);
+        Map<?, ?> space = (Map<?, ?>) spaces.get(0);
         assertThat(space.get("images")).isEqualTo(Collections.emptyList());
         assertThat(response).containsEntry("cursorSpaceId", 20L);
     }
@@ -350,20 +352,24 @@ class BotServiceTest {
     }
 
     @Test
-    void qzonePendingManualPublishReplaysLatestBatchInsteadOfCursorIncrement() {
+    void qzonePendingManualPublishStillUsesCursorForDeduplication() {
         Fixture fixture = new Fixture();
         fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
                 "qzone_cursor_space_id", "496", "qzone_batch_limit", "6",
                 "qzone_publish_now_token", "manual-2", "qzone_publish_now_handled_token", "manual-1");
-        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(6)))
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id ASC LIMIT ?"), eq(496L), eq(6)))
+                .thenReturn(Collections.singletonList(row(
+                        "id", 502L, "uid", 1L, "text", "最新动态", "type", 0)));
+        when(fixture.jdbc.queryForList(startsWith("SELECT m.mid AS id"), eq(502L)))
                 .thenReturn(Collections.emptyList());
 
-        fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
 
         verify(fixture.jdbc).queryForList(
-                contains("s.status=1 AND s.onlyMe=0 AND s.type<>3"), eq(6));
+                contains("s.id>? AND s.status=1 AND s.onlyMe=0 AND s.type<>3"), eq(496L), eq(6));
         verify(fixture.jdbc, never()).queryForList(
-                contains("s.id>? AND s.status=1"), eq(496L), eq(6));
+                contains("ORDER BY s.id DESC LIMIT ?"), eq(6));
+        assertThat(((Map<?, ?>) ((List<?>) response.get("spaces")).get(0)).get("id")).isEqualTo(502L);
     }
 
     @Test

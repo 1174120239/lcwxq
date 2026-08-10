@@ -79,7 +79,7 @@ try {
         $token = gmdate('YmdHis') . '-' . bin2hex(random_bytes(8));
         qqbot_save_config('qzone_publish_now_token', $token);
         qqbot_save_config('qzone_last_error', '');
-        echo "<script>alert('已提交最新一批立即发布任务，AstrBot 下一轮轮询执行');window.location.href='qqBot.php';</script>";
+        echo "<script>alert('已提交未同步动态立即发布任务，AstrBot 下一轮轮询执行');window.location.href='qqBot.php';</script>";
         exit;
     }
     if ($action !== 'save') {
