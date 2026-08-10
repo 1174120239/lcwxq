@@ -107,7 +107,11 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
             "chat_enabled": True,
             "chat_in_groups": False,
         }
-        plugin.context = SimpleNamespace()
+        platform_meta = SimpleNamespace(id="001", name="aiocqhttp")
+        platform = SimpleNamespace(meta=lambda: platform_meta)
+        plugin.context = SimpleNamespace(
+            platform_manager=SimpleNamespace(platform_insts=[platform]),
+        )
         plugin._sessions = {}
         plugin._state_path = state_path
         plugin._sync_task = None
@@ -264,15 +268,16 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("chat", plan["intent"])
         self.assertEqual("这是普通回复，不是 JSON", plan["reply"])
 
-    def test_sync_origin_is_generated_when_backend_row_is_empty(self):
+    def test_initial_sync_delivers_only_latest_space_with_active_platform_origin(self):
         captured = []
 
-        async def api(path, _payload):
+        async def api(path, payload):
             self.assertEqual("/SFreeBot/latestSpaces", path)
-            return {"groupEnabled": True, "spaces": [{"id": 1}]}
+            self.assertEqual("0", payload["afterId"])
+            return {"groupEnabled": False, "spaces": [{"id": 1}, {"id": 2}]}
 
-        async def deliver(origin, group_id, _space):
-            captured.append((origin, group_id))
+        async def deliver(origin, group_id, space):
+            captured.append((origin, group_id, space))
 
         self.plugin._api = api
         self.plugin._deliver_space = deliver
@@ -282,7 +287,39 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
             "cursorSpaceId": 0,
         }))
 
-        self.assertEqual([("lcxqy_onebot:GroupMessage:638978650", "638978650")], captured)
+        self.assertEqual([("001:GroupMessage:638978650", "638978650", 2)], [
+            (origin, group_id, space["id"]) for origin, group_id, space in captured
+        ])
+
+    def test_legacy_sync_origin_is_replaced_with_active_platform(self):
+        origin = self.plugin._group_origin(
+            "lcxqy_onebot:GroupMessage:638978650", "638978650")
+
+        self.assertEqual("001:GroupMessage:638978650", origin)
+
+    def test_sync_origin_with_wrong_group_is_rebuilt(self):
+        origin = self.plugin._group_origin(
+            "001:GroupMessage:123456", "638978650")
+
+        self.assertEqual("001:GroupMessage:638978650", origin)
+
+    def test_delivery_failure_does_not_advance_cursor(self):
+        calls = []
+
+        async def send_message(_origin, _chain):
+            return False
+
+        async def api(path, payload):
+            calls.append((path, payload))
+            return {"recorded": True}
+
+        self.plugin.context.send_message = send_message
+        self.plugin._api = api
+        asyncio.run(self.plugin._deliver_space(
+            "missing:GroupMessage:638978650", "638978650", {"id": 9, "text": "新动态"}))
+
+        self.assertEqual("/SFreeBot/delivery", calls[0][0])
+        self.assertEqual("error", calls[0][1]["status"])
 
     async def _collect_command(self, handler, event):
         return [item async for item in handler(event)]

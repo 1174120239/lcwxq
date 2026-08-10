@@ -275,7 +275,7 @@ public class BotService {
         String groupName = safe(request.get("groupName"), 128);
         String unifiedMsgOrigin = safe(request.get("unifiedMsgOrigin"), 255);
         if (unifiedMsgOrigin.trim().isEmpty()) {
-            unifiedMsgOrigin = oneBotGroupOrigin(groupId);
+            unifiedMsgOrigin = "";
         }
         Timestamp now = Timestamp.from(Instant.now());
         jdbc.update("INSERT INTO lcxqy_bot_group_sync "
@@ -289,10 +289,6 @@ public class BotService {
         response.put("unifiedMsgOrigin", unifiedMsgOrigin);
         response.put("enabled", true);
         return response;
-    }
-
-    private String oneBotGroupOrigin(String groupId) {
-        return "lcxqy_onebot:GroupMessage:" + groupId;
     }
 
     public Map<String, Object> delivery(Map<String, String> request) {
@@ -845,6 +841,9 @@ public class BotService {
     }
 
     private long number(Object value) {
+        if (value instanceof Boolean) {
+            return (Boolean) value ? 1L : 0L;
+        }
         if (value instanceof Number) {
             return ((Number) value).longValue();
         }

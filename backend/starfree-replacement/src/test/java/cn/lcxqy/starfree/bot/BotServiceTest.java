@@ -142,7 +142,25 @@ class BotServiceTest {
     }
 
     @Test
-    void registerGroupGeneratesOneBotOriginWhenAdminDoesNotProvideIt() {
+    void latestSpacesTreatsBooleanDatabaseFlagAsEnabled() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret");
+        when(fixture.jdbc.queryForList(startsWith("SELECT enabled,max_images,summary_length"),
+                eq("qq"), eq("7788"))).thenReturn(Collections.singletonList(row(
+                "enabled", true, "max_images", 1, "summary_length", 120)));
+        when(fixture.jdbc.queryForList(contains("FROM starfree_space s"), eq(0L), eq(1)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("groupId", "7788");
+        request.put("afterId", "0");
+        request.put("limit", "1");
+
+        assertThat(fixture.service.latestSpaces(request)).containsEntry("groupEnabled", true);
+    }
+
+    @Test
+    void registerGroupLeavesOriginForAstrBotAutoDetection() {
         Fixture fixture = new Fixture();
         fixture.config("bot_secret", "test-secret");
         when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_group_sync"), any(Object[].class)))
@@ -155,9 +173,9 @@ class BotServiceTest {
 
         verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_group_sync"),
                 eq("qq"), eq("638978650"), eq("聊城一中论坛"),
-                eq("lcxqy_onebot:GroupMessage:638978650"),
+                eq(""),
                 any(java.sql.Timestamp.class), any(java.sql.Timestamp.class));
-        assertThat(response).containsEntry("unifiedMsgOrigin", "lcxqy_onebot:GroupMessage:638978650");
+        assertThat(response).containsEntry("unifiedMsgOrigin", "");
     }
 
     @Test

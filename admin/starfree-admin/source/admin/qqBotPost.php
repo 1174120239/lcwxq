@@ -56,8 +56,8 @@ function qqbot_group_text($arrayKey, $id, $default = '') {
     return isset($_POST[$arrayKey][$id]) ? trim((string)$_POST[$arrayKey][$id]) : $default;
 }
 
-function qqbot_group_origin($groupId) {
-    return 'lcxqy_onebot:GroupMessage:' . trim((string)$groupId);
+function qqbot_group_origin() {
+    return '';
 }
 
 try {
@@ -105,7 +105,7 @@ try {
                 throw new Exception("QQ群号只能填写数字");
             }
             $groupName = qqbot_group_text('group_name', $id, '');
-            $origin = qqbot_group_origin($groupId);
+            $origin = qqbot_group_origin();
             $enabled = isset($_POST['group_enabled'][$id]) ? 1 : 0;
             $maxImages = intval(qqbot_int_range(qqbot_group_text('group_max_images', $id, '3'), 3, 0, 9));
             $summaryLength = intval(qqbot_int_range(qqbot_group_text('group_summary_length', $id, '120'), 120, 20, 500));
@@ -130,7 +130,7 @@ try {
         }
         $platform = 'qq';
         $groupName = qqbot_post_value('new_group_name');
-        $origin = qqbot_group_origin($newGroupId);
+        $origin = qqbot_group_origin();
         $maxImages = intval(qqbot_int_range(qqbot_post_value('new_max_images'), 3, 0, 9));
         $summaryLength = intval(qqbot_int_range(qqbot_post_value('new_summary_length'), 120, 20, 500));
         $stmt = $connect->prepare("INSERT INTO lcxqy_bot_group_sync "

@@ -36,7 +36,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具和群同步。",
-    "0.2.0",
+    "0.2.1",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -146,6 +146,7 @@ class LcxqyDynamicAiPlugin(Star):
                 "qqUserId": self._sender_id(event),
                 "groupId": group_id,
                 "groupName": self._group_name(event),
+                "unifiedMsgOrigin": str(getattr(event, "unified_msg_origin", "") or ""),
             })
             yield event.plain_result("本群已加入动态同步。后台只需维护群号、群名、开关和摘要设置。")
         except BackendError as error:
@@ -507,27 +508,90 @@ class LcxqyDynamicAiPlugin(Star):
 
     async def _sync_group(self, group: Dict[str, Any]):
         group_id = str(group.get("groupId") or "")
-        origin = str(group.get("unifiedMsgOrigin") or "")
         if not group_id:
             return
-        if not origin:
-            origin = "lcxqy_onebot:GroupMessage:" + group_id
+        origin = self._group_origin(str(group.get("unifiedMsgOrigin") or ""), group_id)
         after_id = int(group.get("cursorSpaceId") or 0)
-        data = await self._api("/SFreeBot/latestSpaces", {
-            "groupId": group_id,
-            "afterId": str(after_id),
-            "limit": str(self._cfg_int("sync_limit", 5)),
-        })
-        if not data.get("groupEnabled", True):
-            return
-        for space in data.get("spaces") or []:
+        if after_id <= 0:
+            latest = await self._latest_space(group_id)
+            spaces = [latest] if latest else []
+        else:
+            data = await self._api("/SFreeBot/latestSpaces", {
+                "groupId": group_id,
+                "afterId": str(after_id),
+                "limit": str(self._cfg_int("sync_limit", 5)),
+            })
+            spaces = data.get("spaces") or []
+        for space in spaces:
             await self._deliver_space(origin, group_id, space)
+
+    async def _latest_space(self, group_id: str) -> Optional[Dict[str, Any]]:
+        after_id = 0
+        latest = None
+        for _ in range(500):
+            data = await self._api("/SFreeBot/latestSpaces", {
+                "groupId": group_id,
+                "afterId": str(after_id),
+                "limit": "20",
+            })
+            spaces = data.get("spaces") or []
+            if not spaces:
+                break
+            latest = spaces[-1]
+            next_id = int(latest.get("id") or 0)
+            if next_id <= after_id or len(spaces) < 20:
+                break
+            after_id = next_id
+        return latest
+
+    def _group_origin(self, configured: str, group_id: str) -> str:
+        platform_id = self._onebot_platform_id()
+        active_ids = self._active_platform_ids()
+        expected = f"{platform_id}:GroupMessage:{group_id}"
+        if configured == expected and platform_id in active_ids:
+            return configured
+        return expected
+
+    def _onebot_platform_id(self) -> str:
+        manager = getattr(self.context, "platform_manager", None)
+        platforms = getattr(manager, "platform_insts", None)
+        if platforms is None and manager is not None:
+            getter = getattr(manager, "get_insts", None)
+            platforms = getter() if getter else []
+        for platform in platforms or []:
+            try:
+                meta = platform.meta()
+                name = str(getattr(meta, "name", "") or "").lower()
+                platform_id = str(getattr(meta, "id", "") or "")
+                if platform_id and (name == "aiocqhttp" or "onebot" in name):
+                    return platform_id
+            except Exception:
+                continue
+        return "001"
+
+    def _active_platform_ids(self) -> set:
+        manager = getattr(self.context, "platform_manager", None)
+        platforms = getattr(manager, "platform_insts", None)
+        if platforms is None and manager is not None:
+            getter = getattr(manager, "get_insts", None)
+            platforms = getter() if getter else []
+        result = set()
+        for platform in platforms or []:
+            try:
+                platform_id = str(getattr(platform.meta(), "id", "") or "")
+                if platform_id:
+                    result.add(platform_id)
+            except Exception:
+                continue
+        return result
 
     async def _deliver_space(self, origin: str, group_id: str, space: Dict[str, Any]):
         space_id = str(space.get("id") or "")
         try:
             chain = self._space_chain(space)
             result = await self.context.send_message(origin, chain)
+            if result is False:
+                raise RuntimeError(f"AstrBot 未找到消息平台：{origin}")
             message_id = getattr(result, "message_id", "") if result is not None else ""
             await self._api("/SFreeBot/delivery", {
                 "groupId": group_id,

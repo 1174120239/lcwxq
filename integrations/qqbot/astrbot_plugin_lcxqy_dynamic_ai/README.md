@@ -42,6 +42,8 @@
 - `bot_secret`：与后台 QQ Bot 设置中的 Bot Secret 完全一致；后台未设置时才使用服务器环境变量 `LCXQY_QQBOT_SECRET`。
 - `chat_in_groups`：默认关闭，避免群里每句话都触发 AI。
 
-后端后台 `QQ Bot设置` 里维护 DeepSeek Key、工具开关、同步群和 H5 链接。新增同步群时只需填写群号，群名可选；平台固定为 `qq`，消息来源自动生成 `lcxqy_onebot:GroupMessage:<群号>`，游标自动推进。这里的“Bot”指 NapCat 登录的个人 QQ 号自动化助手，不是官方 QQBot。
+群同步会自动识别当前 AstrBot 的 OneBot 适配器 ID，不需要手填 `unified_msg_origin`。首次启用某个群时只发送当前最新一条动态，随后按游标增量同步，避免补发全部历史动态。
+
+后端后台 `QQ Bot设置` 里维护 DeepSeek Key、工具开关、同步群和 H5 链接。新增同步群时只需填写群号，群名可选；平台固定为 `qq`，消息来源由插件按当前 OneBot 适配器自动确定，游标自动推进。这里的“Bot”指 NapCat 登录的个人 QQ 号自动化助手，不是官方 QQBot。
 
 论坛插件只应安装在承担论坛 Bot 的 AstrBot 实例上。如果 NapCat 同时连接本机和服务器 AstrBot，不要在两个实例中同时启用本插件。

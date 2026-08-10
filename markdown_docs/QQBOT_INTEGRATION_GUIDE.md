@@ -1,6 +1,6 @@
 # NapCat 个人 QQ / AstrBot 动态助手实现说明
 
-> 更新日期：2026-08-09
+> 更新日期：2026-08-10
 >
 > 当前状态：后端、PHP 后台配置页、AstrBot/NapCat 插件已在本仓库实现；生产发布仍需按部署手册单独执行。
 
@@ -133,16 +133,17 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 ## 7. 群同步规则
 
-后台新增同步群时只需填写 QQ 群号，群名可选，勾选启用即可。平台固定为 `qq`，`unified_msg_origin` 自动生成：
+后台新增同步群时只需填写 QQ 群号，群名可选，勾选启用即可。平台固定为 `qq`，`unified_msg_origin` 由插件根据当前 AstrBot OneBot 适配器自动确定，例如：
 
 ~~~text
-lcxqy_onebot:GroupMessage:<QQ群号>
+001:GroupMessage:<QQ群号>
 ~~~
 
 游标、最近成功时间和最近错误由系统维护。“绑定本群同步”命令仍可用于自动登记当前群，但不再是必需步骤。
 
 - 只同步 `starfree_space.status=1` 且 `onlyMe=0` 的公开动态。
 - 默认排除动态回复 `type=3`。
+- 群游标为 0 时只发送当前最新一条动态，再从该位置继续监听，避免首次启用补发全部历史动态。
 - 消息包含作者显示名、摘要、话题、动态 H5 链接和最多 N 张图片。
 - 发送成功后调用 `SFreeBot/delivery status=success`，后端才推进 `cursor_space_id`。
 - 发送失败只记录错误，不推进游标，下一轮可继续重试。

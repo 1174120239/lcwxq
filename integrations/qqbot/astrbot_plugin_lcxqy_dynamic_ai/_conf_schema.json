@@ -5,7 +5,7 @@
     "default": "http://127.0.0.1:18082"
   },
   "bot_secret": {
-    "description": "SFreeBot 接口密钥。生产建议与后端环境变量 LCXQY_QQBOT_SECRET 一致。",
+    "description": "SFreeBot 接口密钥，与论坛后台 QQ Bot设置中的 Bot Secret 完全一致。",
     "type": "string",
     "default": ""
   },
