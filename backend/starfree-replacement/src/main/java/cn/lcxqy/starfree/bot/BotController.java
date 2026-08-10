@@ -9,9 +9,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -63,8 +65,9 @@ public class BotController {
 
     @RequestMapping(value = "/addSpace", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse addSpace(@RequestParam Map<String, String> params,
+                                @RequestParam(value = "images", required = false) List<MultipartFile> images,
                                 HttpServletRequest request) {
-        Map<String, Object> result = bot.addSpace(params, clientAddress(request));
+        Map<String, Object> result = bot.addSpace(params, images, clientAddress(request));
         return ApiResponse.success(String.valueOf(result.get("msg")), result);
     }
 

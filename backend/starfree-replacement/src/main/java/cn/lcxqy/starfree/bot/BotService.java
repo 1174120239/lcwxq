@@ -13,6 +13,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -57,16 +58,19 @@ public class BotService {
     private final LegacyTokenService tokens;
     private final SpaceService spaces;
     private final SigninService signin;
+    private final BotImageUploadService imageUploads;
     private final SecureRandom random = new SecureRandom();
 
     public BotService(JdbcTemplate jdbc, ObjectMapper mapper, PhpassPasswordVerifier passwords,
-                      LegacyTokenService tokens, SpaceService spaces, SigninService signin) {
+                      LegacyTokenService tokens, SpaceService spaces, SigninService signin,
+                      BotImageUploadService imageUploads) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.passwords = passwords;
         this.tokens = tokens;
         this.spaces = spaces;
         this.signin = signin;
+        this.imageUploads = imageUploads;
     }
 
     public Map<String, Object> config(Map<String, String> request) {
@@ -196,6 +200,11 @@ public class BotService {
     }
 
     public Map<String, Object> addSpace(Map<String, String> request, String ip) {
+        return addSpace(request, Collections.<MultipartFile>emptyList(), ip);
+    }
+
+    public Map<String, Object> addSpace(Map<String, String> request, List<MultipartFile> images,
+                                        String ip) {
         requireTool(request, "tool_add_space", "发动态功能已关闭");
         Binding binding = requireBinding(request);
         String requestId = requiredText(request, "requestId", "缺少 requestId");
@@ -215,7 +224,9 @@ public class BotService {
             dynamic.put("onlyMe", comment ? "0"
                     : (RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0"));
             dynamic.put("text", boundedText(request.get("text"), MAX_DYNAMIC_TEXT, true));
-            dynamic.put("pic", comment ? "" : RequestValues.text(request, "pic"));
+            List<String> uploaded = comment ? Collections.<String>emptyList() : imageUploads.upload(images);
+            dynamic.put("pic", comment ? "" : (uploaded.isEmpty()
+                    ? RequestValues.text(request, "pic") : String.join(",", uploaded)));
             dynamic.put("topicIds", comment ? "" : RequestValues.text(request, "topicIds"));
             boolean pending = spaces.addForBotUid(binding.uid, dynamic, ip);
             Long latestId = latestSpaceId(binding.uid);

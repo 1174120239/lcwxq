@@ -65,7 +65,7 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 ## 4. 后端接口
 
-所有插件调用都带 `botSecret` 和 `platform=qq`，使用 `application/x-www-form-urlencoded`，返回旧协议 `{code,msg,data}`。
+所有插件调用都带 `botSecret` 和 `platform=qq`，返回旧协议 `{code,msg,data}`。普通请求使用 `application/x-www-form-urlencoded`；带图动态的 `addSpace` 使用 `multipart/form-data`，图片字段名为可重复的 `images`。
 
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
@@ -76,7 +76,7 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 | `POST /SFreeBot/bindLogin` | 验证论坛账号密码并绑定 QQ | `token,account,password` |
 | `POST /SFreeBot/meStatus` | 查询论坛账号、积分、经验、余额、签到连续天数 | `qqUserId` |
 | `POST /SFreeBot/signin` | QQ 绑定用户签到 | `qqUserId,requestId` |
-| `POST /SFreeBot/addSpace` | 发动态或评论动态 | 发动态使用 `qqUserId,requestId,text,pic,topicIds,onlyMe`；评论额外使用 `type=3,toid=<动态ID>` |
+| `POST /SFreeBot/addSpace` | 发动态或评论动态 | 发动态使用 `qqUserId,requestId,text,pic,topicIds,onlyMe`；带图时重复提交 `images` 文件字段；评论额外使用 `type=3,toid=<动态ID>` |
 | `POST /SFreeBot/updateProfile` | 修改资料白名单字段 | `qqUserId,requestId,screenName,introduce,avatar,campusId,gradeId` |
 | `POST /SFreeBot/registerGroup` | 登记当前群同步 | `groupId,groupName,unifiedMsgOrigin` |
 | `POST /SFreeBot/latestSpaces` | 拉取公开已审核动态 | `groupId,afterId,limit` |
@@ -84,7 +84,9 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 | `POST /SFreeBot/qzoneBatch` | 读取 QQ 空间待发布批次、发布模式、立即任务 token 和图片模板配置 | `botSecret,platform` |
 | `POST /SFreeBot/qzoneDelivery` | 回写 QQ 空间投递结果，并在成功时完成对应立即任务 | `status,maxSpaceId,tid,error,publishNowToken` |
 
-`addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。图片字段沿用动态接口的 `pic` 字符串格式；图片上传仍由现有前端/旧上传能力承担，Bot 只提交已可用的图片 URL。
+`addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。
+
+带图动态最多 9 张、单张最多 8 MB，只接受 `image/*`。插件保留 QQ 图片段的 `url/file/path`，优先读取本地路径；临时 URL 不可用时通过 NapCat OneBot `get_image(file=...)` 取得本地文件。新后端使用服务器自身的 `webinfo.key` 调用旧端 `upload/full`，把返回的论坛永久 URL 写入 `starfree_space.pic`，不会把服务器密钥返回插件，也不会把 QQ 临时 CDN 地址作为最终图片地址。任何图片读取或上传失败都会阻止发布并保留草稿。
 
 新后端在 `config` 返回顶层 `commentSpace=true`。插件提交评论前必须先确认该标记；旧后端没有标记时只提示后端尚未升级，绝不能继续调用 `addSpace`，以免旧实现把 `type=3` 强制改成普通动态。
 
@@ -217,13 +219,13 @@ AstrBot 插件配置：
 }
 ~~~
 
-插件版本 `v0.3.3` 只发送后台设置的简短空间正文，不再自动追加图片索引清单；`v0.3.2` 使用 NapCat `get_cookies` 与 QQ 空间 HTTP 接口发布图集；`v0.3.1` 将 QQ 空间同步改为每条动态一张编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
+插件版本 `v0.3.4` 增加 QQ 图片读取、NapCat `get_image` 回退和论坛永久图片上传；`v0.3.3` 只发送后台设置的简短空间正文，不再自动追加图片索引清单；`v0.3.2` 使用 NapCat `get_cookies` 与 QQ 空间 HTTP 接口发布图集；`v0.3.1` 将 QQ 空间同步改为每条动态一张编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
 
 本地针对性测试：
 
 ~~~powershell
 python -m unittest integrations.qqbot.tests.test_lcxqy_dynamic_ai -v
-mvn -f backend/starfree-replacement/pom.xml -Dtest=BotServiceTest test
+mvn -f backend/starfree-replacement/pom.xml -Dtest=BotServiceTest,BotImageUploadServiceTest test
 php -l admin/starfree-admin/source/admin/qqBot.php
 php -l admin/starfree-admin/source/admin/qqBotPost.php
 ~~~

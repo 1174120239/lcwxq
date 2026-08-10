@@ -78,7 +78,8 @@ from main import BackendError, LcxqyDynamicAiPlugin  # noqa: E402
 class DummyEvent:
     def __init__(self, text, message_id="message-1", group_id="", images=None):
         self.message_str = text
-        segments = [SimpleNamespace(data={"url": value}) for value in (images or [])]
+        segments = [SimpleNamespace(data=value if isinstance(value, dict) else {"url": value})
+                    for value in (images or [])]
         self.message_obj = SimpleNamespace(
             message=segments,
             group_id=group_id,
@@ -155,6 +156,130 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         session = self.plugin._sessions[":10001"]
         self.assertEqual("confirm_add_space", session["stage"])
         self.assertEqual("今天晚霞很好看", session["pending"]["payload"]["text"])
+
+    def test_image_segment_keeps_url_file_and_path_for_napcat_fallback(self):
+        event = DummyEvent("发动态", images=[{
+            "url": "https://multimedia.nt.qq.com.cn/temp.jpg",
+            "file": "napcat-file-id",
+            "path": "C:/temp/napcat.jpg",
+        }])
+
+        sources = self.plugin._images_from_event(event)
+
+        self.assertEqual([{
+            "url": "https://multimedia.nt.qq.com.cn/temp.jpg",
+            "file": "napcat-file-id",
+            "path": "C:/temp/napcat.jpg",
+        }], sources)
+
+    def test_confirm_image_space_uses_multipart_images(self):
+        image_path = Path(self.temp_dir.name) / "qq.png"
+        image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage-data")
+        calls = []
+
+        async def multipart(path, payload, files):
+            calls.append((path, payload, files))
+            return {"msg": "动态已发布", "h5Url": "https://example.test/space/8"}
+
+        self.plugin._api_multipart = multipart
+        self.plugin._prepare_space(
+            DummyEvent(""), "带图动态", [{"path": str(image_path), "file": "napcat-id"}])
+
+        result = self.collect(DummyEvent("发吧", message_id="message-2"))
+
+        self.assertIn("动态已发布", result[0])
+        self.assertEqual("/SFreeBot/addSpace", calls[0][0])
+        self.assertEqual(1, len(calls[0][2]))
+        self.assertEqual("image/png", calls[0][2][0]["content_type"])
+        self.assertTrue(calls[0][2][0]["content"].startswith(b"\x89PNG"))
+
+    def test_image_read_failure_keeps_pending_space(self):
+        called = False
+
+        async def multipart(*_args):
+            nonlocal called
+            called = True
+            return {}
+
+        self.plugin._api_multipart = multipart
+        self.plugin._prepare_space(
+            DummyEvent(""), "图片稍后重试", [{"file": "missing-napcat-file"}])
+
+        result = self.collect(DummyEvent("发吧", message_id="message-2"))
+        session = self.plugin._sessions[":10001"]
+
+        self.assertIn("图片上传失败", result[0])
+        self.assertFalse(called)
+        self.assertEqual("confirm_add_space", session["stage"])
+        self.assertEqual("图片稍后重试", session["pending"]["payload"]["text"])
+
+    def test_napcat_get_image_falls_back_to_local_file(self):
+        image_path = Path(self.temp_dir.name) / "napcat.jpg"
+        image_path.write_bytes(b"\xff\xd8\xffimage-data")
+        actions = []
+
+        async def call_action(action, **payload):
+            actions.append((action, payload))
+            return {"data": {"file": str(image_path)}}
+
+        platform_meta = SimpleNamespace(id="001", name="aiocqhttp")
+        platform = SimpleNamespace(
+            meta=lambda: platform_meta,
+            bot=SimpleNamespace(call_action=call_action),
+        )
+        self.plugin.context.platform_manager.platform_insts = [platform]
+
+        part = asyncio.run(self.plugin._read_image_for_upload(
+            {"file": "napcat-file-id"}, 1))
+
+        self.assertEqual("get_image", actions[0][0])
+        self.assertEqual("napcat-file-id", actions[0][1]["file"])
+        self.assertEqual("image/jpeg", part["content_type"])
+
+    def test_plain_text_space_still_uses_form_api(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, payload))
+            return {"msg": "动态已发布"}
+
+        self.plugin._api = api
+        self.plugin._prepare_space(DummyEvent(""), "纯文字动态", [])
+
+        result = self.collect(DummyEvent("发吧", message_id="message-2"))
+
+        self.assertIn("动态已发布", result[0])
+        self.assertEqual(["/SFreeBot/addSpace"], [item[0] for item in calls])
+
+    def test_multipart_request_repeats_images_and_hides_private_sources(self):
+        captured = {}
+        self.plugin.config.update({
+            "backend_base_url": "https://api.example.test",
+            "bot_secret": "test-secret",
+        })
+
+        def urlopen(request):
+            captured["body"] = request.data
+            captured["content_type"] = request.headers.get("Content-type")
+            return '{"code":1,"data":{"msg":"动态已发布"}}'
+
+        self.plugin._urlopen_text = urlopen
+        data = asyncio.run(self.plugin._api_multipart(
+            "/SFreeBot/addSpace",
+            {"qqUserId": "10001", "_imageSources": [{"file": "private-id"}]},
+            [
+                {"filename": "one.png", "content_type": "image/png", "content": b"one"},
+                {"filename": "two.jpg", "content_type": "image/jpeg", "content": b"two"},
+            ],
+        ))
+
+        body = captured["body"]
+        self.assertEqual(2, body.count(b'name="images"'))
+        self.assertIn(b'name="botSecret"', body)
+        self.assertNotIn(b"_imageSources", body)
+        self.assertNotIn(b"private-id", body)
+        self.assertTrue(captured["content_type"].startswith("multipart/form-data; boundary="))
+        self.assertEqual("动态已发布", data["msg"])
 
     def test_forum_operation_works_in_group_when_group_chat_is_disabled(self):
         self.plugin._group_chat_enabled = False

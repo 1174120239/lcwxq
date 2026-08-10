@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -138,6 +139,40 @@ class BotServiceTest {
                 .containsEntry("toid", "0")
                 .containsEntry("text", "今天操场晚霞很好看");
         assertThat(result).containsEntry("spaceId", 88L);
+    }
+
+    @Test
+    void addSpaceStoresUploadedForumUrlsInsteadOfTemporaryQqUrls() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret",
+                "tool_add_space", "1", "h5_base_url", "https://prev.lcxqy.cn");
+        fixture.binding(77L);
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_operation_log"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.update(startsWith("UPDATE lcxqy_bot_operation_log"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.update(startsWith("UPDATE lcxqy_bot_bindings"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.query(eq("SELECT id FROM starfree_space WHERE uid=? ORDER BY id DESC LIMIT 1"),
+                any(Object[].class), any(RowMapper.class))).thenReturn(Collections.singletonList(89L));
+        when(fixture.spaces.addForBotUid(eq(77L), any(), eq("127.0.0.1"))).thenReturn(false);
+        MultipartFile first = mock(MultipartFile.class);
+        MultipartFile second = mock(MultipartFile.class);
+        when(fixture.imageUploads.upload(Arrays.asList(first, second))).thenReturn(Arrays.asList(
+                "https://frp.lcxqy.cn/upload/first.jpg",
+                "https://frp.lcxqy.cn/upload/second.jpg"));
+
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("requestId", "request-with-images");
+        request.put("text", "群聊图片动态");
+        request.put("pic", "https://multimedia.nt.qq.com.cn/temporary.jpg");
+
+        fixture.service.addSpace(request, Arrays.asList(first, second), "127.0.0.1");
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(fixture.spaces).addForBotUid(eq(77L), captor.capture(), eq("127.0.0.1"));
+        assertThat(captor.getValue()).containsEntry("pic",
+                "https://frp.lcxqy.cn/upload/first.jpg,https://frp.lcxqy.cn/upload/second.jpg");
     }
 
     @Test
@@ -484,8 +519,9 @@ class BotServiceTest {
         private final LegacyTokenService tokens = mock(LegacyTokenService.class);
         private final SpaceService spaces = mock(SpaceService.class);
         private final SigninService signin = mock(SigninService.class);
+        private final BotImageUploadService imageUploads = mock(BotImageUploadService.class);
         private final BotService service = new BotService(
-                jdbc, new ObjectMapper(), passwords, tokens, spaces, signin);
+                jdbc, new ObjectMapper(), passwords, tokens, spaces, signin, imageUploads);
 
         private void config(String... pairs) {
             Map<String, Object> rows[] = new Map[pairs.length / 2];

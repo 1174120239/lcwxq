@@ -53,7 +53,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
-    "0.3.2",
+    "0.3.4",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -309,7 +309,7 @@ class LcxqyDynamicAiPlugin(Star):
             logger.warning("lcxqy_dynamic_ai planner failed: %s", error.message)
 
     async def _deterministic_intent(self, event: AstrMessageEvent, text: str,
-                                    images: List[str]) -> Optional[str]:
+                                    images: List[Any]) -> Optional[str]:
         compact = re.sub(r"\s+", "", text)
         has_signin = "签到" in compact
         has_status = any(word in compact for word in ("积分", "签到状态", "我的状态", "多少经验", "多少余额"))
@@ -480,7 +480,7 @@ class LcxqyDynamicAiPlugin(Star):
         return plan
 
     async def _execute_plan(self, event: AstrMessageEvent, session: Dict[str, Any],
-                            plan: Dict[str, str], images: List[str]) -> str:
+                            plan: Dict[str, str], images: List[Any]) -> str:
         intent = plan.get("intent", "chat")
         if intent == "add_space":
             return self._prepare_space(event, plan.get("text", ""), images)
@@ -505,7 +505,7 @@ class LcxqyDynamicAiPlugin(Star):
             return "已取消。"
         return plan.get("reply") or "我在。你可以和我聊天，也可以让我发动态、签到、查积分或修改资料。"
 
-    def _prepare_space(self, event: AstrMessageEvent, text: str, images: List[str]) -> str:
+    def _prepare_space(self, event: AstrMessageEvent, text: str, images: List[Any]) -> str:
         session = self._session(event)
         text = (text or "").strip()
         if not text and not images:
@@ -518,15 +518,28 @@ class LcxqyDynamicAiPlugin(Star):
             session["pending"] = None
             self._touch_session(session)
             return f"动态内容最多 1500 字，当前有 {len(text)} 字。请精简后重新发送。"
+        if len(images) > 9:
+            session["stage"] = "awaiting_space_content"
+            session["pending"] = None
+            self._touch_session(session)
+            return "一条动态最多 9 张图片，请减少图片后重新发送。"
+        image_sources = [self._normalize_image_source(item) for item in images]
+        image_sources = [item for item in image_sources if item]
+        image_urls = [self._image_source_display_url(item) for item in image_sources]
+        payload = {
+            "qqUserId": self._sender_id(event),
+            "requestId": self._request_id(event, "space"),
+            "text": text,
+            # Kept for old backends; the new backend replaces this with permanent URLs.
+            "pic": ",".join(item for item in image_urls if item),
+            "onlyMe": "0",
+        }
+        if image_sources:
+            # Private plugin state. _api_multipart strips it before sending the request.
+            payload["_imageSources"] = image_sources
         session["pending"] = {
             "type": "addSpace",
-            "payload": {
-                "qqUserId": self._sender_id(event),
-                "requestId": self._request_id(event, "space"),
-                "text": text,
-                "pic": ",".join(images),
-                "onlyMe": "0",
-            },
+            "payload": payload,
         }
         session["stage"] = "confirm_add_space"
         preview = text if len(text) <= 180 else text[:180] + "..."
@@ -589,7 +602,7 @@ class LcxqyDynamicAiPlugin(Star):
             return "目前没有待确认操作。"
         try:
             if action_type == "addSpace":
-                data = await self._api("/SFreeBot/addSpace", pending["payload"])
+                data = await self._publish_space(pending["payload"])
                 msg = data.get("msg") or ("动态已提交审核" if data.get("pending") else "动态已发布")
                 url = data.get("h5Url")
                 self._clear_action(session)
@@ -613,6 +626,10 @@ class LcxqyDynamicAiPlugin(Star):
                 self._clear_action(session)
                 return await self._status_text(event, preserve_action=True)
         except BackendError as error:
+            if action_type == "addSpace" and error.data.get("imageUpload"):
+                pending.setdefault("payload", {})["requestId"] = self._request_id(event, "space")
+                self._touch_session(session)
+                return "图片上传失败，动态草稿已保留。请检查图片后再回复“发吧”。\n" + error.message
             if self._is_unbound_error(error):
                 session["stage"] = "awaiting_binding"
                 session["resume_stage"] = self._stage_for_action(action_type)
@@ -1296,6 +1313,22 @@ class LcxqyDynamicAiPlugin(Star):
             return value
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
+    async def _publish_space(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        sources = payload.get("_imageSources") or []
+        if not sources:
+            return await self._api("/SFreeBot/addSpace", payload)
+        files = []
+        try:
+            for index, source in enumerate(sources[:9], start=1):
+                files.append(await self._read_image_for_upload(source, index))
+        except BackendError as error:
+            data = dict(error.data)
+            data["imageUpload"] = True
+            raise BackendError(error.message, data) from error
+        except Exception as error:
+            raise BackendError(str(error) or "图片读取失败", {"imageUpload": True}) from error
+        return await self._api_multipart("/SFreeBot/addSpace", payload, files)
+
     async def _api(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).rstrip("/")
         secret = str(self._cfg("bot_secret", ""))
@@ -1318,6 +1351,136 @@ class LcxqyDynamicAiPlugin(Star):
             raise BackendError(str(parsed.get("msg") or "请求失败"), parsed.get("data") or {})
         response_data = parsed.get("data")
         return response_data if isinstance(response_data, dict) else {}
+
+    async def _api_multipart(self, path: str, payload: Dict[str, Any], files: List[Dict[str, Any]]) -> Dict[str, Any]:
+        base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).rstrip("/")
+        secret = str(self._cfg("bot_secret", ""))
+        if not secret:
+            raise BackendError("插件未配置 bot_secret")
+        data = {key: value for key, value in payload.items() if not str(key).startswith("_")}
+        data.setdefault("botSecret", secret)
+        data.setdefault("platform", self._cfg("platform", "qq"))
+        boundary = "----lcxqy" + os.urandom(12).hex()
+        body = bytearray()
+        for key, value in data.items():
+            body.extend((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n"
+                         f"{'' if value is None else value}\r\n").encode("utf-8"))
+        for item in files:
+            body.extend((f"--{boundary}\r\nContent-Disposition: form-data; name=\"images\"; "
+                         f"filename=\"{item['filename']}\"\r\nContent-Type: {item['content_type']}\r\n\r\n").encode("utf-8"))
+            body.extend(item["content"])
+            body.extend(b"\r\n")
+        body.extend(f"--{boundary}--\r\n".encode("ascii"))
+        request = urllib.request.Request(
+            base + path,
+            data=bytes(body),
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        loop = asyncio.get_running_loop()
+        try:
+            raw = await loop.run_in_executor(None, self._urlopen_text, request)
+            parsed = json.loads(raw)
+        except BackendError as error:
+            data = dict(error.data)
+            data["imageUpload"] = True
+            raise BackendError(error.message, data) from error
+        except Exception as error:
+            raise BackendError("图片上传请求失败", {"imageUpload": True}) from error
+        if int(parsed.get("code", 0)) != 1:
+            raise BackendError(str(parsed.get("msg") or "图片动态发布失败"), {"imageUpload": True})
+        response_data = parsed.get("data")
+        return response_data if isinstance(response_data, dict) else {}
+
+    async def _read_image_for_upload(self, source: Dict[str, str], index: int) -> Dict[str, Any]:
+        candidates = []
+        for key in ("path", "file"):
+            value = str(source.get(key) or "").strip()
+            if value and not value.lower().startswith(("http://", "https://")):
+                candidates.append(("path", value))
+        url = str(source.get("url") or "").strip()
+        if url.lower().startswith(("http://", "https://")):
+            candidates.append(("url", url))
+        for kind, candidate in candidates:
+            try:
+                raw = self._read_image_candidate(candidate, kind)
+                return self._image_upload_part(raw, source, index)
+            except Exception:
+                continue
+        file_id = str(source.get("file") or "").strip()
+        if file_id:
+            platform = self._onebot_platform()
+            bot = getattr(platform, "bot", None) if platform is not None else None
+            call_action = getattr(bot, "call_action", None)
+            if callable(call_action):
+                try:
+                    result = await call_action("get_image", file=file_id)
+                    refs = self._image_refs_from_action(result)
+                    for kind, ref in refs:
+                        try:
+                            raw = self._read_image_candidate(ref, kind)
+                            return self._image_upload_part(raw, source, index)
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+        raise BackendError(f"第 {index} 张图片读取失败，请重新发送图片", {"imageUpload": True})
+
+    def _read_image_candidate(self, candidate: Any, kind: str) -> bytes:
+        value = str(candidate[1] if isinstance(candidate, tuple) else candidate).strip()
+        if kind == "url":
+            if not self._remote_url_allowed(value):
+                raise ValueError("图片地址不可访问")
+            request = urllib.request.Request(value, headers={"User-Agent": "lcxqy-qqbot/0.3.4"})
+            with urllib.request.urlopen(request, timeout=12) as response:
+                raw = response.read(8 * 1024 * 1024 + 1)
+        else:
+            path = Path(value.replace("file://", ""))
+            if not path.exists() or not path.is_file():
+                raise FileNotFoundError(value)
+            if path.stat().st_size > 8 * 1024 * 1024:
+                raise ValueError("图片超过 8 MB")
+            raw = path.read_bytes()
+        if len(raw) > 8 * 1024 * 1024:
+            raise ValueError("图片超过 8 MB")
+        if not self._image_mime(raw):
+            raise ValueError("文件不是支持的图片格式")
+        return raw
+
+    def _image_upload_part(self, raw: bytes, source: Dict[str, str], index: int) -> Dict[str, Any]:
+        mime, extension = self._image_mime(raw)
+        original = str(source.get("name") or source.get("file") or "").strip()
+        filename = Path(original).name if original else f"qqbot-{index}.{extension}"
+        filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
+        if "." not in filename:
+            filename += "." + extension
+        return {"filename": filename[:120], "content_type": mime, "content": raw}
+
+    def _image_mime(self, raw: bytes):
+        if raw.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg", "jpg"
+        if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png", "png"
+        if raw.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif", "gif"
+        if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+            return "image/webp", "webp"
+        return None
+
+    def _image_refs_from_action(self, result: Any) -> List[Any]:
+        refs = []
+        values = [result]
+        if isinstance(result, dict) and isinstance(result.get("data"), dict):
+            values.append(result["data"])
+        for value in values:
+            if isinstance(value, dict):
+                for key in ("path", "file", "url"):
+                    candidate = value.get(key)
+                    kind = "url" if str(candidate or "").lower().startswith(("http://", "https://")) else "path"
+                    ref = (kind, str(candidate))
+                    if candidate and ref not in refs:
+                        refs.append(ref)
+        return refs
 
     def _urlopen_text(self, request: urllib.request.Request) -> str:
         try:
@@ -1431,22 +1594,39 @@ class LcxqyDynamicAiPlugin(Star):
         normalized = text.lstrip("/／!！").strip()
         return any(normalized == name or normalized.startswith(name + " ") for name in self._COMMAND_NAMES)
 
-    def _images_from_event(self, event: AstrMessageEvent) -> List[str]:
+    def _images_from_event(self, event: AstrMessageEvent) -> List[Dict[str, str]]:
         message = getattr(event.message_obj, "message", None) or []
         result = []
         for segment in message:
             data = getattr(segment, "data", None)
+            source = {}
             if isinstance(data, dict):
-                url = data.get("url") or data.get("file") or data.get("path")
-                if url:
-                    result.append(str(url))
+                for key in ("url", "file", "path", "name"):
+                    value = data.get(key)
+                    if value:
+                        source[key] = str(value)
             else:
-                for attr in ("url", "file", "path"):
+                for attr in ("url", "file", "path", "name"):
                     value = getattr(segment, attr, None)
                     if value:
-                        result.append(str(value))
-                        break
+                        source[attr] = str(value)
+            if any(source.get(key) for key in ("url", "file", "path")):
+                result.append(source)
         return result
+
+    def _normalize_image_source(self, value: Any) -> Dict[str, str]:
+        if isinstance(value, dict):
+            return {key: str(value.get(key)) for key in ("url", "file", "path", "name")
+                    if value.get(key)}
+        text = str(value or "").strip()
+        return {"url": text} if text else {}
+
+    def _image_source_display_url(self, source: Dict[str, str]) -> str:
+        for key in ("url", "path", "file"):
+            value = str(source.get(key) or "").strip()
+            if value:
+                return value
+        return ""
 
     def _sender_id(self, event: AstrMessageEvent) -> str:
         try:
