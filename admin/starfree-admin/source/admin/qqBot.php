@@ -185,7 +185,7 @@ if ($groupResult) {
                     <hr>
                     <h5 class="mb-3">QQ 空间每日同步</h5>
                     <p class="text-muted">
-                        每天到达设定时间后，云云会把游标之后的公开动态合成一张图片，并通过本机 NapCat 个人 QQ 发布一条空间说说。
+                        每天到达设定时间后，云云会把游标之后的公开动态各生成一张 P1-P9 编号图片，并通过本机 NapCat 个人 QQ 发布一条空间说说。
                         没有新动态时不会发布；发布成功后才推进游标。
                     </p>
                     <div class="row">
@@ -207,8 +207,9 @@ if ($groupResult) {
                         <div class="col-md-3">
                             <div class="form-group mb-3">
                                 <label for="qzone_batch_limit">每批动态数</label>
-                                <input name="qzone_batch_limit" class="form-control" type="number" min="1" max="12"
+                                <input name="qzone_batch_limit" class="form-control" type="number" min="1" max="9"
                                        value="<?php echo bot_h($botConfig['qzone_batch_limit']); ?>">
+                                <small class="form-text text-muted">一条动态一张图，单条说说最多 9 张。</small>
                             </div>
                         </div>
                         <div class="col-md-3">

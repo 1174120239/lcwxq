@@ -46,8 +46,8 @@ class BackendError(Exception):
 @register(
     "lcxqy_dynamic_ai",
     "lcxqy",
-    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日合集。",
-    "0.3.0",
+    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
+    "0.3.1",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -861,8 +861,8 @@ class LcxqyDynamicAiPlugin(Star):
             max_space_id = max(int(item.get("id") or 0) for item in spaces)
             try:
                 loop = asyncio.get_running_loop()
-                png = await loop.run_in_executor(None, self._render_qzone_image, batch, spaces)
-                result = await self._send_qzone_message(batch, png)
+                pngs = await loop.run_in_executor(None, self._render_qzone_images, batch, spaces)
+                result = await self._send_qzone_message(batch, pngs, spaces)
                 result_data = result.get("data") if isinstance(result, dict) else {}
                 tid = (result_data or {}).get("tid") if isinstance(result_data, dict) else ""
                 await self._api("/SFreeBot/qzoneDelivery", {
@@ -882,20 +882,21 @@ class LcxqyDynamicAiPlugin(Star):
                     logger.warning("lcxqy_dynamic_ai qzone error report failed:\n%s", traceback.format_exc())
                 raise
 
-    async def _send_qzone_message(self, settings: Dict[str, Any], png: bytes) -> Dict[str, Any]:
+    async def _send_qzone_message(self, settings: Dict[str, Any], pngs: List[bytes],
+                                  spaces: List[Dict[str, Any]]) -> Dict[str, Any]:
         platform = self._onebot_platform()
         bot = getattr(platform, "bot", None) if platform is not None else None
         call_action = getattr(bot, "call_action", None)
         if not callable(call_action):
             raise RuntimeError("未找到 NapCat/aiocqhttp OneBot 连接")
-        content = str(settings.get("postText") or "今天的校园动态整理好了。")[:500]
+        content = self._qzone_post_content(settings, spaces)
         ugc_right = int(settings.get("ugcRight") or 1)
         if ugc_right not in {1, 4, 16, 64, 128}:
             ugc_right = 1
         result = await call_action(
             "send_qzone_msg",
             content=content,
-            images=["base64://" + base64.b64encode(png).decode("ascii")],
+            images=["base64://" + base64.b64encode(png).decode("ascii") for png in pngs[:9]],
             ugc_right=ugc_right,
             target_uins=[],
         )
@@ -920,25 +921,33 @@ class LcxqyDynamicAiPlugin(Star):
                 continue
         return None
 
-    def _render_qzone_image(self, settings: Dict[str, Any], spaces: List[Dict[str, Any]]) -> bytes:
+    def _qzone_post_content(self, settings: Dict[str, Any], spaces: List[Dict[str, Any]]) -> str:
+        lines = [str(settings.get("postText") or "今天的校园动态整理好了。").strip()]
+        for index, space in enumerate(spaces[:9], start=1):
+            author = space.get("author") or {}
+            name = self._compact_text(author.get("name") or "论坛用户", 16)
+            summary = self._compact_text(space.get("summary") or space.get("text") or "", 32)
+            lines.append(f"P{index} {name}：{summary}")
+        return self._compact_text("\n".join(line for line in lines if line), 500)
+
+    def _render_qzone_images(self, settings: Dict[str, Any],
+                             spaces: List[Dict[str, Any]]) -> List[bytes]:
         if Image is None:
             raise RuntimeError("Pillow 未安装，无法生成 QQ 空间动态图片")
-        width = 1080
-        padding = 54
-        header_height = 230
-        footer_height = 130
-        gap = 22
-        include_images = self._truthy(settings.get("includeSourceImages", True))
-        source_images = []
-        for space in spaces:
-            image = None
-            urls = space.get("images") or []
-            if include_images and urls:
-                image = self._load_remote_image(str(urls[0]), str(space.get("h5Url") or ""))
-            source_images.append(image)
+        selected = spaces[:9]
+        return [self._render_qzone_image(settings, space, index, len(selected))
+                for index, space in enumerate(selected, start=1)]
 
-        card_heights = [318 if image is not None else 260 for image in source_images]
-        height = header_height + footer_height + padding + sum(card_heights) + gap * max(0, len(spaces) - 1)
+    def _render_qzone_image(self, settings: Dict[str, Any], space: Dict[str, Any],
+                            index: int, total: int) -> bytes:
+        width = 1080
+        height = 1350
+        padding = 54
+        include_images = self._truthy(settings.get("includeSourceImages", True))
+        source_image = None
+        urls = space.get("images") or []
+        if include_images and urls:
+            source_image = self._load_remote_image(str(urls[0]), str(space.get("h5Url") or ""))
         background_color = self._image_color(settings.get("backgroundColor"), "#F4F7F5")
         canvas = Image.new("RGB", (width, height), background_color)
         background_url = str(settings.get("backgroundImageUrl") or "").strip()
@@ -956,73 +965,75 @@ class LcxqyDynamicAiPlugin(Star):
         muted = self._mix_color(text_color, background_color, 0.48)
         title_font = self._image_font(54, bold=True)
         subtitle_font = self._image_font(28)
-        author_font = self._image_font(31, bold=True)
-        meta_font = self._image_font(24)
-        body_font = self._image_font(29)
+        page_font = self._image_font(40, bold=True)
+        author_font = self._image_font(38, bold=True)
+        meta_font = self._image_font(27)
+        body_font = self._image_font(36)
         footer_font = self._image_font(25)
 
-        draw.rounded_rectangle((padding, 54, padding + 12, 166), radius=6, fill=accent)
+        draw.rounded_rectangle((padding, 48, padding + 12, 166), radius=6, fill=accent)
         title = self._truncate_image_text(
-            draw, str(settings.get("title") or "聊一今日动态"), title_font, 660)
+            draw, str(settings.get("title") or "聊一今日动态"), title_font, 570)
         draw.text((padding + 34, 48), title, font=title_font, fill=text_color)
         subtitle = self._truncate_image_text(
-            draw, str(settings.get("subtitle") or "校园里今天发生了什么"), subtitle_font, 720)
+            draw, str(settings.get("subtitle") or "校园里今天发生了什么"), subtitle_font, 680)
         date_text = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y.%m.%d")
         draw.text((padding + 36, 126), subtitle, font=subtitle_font, fill=muted)
+        page_text = f"P{index} / {total}"
+        page_width = draw.textlength(page_text, font=page_font)
+        page_x = width - padding - page_width - 34
+        draw.rounded_rectangle((page_x - 24, 48, width - padding, 112), radius=8, fill=accent)
+        draw.text((page_x, 55), page_text, font=page_font, fill="#FFFFFF")
         date_width = draw.textlength(date_text, font=meta_font)
-        draw.text((width - padding - date_width, 72), date_text, font=meta_font, fill=accent)
+        draw.text((width - padding - date_width, 132), date_text, font=meta_font, fill=muted)
 
-        y = header_height
-        for index, (space, source_image, card_height) in enumerate(zip(spaces, source_images, card_heights), start=1):
-            x1, x2 = padding, width - padding
-            draw.rounded_rectangle((x1, y, x2, y + card_height), radius=8, fill=card_color)
-            draw.rounded_rectangle((x1 + 24, y + 30, x1 + 72, y + 78), radius=8, fill=accent)
-            number_text = str(index)
-            number_width = draw.textlength(number_text, font=meta_font)
-            draw.text((x1 + 48 - number_width / 2, y + 37), number_text, font=meta_font, fill="#FFFFFF")
+        card_top = 210
+        card_bottom = height - 126
+        draw.rounded_rectangle((padding, card_top, width - padding, card_bottom), radius=8, fill=card_color)
+        author = space.get("author") or {}
+        author_name = self._truncate_image_text(
+            draw, str(author.get("name") or "论坛用户"), author_font, 600)
+        draw.text((padding + 40, card_top + 34), author_name, font=author_font, fill=text_color)
+        meta_parts = []
+        if self._truthy(settings.get("showCampus", True)) and author.get("campus"):
+            meta_parts.append(str(author.get("campus")))
+        if author.get("grade"):
+            meta_parts.append(str(author.get("grade")))
+        meta = " · ".join(meta_parts)
+        if meta:
+            draw.text((padding + 40, card_top + 88),
+                      self._truncate_image_text(draw, meta, meta_font, 720),
+                      font=meta_font, fill=muted)
 
-            author = space.get("author") or {}
-            author_name = self._truncate_image_text(
-                draw, str(author.get("name") or "论坛用户"), author_font, 540)
-            draw.text((x1 + 92, y + 27), author_name, font=author_font, fill=text_color)
-            meta_parts = []
-            if self._truthy(settings.get("showCampus", True)) and author.get("campus"):
-                meta_parts.append(str(author.get("campus")))
-            if author.get("grade"):
-                meta_parts.append(str(author.get("grade")))
-            meta = " · ".join(meta_parts)
-            if meta:
-                draw.text((x1 + 92, y + 70),
-                          self._truncate_image_text(draw, meta, meta_font, 560),
-                          font=meta_font, fill=muted)
+        body_x = padding + 40
+        body_width = width - padding * 2 - 80
+        body_y = card_top + 146
+        summary = self._compact_text(space.get("summary") or space.get("text") or "", 300)
+        lines = self._wrap_image_text(draw, summary, body_font, body_width,
+                                      4 if source_image is not None else 10)
+        for line_index, line in enumerate(lines):
+            draw.text((body_x, body_y + line_index * 54), line, font=body_font, fill=text_color)
 
-            image_width = 282 if source_image is not None else 0
-            body_x = x1 + 34
-            body_y = y + 112
-            body_width = x2 - body_x - 34 - image_width - (28 if source_image is not None else 0)
-            summary = self._compact_text(space.get("summary") or space.get("text") or "", 240)
-            lines = self._wrap_image_text(draw, summary, body_font, body_width, 3 if source_image is not None else 2)
-            for line_index, line in enumerate(lines):
-                draw.text((body_x, body_y + line_index * 43), line, font=body_font, fill=text_color)
+        topics = []
+        if self._truthy(settings.get("showTopics", True)):
+            topics = ["#" + str(item.get("name")) for item in (space.get("topics") or []) if item.get("name")]
+        topic_text = self._truncate_image_text(draw, "  ".join(topics), meta_font, body_width)
 
-            if self._truthy(settings.get("showTopics", True)):
-                topics = ["#" + str(item.get("name")) for item in (space.get("topics") or []) if item.get("name")]
-                topic_text = self._truncate_image_text(
-                    draw, "  ".join(topics), meta_font, body_width)
-                if topic_text:
-                    draw.text((body_x, y + card_height - 46), topic_text, font=meta_font, fill=accent)
-
-            if source_image is not None:
-                image_box = (x2 - 316, y + 92, x2 - 34, y + card_height - 34)
-                thumb = ImageOps.fit(source_image.convert("RGB"),
-                                     (image_box[2] - image_box[0], image_box[3] - image_box[1]),
-                                     method=Image.Resampling.LANCZOS)
-                canvas.paste(thumb, (image_box[0], image_box[1]))
-            y += card_height + gap
+        if source_image is not None:
+            image_top = max(card_top + 390, body_y + len(lines) * 54 + 30)
+            image_bottom = card_bottom - (92 if topic_text else 40)
+            if image_bottom > image_top:
+                image_box = (body_x, image_top, width - padding - 40, image_bottom)
+                fitted = ImageOps.fit(source_image.convert("RGB"),
+                                      (image_box[2] - image_box[0], image_box[3] - image_box[1]),
+                                      method=Image.Resampling.LANCZOS)
+                canvas.paste(fitted, (image_box[0], image_box[1]))
+        if topic_text:
+            draw.text((body_x, card_bottom - 62), topic_text, font=meta_font, fill=accent)
 
         footer = self._truncate_image_text(
             draw, str(settings.get("footer") or "更多动态，来聊一看看"), footer_font, width - padding * 2 - 180)
-        footer_y = height - footer_height + 24
+        footer_y = height - 96
         draw.line((padding, footer_y, width - padding, footer_y), fill=self._mix_color(accent, background_color, 0.65), width=2)
         draw.text((padding, footer_y + 26), footer, font=footer_font, fill=muted)
         draw.text((width - padding - draw.textlength("LCXQY", font=footer_font), footer_y + 26),

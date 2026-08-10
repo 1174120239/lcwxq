@@ -360,7 +360,7 @@ public class BotService {
         Map<String, Object> settings = qzoneSettings(config);
         boolean enabled = Boolean.TRUE.equals(settings.get("enabled"));
         long cursor = longValue(value(config, "qzone_cursor_space_id", "0"));
-        int limit = integer(config, "qzone_batch_limit", 6, 1, 12);
+        int limit = integer(config, "qzone_batch_limit", 6, 1, 9);
         int summaryLength = integer(config, "qzone_summary_length", 80, 20, 200);
         boolean includeImages = bool(config, "qzone_include_source_images", true);
 
@@ -793,7 +793,7 @@ public class BotService {
         settings.put("timeZone", QZONE_ZONE.getId());
         settings.put("due", !now.isBefore(LocalTime.parse(publishTime, QZONE_TIME_FORMAT)));
         settings.put("alreadyPublishedToday", today.toString().equals(lastRunDate));
-        settings.put("batchLimit", integer(config, "qzone_batch_limit", 6, 1, 12));
+        settings.put("batchLimit", integer(config, "qzone_batch_limit", 6, 1, 9));
         settings.put("summaryLength", integer(config, "qzone_summary_length", 80, 20, 200));
         settings.put("includeSourceImages", bool(config, "qzone_include_source_images", true));
         settings.put("showCampus", bool(config, "qzone_show_campus", true));

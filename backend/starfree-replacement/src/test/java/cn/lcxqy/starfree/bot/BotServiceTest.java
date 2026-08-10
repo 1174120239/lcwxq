@@ -283,6 +283,20 @@ class BotServiceTest {
     }
 
     @Test
+    void qzoneBatchClampsLegacyBatchSettingToNineImages() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_batch_limit", "12");
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(9)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        assertThat(response).containsEntry("batchLimit", 9);
+        verify(fixture.jdbc).queryForList(contains("s.status=1 AND s.onlyMe=0 AND s.type<>3"), eq(9));
+    }
+
+    @Test
     void qzoneBatchReadsOnlyAfterSuccessfulCursor() {
         Fixture fixture = new Fixture();
         fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",

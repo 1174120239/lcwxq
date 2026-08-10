@@ -116,7 +116,7 @@ try {
         'chat_in_groups' => qqbot_bool('chat_in_groups'),
         'qzone_enabled' => qqbot_bool('qzone_enabled'),
         'qzone_publish_time' => $qzonePublishTime,
-        'qzone_batch_limit' => qqbot_int_range(qqbot_post_value('qzone_batch_limit'), 6, 1, 12),
+        'qzone_batch_limit' => qqbot_int_range(qqbot_post_value('qzone_batch_limit'), 6, 1, 9),
         'qzone_summary_length' => qqbot_int_range(qqbot_post_value('qzone_summary_length'), 80, 20, 200),
         'qzone_include_source_images' => qqbot_bool('qzone_include_source_images'),
         'qzone_show_campus' => qqbot_bool('qzone_show_campus'),

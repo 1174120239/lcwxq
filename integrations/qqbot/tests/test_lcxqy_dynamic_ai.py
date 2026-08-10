@@ -617,8 +617,8 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("/SFreeBot/delivery", calls[0][0])
         self.assertEqual("error", calls[0][1]["status"])
 
-    def test_qzone_renderer_returns_1080_wide_png(self):
-        png = self.plugin._render_qzone_image({
+    def test_qzone_renderer_returns_one_numbered_png_per_dynamic(self):
+        pngs = self.plugin._render_qzone_images({
             "title": "聊一今日动态",
             "subtitle": "校园里今天发生了什么",
             "footer": "更多动态，来聊一看看",
@@ -631,13 +631,20 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
             "author": {"name": "Alice", "campus": "主校区", "grade": "2025"},
             "topics": [{"name": "校园生活"}],
             "images": [],
+        }, {
+            "id": 10,
+            "summary": "图书馆新到了一批书。",
+            "author": {"name": "Bob"},
+            "topics": [],
+            "images": [],
         }])
 
         from PIL import Image
-        rendered = Image.open(io.BytesIO(png))
+        self.assertEqual(2, len(pngs))
+        rendered = Image.open(io.BytesIO(pngs[0]))
         self.assertEqual("PNG", rendered.format)
         self.assertEqual(1080, rendered.width)
-        self.assertGreater(rendered.height, 400)
+        self.assertEqual(1350, rendered.height)
 
     def test_qzone_sync_posts_one_batch_and_reports_success(self):
         calls = []
@@ -658,8 +665,10 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
                 return {"recorded": True}
             raise AssertionError(path)
 
-        async def send(_settings, png):
-            self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        async def send(_settings, pngs, spaces):
+            self.assertEqual(2, len(pngs))
+            self.assertEqual(2, len(spaces))
+            self.assertTrue(all(png.startswith(b"\x89PNG\r\n\x1a\n") for png in pngs))
             return {"status": "ok", "retcode": 0, "data": {"tid": "tid-32"}}
 
         self.plugin._api = api
@@ -703,12 +712,17 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.plugin.context.platform_manager.platform_insts = [platform]
 
         result = asyncio.run(self.plugin._send_qzone_message(
-            {"postText": "今天的动态", "ugcRight": 4}, b"png-data"))
+            {"postText": "今天的动态", "ugcRight": 4},
+            [b"png-1", b"png-2"],
+            [{"summary": "第一条", "author": {"name": "A"}},
+             {"summary": "第二条", "author": {"name": "B"}}]))
 
         self.assertEqual("tid-1", result["data"]["tid"])
         self.assertEqual("send_qzone_msg", calls[0][0])
-        self.assertEqual("今天的动态", calls[0][1]["content"])
+        self.assertIn("今天的动态", calls[0][1]["content"])
+        self.assertIn("P1 A：第一条", calls[0][1]["content"])
         self.assertEqual(4, calls[0][1]["ugc_right"])
+        self.assertEqual(2, len(calls[0][1]["images"]))
         self.assertTrue(calls[0][1]["images"][0].startswith("base64://"))
 
     def test_qzone_image_loader_rejects_private_network_urls(self):
