@@ -183,7 +183,7 @@ https://prev.lcxqy.cn/#/pages/space/info?id=<spaceId>
 
 - 数据源只包含 `starfree_space.status=1 AND onlyMe=0 AND type<>3`，动态仍是唯一内容核心。
 - 独立游标为 0 时取当前最新一批，避免补发全部历史；之后只取成功游标之后的增量。
-- 同一批动态各生成一张 1080px 宽的竖版 PNG，按 `P1-P9` 编号，只调用一次 NapCat OneBot `send_qzone_msg`。
+- 同一批动态各生成一张 1080px 宽的竖版 PNG，按 `P1-P9` 编号。NapCat 只通过 OneBot `get_cookies(domain=user.qzone.qq.com)` 提供当前个人 QQ 的空间凭据；插件上传图片后直接调用 QQ 空间发布接口，不使用 NapCat 不支持的 `send_qzone_msg`。
 - 图片显示作者、校区/入学年份、摘要、话题和可选首图；没有首图或下载失败时自动使用纯文字布局。
 - 远程图片只允许公网 HTTP(S)，单图最大 8 MB，重定向目标也必须通过公网地址检查。
 - 没有新动态时不发布；失败只记录错误且不推进游标，插件最早 15 分钟后重试。
@@ -193,11 +193,8 @@ NapCat 动作参数：
 
 ~~~json
 {
-  "action": "send_qzone_msg",
-  "content": "后台配置的说说正文",
-  "images": ["base64://<P1 PNG>", "base64://<P2 PNG>"],
-  "ugc_right": 1,
-  "target_uins": []
+  "action": "get_cookies",
+  "domain": "user.qzone.qq.com"
 }
 ~~~
 
@@ -218,7 +215,7 @@ AstrBot 插件配置：
 }
 ~~~
 
-插件版本 `v0.3.1` 将 QQ 空间同步改为每条动态一张 `P1-P9` 编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
+插件版本 `v0.3.2` 使用 NapCat `get_cookies` 与 QQ 空间 HTTP 接口发布 P1-P9 图集；`v0.3.1` 将 QQ 空间同步改为每条动态一张编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
 
 本地针对性测试：
 

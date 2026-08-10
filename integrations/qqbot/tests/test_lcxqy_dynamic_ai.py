@@ -699,17 +699,30 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
         self.assertEqual(["/SFreeBot/qzoneBatch"], [item[0] for item in calls])
 
-    def test_qzone_send_uses_napcat_onebot_action(self):
+    def test_qzone_send_uses_napcat_credentials_and_qzone_http(self):
         calls = []
 
         async def call_action(action, **payload):
             calls.append((action, payload))
-            return {"status": "ok", "retcode": 0, "data": {"tid": "tid-1"}}
+            if action == "get_cookies":
+                return {"cookies": "uin=o1174120239; skey=test-skey; p_skey=test-p-skey"}
+            raise AssertionError(f"unexpected NapCat action: {action}")
+
+        async def post_form(url, params, data, context, timeout):
+            calls.append(("http", {"url": url, "params": params, "data": data}))
+            if "cgi_upload_image" in url:
+                return {"ret": 0, "data": {
+                    "url": "https://example.test/photo.jpg&bo=pic-bo",
+                    "albumid": "0", "lloc": "lloc", "sloc": "sloc",
+                    "type": "1", "height": "1350", "width": "1080",
+                }}
+            return {"code": 0, "tid": "tid-1"}
 
         platform_meta = SimpleNamespace(id="001", name="aiocqhttp")
         platform = SimpleNamespace(meta=lambda: platform_meta,
                                    bot=SimpleNamespace(call_action=call_action))
         self.plugin.context.platform_manager.platform_insts = [platform]
+        self.plugin._qzone_post_form = post_form
 
         result = asyncio.run(self.plugin._send_qzone_message(
             {"postText": "今天的动态", "ugcRight": 4},
@@ -718,12 +731,14 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
              {"summary": "第二条", "author": {"name": "B"}}]))
 
         self.assertEqual("tid-1", result["data"]["tid"])
-        self.assertEqual("send_qzone_msg", calls[0][0])
-        self.assertIn("今天的动态", calls[0][1]["content"])
-        self.assertIn("P1 A：第一条", calls[0][1]["content"])
-        self.assertEqual(4, calls[0][1]["ugc_right"])
-        self.assertEqual(2, len(calls[0][1]["images"]))
-        self.assertTrue(calls[0][1]["images"][0].startswith("base64://"))
+        self.assertEqual("get_cookies", calls[0][0])
+        http_calls = [item for item in calls if item[0] == "http"]
+        self.assertEqual(3, len(http_calls))
+        self.assertTrue(http_calls[-1][1]["data"]["con"].startswith("今天的动态"))
+        self.assertIn("P1 A：第一条", http_calls[-1][1]["data"]["con"])
+        self.assertEqual("4", http_calls[-1][1]["data"]["ugc_right"])
+        self.assertEqual("pic-bo,pic-bo", http_calls[-1][1]["data"]["pic_bo"])
+        self.assertNotIn("send_qzone_msg", [item[0] for item in calls])
 
     def test_qzone_image_loader_rejects_private_network_urls(self):
         self.assertFalse(self.plugin._remote_url_allowed("http://127.0.0.1/private.png"))

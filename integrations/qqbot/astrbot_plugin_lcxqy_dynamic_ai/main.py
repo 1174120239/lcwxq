@@ -12,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
+from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 from zoneinfo import ZoneInfo
@@ -35,6 +36,11 @@ try:
 except ImportError:  # pragma: no cover - reported through qzone delivery status
     Image = ImageDraw = ImageFont = ImageOps = None
 
+try:
+    import aiohttp
+except ImportError:  # pragma: no cover - AstrBot normally provides aiohttp
+    aiohttp = None
+
 
 class BackendError(Exception):
     def __init__(self, message: str, data: Optional[Dict[str, Any]] = None):
@@ -47,7 +53,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
-    "0.3.1",
+    "0.3.2",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -893,18 +899,140 @@ class LcxqyDynamicAiPlugin(Star):
         ugc_right = int(settings.get("ugcRight") or 1)
         if ugc_right not in {1, 4, 16, 64, 128}:
             ugc_right = 1
-        result = await call_action(
-            "send_qzone_msg",
-            content=content,
-            images=["base64://" + base64.b64encode(png).decode("ascii") for png in pngs[:9]],
-            ugc_right=ugc_right,
-            target_uins=[],
+        return await self._publish_qzone_http(call_action, content, pngs[:9], ugc_right)
+
+    async def _publish_qzone_http(self, call_action: Any, content: str,
+                                  pngs: List[bytes], ugc_right: int) -> Dict[str, Any]:
+        context = await self._qzone_context(call_action)
+        upload_url = "https://up.qzone.qq.com/cgi-bin/upload/cgi_upload_image"
+        publish_url = (
+            "https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/"
+            "cgi-bin/emotion_cgi_publish_v6"
         )
-        if not isinstance(result, dict):
-            return {}
-        if result.get("status") == "failed" or int(result.get("retcode") or 0) != 0:
-            raise RuntimeError(str(result.get("message") or result.get("wording") or "NapCat 发布 QQ 空间失败"))
-        return result
+        pic_bos: List[str] = []
+        richvals: List[str] = []
+        for png in pngs:
+            uploaded = await self._qzone_post_form(
+                upload_url,
+                {},
+                {
+                    "filename": "lcxqy-dynamic.png",
+                    "uploadtype": "1",
+                    "albumtype": "7",
+                    "skey": context["skey"],
+                    "uin": context["uin"],
+                    "p_skey": context["p_skey"],
+                    "output_type": "json",
+                    "base64": "1",
+                    "picfile": base64.b64encode(png).decode("ascii"),
+                },
+                context,
+                60,
+            )
+            if int(uploaded.get("ret", -1)) != 0:
+                raise RuntimeError(str(uploaded.get("msg") or "QQ 空间图片上传失败"))
+            data = uploaded.get("data") or {}
+            url = str(data.get("url") or "")
+            if "&bo=" not in url:
+                raise RuntimeError("QQ 空间图片上传结果缺少 pic_bo")
+            pic_bos.append(url.split("&bo=", 1)[1])
+            richvals.append(
+                ",{},{},{},{},{},{},,{},{}".format(
+                    data.get("albumid", ""), data.get("lloc", ""), data.get("sloc", ""),
+                    data.get("type", ""), data.get("height", ""), data.get("width", ""),
+                    data.get("height", ""), data.get("width", ""),
+                )
+            )
+
+        payload = {
+            "syn_tweet_verson": "1",
+            "paramstr": "1",
+            "who": "1",
+            "con": content,
+            "feedversion": "1",
+            "ver": "1",
+            "ugc_right": str(ugc_right),
+            "to_sign": "0",
+            "hostuin": context["uin"],
+            "code_version": "1",
+            "format": "json",
+            "qzreferrer": f"https://user.qzone.qq.com/{context['uin']}/infocenter",
+        }
+        if pic_bos:
+            payload.update(pic_bo=",".join(pic_bos), richtype="1", richval="\t".join(richvals))
+        published = await self._qzone_post_form(
+            publish_url,
+            {"g_tk": context["gtk"], "uin": context["uin"]},
+            payload,
+            context,
+            30,
+        )
+        if int(published.get("code", -1)) != 0:
+            raise RuntimeError(str(published.get("message") or published.get("msg") or "QQ 空间发布失败"))
+        data = published.get("data") or {}
+        tid = published.get("tid") or (data.get("tid") if isinstance(data, dict) else "")
+        return {"status": "ok", "retcode": 0, "data": {"tid": str(tid or "")}}
+
+    async def _qzone_context(self, call_action: Any) -> Dict[str, str]:
+        result: Dict[str, Any] = {}
+        for action in ("get_cookies", "get_credentials"):
+            try:
+                candidate = await call_action(action, domain="user.qzone.qq.com")
+                if isinstance(candidate, dict):
+                    nested = candidate.get("data")
+                    result = nested if isinstance(nested, dict) else candidate
+                    if result.get("cookies"):
+                        break
+            except Exception:
+                continue
+        cookie_text = str(result.get("cookies") or "").strip()
+        if not cookie_text:
+            raise RuntimeError("NapCat 未返回 QQ 空间 Cookie，请重新登录个人 QQ")
+        parsed = SimpleCookie()
+        parsed.load(cookie_text)
+        cookies = {key: morsel.value for key, morsel in parsed.items()}
+        uin = str(cookies.get("uin") or "").lstrip("oO")
+        if not uin.isdigit():
+            login = await call_action("get_login_info")
+            login_data = login.get("data") if isinstance(login, dict) else {}
+            source = login_data if isinstance(login_data, dict) else login
+            uin = str((source or {}).get("user_id") or "")
+        p_skey = str(cookies.get("p_skey") or cookies.get("skey") or "")
+        if not uin.isdigit() or not p_skey:
+            raise RuntimeError("NapCat 返回的 QQ 空间会话不完整")
+        hash_value = 5381
+        for char in p_skey:
+            hash_value += (hash_value << 5) + ord(char)
+        return {
+            "uin": uin,
+            "skey": str(cookies.get("skey") or ""),
+            "p_skey": p_skey,
+            "gtk": str(hash_value & 0x7FFFFFFF),
+            "cookie": cookie_text,
+        }
+
+    async def _qzone_post_form(self, url: str, params: Dict[str, str],
+                               data: Dict[str, str], context: Dict[str, str],
+                               timeout: int) -> Dict[str, Any]:
+        if aiohttp is None:
+            raise RuntimeError("AstrBot 缺少 aiohttp，无法发布 QQ 空间")
+        headers = {
+            "Cookie": context["cookie"],
+            "Origin": "https://user.qzone.qq.com",
+            "Referer": f"https://user.qzone.qq.com/{context['uin']}/infocenter",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        }
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+            async with session.post(url, params=params, data=data, headers=headers) as response:
+                text = await response.text()
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end < start:
+            raise RuntimeError(f"QQ 空间接口返回异常（HTTP {response.status}）")
+        try:
+            result = json.loads(text[start:end + 1].replace("undefined", "null"))
+        except json.JSONDecodeError as error:
+            raise RuntimeError("QQ 空间接口响应无法解析") from error
+        return result if isinstance(result, dict) else {}
 
     def _onebot_platform(self) -> Any:
         manager = getattr(self.context, "platform_manager", None)
