@@ -20,7 +20,7 @@
     "default": true
   },
   "chat_in_groups": {
-    "description": "是否在群聊里回复普通聊天。关闭时群里只响应命令和确认词。",
+    "description": "兼容旧配置项。群聊现在始终只响应 @云云、叫云云、引用云云消息或正在进行的操作。",
     "type": "bool",
     "default": false
   },

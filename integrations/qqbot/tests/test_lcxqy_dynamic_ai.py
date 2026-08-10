@@ -82,6 +82,7 @@ class DummyEvent:
             group_id=group_id,
             group_name="测试群" if group_id else "",
             message_id=message_id,
+            self_id="987654321",
         )
         self.stopped = False
 
@@ -93,6 +94,12 @@ class DummyEvent:
 
     def get_sender_id(self):
         return "10001"
+
+    def get_self_id(self):
+        return self.message_obj.self_id
+
+    def get_messages(self):
+        return self.message_obj.message
 
 
 class LcxqyDynamicAiPluginTest(unittest.TestCase):
@@ -134,10 +141,51 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("今天晚霞很好看", session["pending"]["payload"]["text"])
 
     def test_forum_operation_works_in_group_when_group_chat_is_disabled(self):
-        result = self.collect(DummyEvent("帮我发个动态", group_id="638978650"))
+        result = self.collect(DummyEvent("云云，帮我发个动态", group_id="638978650"))
 
         self.assertIn("想发什么内容", result[0])
         self.assertTrue(self.plugin._sessions["638978650:10001"])
+
+    def test_unaddressed_group_chat_is_ignored(self):
+        result = self.collect(DummyEvent("今天天气真不错", group_id="638978650"))
+
+        self.assertEqual([], result)
+
+    def test_group_chat_responds_to_direct_name(self):
+        result = self.collect(DummyEvent("云云，你是谁", group_id="638978650"))
+
+        self.assertEqual(["我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
+
+    def test_group_chat_responds_to_self_mention(self):
+        event = DummyEvent("你是谁", group_id="638978650")
+        event.message_obj.message.insert(0, SimpleNamespace(qq="987654321"))
+
+        result = self.collect(event)
+
+        self.assertEqual(["我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
+
+    def test_group_chat_responds_to_reply_to_yunyun(self):
+        event = DummyEvent("你是谁", group_id="638978650")
+        event.message_obj.message.insert(0, SimpleNamespace(sender_id="987654321"))
+
+        result = self.collect(event)
+
+        self.assertEqual(["我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
+
+    def test_group_follow_up_continues_pending_operation_without_mention(self):
+        first = self.collect(DummyEvent("云云，帮我发个动态", group_id="638978650"))
+        second = self.collect(DummyEvent("今天晚霞很好看", message_id="message-2", group_id="638978650"))
+
+        self.assertIn("想发什么内容", first[0])
+        self.assertIn("今天晚霞很好看", second[0])
+
+    def test_group_pure_mention_gets_short_ack(self):
+        event = DummyEvent("", group_id="638978650")
+        event.message_obj.message.insert(0, SimpleNamespace(qq="987654321"))
+
+        result = self.collect(event)
+
+        self.assertEqual(["我在呢。想聊什么？"], result)
 
     def test_command_handler_stops_default_llm_pipeline(self):
         event = DummyEvent("发动态")
@@ -146,6 +194,11 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
         self.assertIn("想发什么内容", result[0])
         self.assertTrue(event.stopped)
+
+    def test_help_uses_yunyun_name(self):
+        result = asyncio.run(self._collect_command(self.plugin.help, DummyEvent("动态助手")))
+
+        self.assertIn("我是云云", result[0])
 
     def test_unbound_draft_survives_binding_and_resumes(self):
         bound = False
@@ -268,10 +321,10 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("chat", plan["intent"])
         self.assertEqual("这是普通回复，不是 JSON", plan["reply"])
 
-    def test_chat_prompt_uses_safe_xiaoying_forum_persona(self):
+    def test_chat_prompt_uses_safe_yunyun_forum_persona(self):
         prompt = self.plugin._CHAT_SYSTEM_PROMPT
 
-        self.assertIn("你是小樱", prompt)
+        self.assertIn("你是云云", prompt)
         self.assertIn("一到三句", prompt)
         self.assertIn("动态是论坛唯一核心内容", prompt)
         self.assertIn("不输出露骨", prompt)
@@ -302,12 +355,12 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.plugin._api = unexpected_api
         result = self.collect(DummyEvent("你好，你是谁？简单说。"))
 
-        self.assertEqual(["我是小樱，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
+        self.assertEqual(["我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
 
     def test_simple_greeting_uses_direct_short_reply(self):
         result = self.collect(DummyEvent("你好"))
 
-        self.assertEqual(["在呢。\n我是小樱，有事直接说喵。"], result)
+        self.assertEqual(["在呢。\n我是云云，有事直接说喵。"], result)
 
     def test_initial_sync_delivers_only_latest_space_with_active_platform_origin(self):
         captured = []
