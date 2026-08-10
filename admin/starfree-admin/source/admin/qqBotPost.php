@@ -35,6 +35,19 @@ function qqbot_int_range($value, $default, $min, $max) {
     return (string)$number;
 }
 
+function qqbot_color($key, $default) {
+    $value = strtoupper(qqbot_post_value($key, $default));
+    return preg_match('/^#[0-9A-F]{6}$/', $value) ? $value : $default;
+}
+
+function qqbot_limited_text($key, $default, $maxLength) {
+    $value = qqbot_post_value($key, $default);
+    if (function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') > $maxLength : strlen($value) > $maxLength * 3) {
+        throw new Exception($key . " 内容过长");
+    }
+    return $value;
+}
+
 function qqbot_save_config($key, $value) {
     global $connect;
     $stmt = $connect->prepare("INSERT INTO lcxqy_bot_config(config_key,config_value,updated_at) "
@@ -70,6 +83,21 @@ try {
         qqbot_save_config('bot_secret', $newBotSecret);
     }
 
+    $qzonePublishTime = qqbot_post_value('qzone_publish_time', '20:30');
+    if (!preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/', $qzonePublishTime)) {
+        throw new Exception("QQ 空间发布时间格式不正确");
+    }
+    $qzoneUgcRight = qqbot_post_value('qzone_ugc_right', '1');
+    if (!in_array($qzoneUgcRight, array('1', '4', '64'), true)) {
+        throw new Exception("QQ 空间可见范围不正确");
+    }
+    $qzoneBackgroundImageUrl = qqbot_post_value('qzone_background_image_url');
+    if ($qzoneBackgroundImageUrl !== ''
+        && (!filter_var($qzoneBackgroundImageUrl, FILTER_VALIDATE_URL)
+            || !preg_match('/^https?:\/\//i', $qzoneBackgroundImageUrl))) {
+        throw new Exception("QQ 空间背景图必须是 HTTP 或 HTTPS 地址");
+    }
+
     $configs = array(
         'enabled' => qqbot_bool('enabled'),
         'bot_public_base_url' => qqbot_post_value('bot_public_base_url'),
@@ -85,7 +113,24 @@ try {
         'tool_update_profile' => qqbot_bool('tool_update_profile'),
         'tool_status' => qqbot_bool('tool_status'),
         'tool_signin' => qqbot_bool('tool_signin'),
-        'chat_in_groups' => qqbot_bool('chat_in_groups')
+        'chat_in_groups' => qqbot_bool('chat_in_groups'),
+        'qzone_enabled' => qqbot_bool('qzone_enabled'),
+        'qzone_publish_time' => $qzonePublishTime,
+        'qzone_batch_limit' => qqbot_int_range(qqbot_post_value('qzone_batch_limit'), 6, 1, 12),
+        'qzone_summary_length' => qqbot_int_range(qqbot_post_value('qzone_summary_length'), 80, 20, 200),
+        'qzone_include_source_images' => qqbot_bool('qzone_include_source_images'),
+        'qzone_show_campus' => qqbot_bool('qzone_show_campus'),
+        'qzone_show_topics' => qqbot_bool('qzone_show_topics'),
+        'qzone_ugc_right' => $qzoneUgcRight,
+        'qzone_title' => qqbot_limited_text('qzone_title', '聊一今日动态', 40),
+        'qzone_subtitle' => qqbot_limited_text('qzone_subtitle', '校园里今天发生了什么', 80),
+        'qzone_footer' => qqbot_limited_text('qzone_footer', '更多动态，来聊一看看', 80),
+        'qzone_post_text' => qqbot_limited_text('qzone_post_text', "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/", 500),
+        'qzone_background_color' => qqbot_color('qzone_background_color', '#F4F7F5'),
+        'qzone_accent_color' => qqbot_color('qzone_accent_color', '#1E7258'),
+        'qzone_text_color' => qqbot_color('qzone_text_color', '#18211E'),
+        'qzone_card_color' => qqbot_color('qzone_card_color', '#FFFFFF'),
+        'qzone_background_image_url' => $qzoneBackgroundImageUrl
     );
     foreach ($configs as $key => $value) {
         qqbot_save_config($key, $value);

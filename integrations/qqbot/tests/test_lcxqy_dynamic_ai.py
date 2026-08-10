@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import sys
 import tempfile
@@ -615,6 +616,104 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
         self.assertEqual("/SFreeBot/delivery", calls[0][0])
         self.assertEqual("error", calls[0][1]["status"])
+
+    def test_qzone_renderer_returns_1080_wide_png(self):
+        png = self.plugin._render_qzone_image({
+            "title": "聊一今日动态",
+            "subtitle": "校园里今天发生了什么",
+            "footer": "更多动态，来聊一看看",
+            "includeSourceImages": False,
+            "showCampus": True,
+            "showTopics": True,
+        }, [{
+            "id": 9,
+            "summary": "今天操场的晚霞很好看，和大家分享一下。",
+            "author": {"name": "Alice", "campus": "主校区", "grade": "2025"},
+            "topics": [{"name": "校园生活"}],
+            "images": [],
+        }])
+
+        from PIL import Image
+        rendered = Image.open(io.BytesIO(png))
+        self.assertEqual("PNG", rendered.format)
+        self.assertEqual(1080, rendered.width)
+        self.assertGreater(rendered.height, 400)
+
+    def test_qzone_sync_posts_one_batch_and_reports_success(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, dict(payload)))
+            if path == "/SFreeBot/qzoneBatch":
+                return {
+                    "enabled": True,
+                    "alreadyPublishedToday": False,
+                    "postText": "今日动态",
+                    "ugcRight": 1,
+                    "includeSourceImages": False,
+                    "spaces": [{"id": 31, "summary": "第一条", "author": {"name": "A"}},
+                               {"id": 32, "summary": "第二条", "author": {"name": "B"}}],
+                }
+            if path == "/SFreeBot/qzoneDelivery":
+                return {"recorded": True}
+            raise AssertionError(path)
+
+        async def send(_settings, png):
+            self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+            return {"status": "ok", "retcode": 0, "data": {"tid": "tid-32"}}
+
+        self.plugin._api = api
+        self.plugin._send_qzone_message = send
+        self.plugin._qzone_next_check_at = 0
+        asyncio.run(self.plugin._sync_qzone({
+            "enabled": True, "due": True, "alreadyPublishedToday": False,
+        }))
+
+        self.assertEqual("/SFreeBot/qzoneBatch", calls[0][0])
+        self.assertEqual("/SFreeBot/qzoneDelivery", calls[1][0])
+        self.assertEqual("success", calls[1][1]["status"])
+        self.assertEqual("32", calls[1][1]["maxSpaceId"])
+        self.assertEqual("tid-32", calls[1][1]["tid"])
+
+    def test_qzone_sync_skips_empty_batch(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, payload))
+            return {"enabled": True, "alreadyPublishedToday": False, "spaces": []}
+
+        self.plugin._api = api
+        self.plugin._qzone_next_check_at = 0
+        asyncio.run(self.plugin._sync_qzone({
+            "enabled": True, "due": True, "alreadyPublishedToday": False,
+        }))
+
+        self.assertEqual(["/SFreeBot/qzoneBatch"], [item[0] for item in calls])
+
+    def test_qzone_send_uses_napcat_onebot_action(self):
+        calls = []
+
+        async def call_action(action, **payload):
+            calls.append((action, payload))
+            return {"status": "ok", "retcode": 0, "data": {"tid": "tid-1"}}
+
+        platform_meta = SimpleNamespace(id="001", name="aiocqhttp")
+        platform = SimpleNamespace(meta=lambda: platform_meta,
+                                   bot=SimpleNamespace(call_action=call_action))
+        self.plugin.context.platform_manager.platform_insts = [platform]
+
+        result = asyncio.run(self.plugin._send_qzone_message(
+            {"postText": "今天的动态", "ugcRight": 4}, b"png-data"))
+
+        self.assertEqual("tid-1", result["data"]["tid"])
+        self.assertEqual("send_qzone_msg", calls[0][0])
+        self.assertEqual("今天的动态", calls[0][1]["content"])
+        self.assertEqual(4, calls[0][1]["ugc_right"])
+        self.assertTrue(calls[0][1]["images"][0].startswith("base64://"))
+
+    def test_qzone_image_loader_rejects_private_network_urls(self):
+        self.assertFalse(self.plugin._remote_url_allowed("http://127.0.0.1/private.png"))
+        self.assertFalse(self.plugin._remote_url_allowed("http://192.168.1.10/private.png"))
 
     async def _collect_command(self, handler, event):
         return [item async for item in handler(event)]

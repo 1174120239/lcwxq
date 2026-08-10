@@ -17,6 +17,7 @@
 5. 群内引用评论：用户引用云云同步的动态并输入正文，即以当前 QQ 已绑定的论坛账号评论该动态。
 6. 幂等与投递：发动态、评论动态、改资料、签到记录 requestId；群同步只有发送成功后才推进游标。
 7. 对话状态：草稿、绑定续接和最近对话保存在 AstrBot 插件数据目录，插件重启后仍可恢复。
+8. QQ 空间每日合集：按后台设定的北京时间批量读取公开动态，生成一张合集图，并通过 NapCat 个人 QQ 发布一条空间说说。
 
 明确不做：
 
@@ -51,7 +52,7 @@
 
 新增表：
 
-- `lcxqy_bot_config`：Bot 开关、Bot Secret、DeepSeek Key/Base/Model、H5 地址、同步间隔、工具开关。
+- `lcxqy_bot_config`：Bot 开关、Bot Secret、DeepSeek Key/Base/Model、H5 地址、同步间隔、工具开关，以及 QQ 空间发布时间、图片模板、独立游标和最近投递状态。
 - `lcxqy_bot_bind_challenge`：一次性绑定 token，短期有效，只能使用一次。
 - `lcxqy_bot_bindings`：QQ 用户与论坛 uid 的持久绑定。
 - `lcxqy_bot_group_sync`：可同步群、`unified_msg_origin`、游标和摘要策略。
@@ -68,7 +69,7 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
-| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群和引用评论能力标记 | `botSecret,platform` |
+| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群、QQ 空间设置和引用评论能力标记 | `botSecret,platform` |
 | `POST /SFreeBot/chat` | DeepSeek 聊天代理 | `message` 或 `messages` JSON |
 | `POST /SFreeBot/bindChallenge` | 生成 QQ 绑定链接 | `qqUserId` |
 | `GET /SFreeBot/bindPage` | 独立绑定登录页 | `token` |
@@ -80,6 +81,8 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 | `POST /SFreeBot/registerGroup` | 登记当前群同步 | `groupId,groupName,unifiedMsgOrigin` |
 | `POST /SFreeBot/latestSpaces` | 拉取公开已审核动态 | `groupId,afterId,limit` |
 | `POST /SFreeBot/delivery` | 回写群投递结果 | `groupId,spaceId,status,messageId,error` |
+| `POST /SFreeBot/qzoneBatch` | 读取 QQ 空间待发布批次和图片模板配置 | `botSecret,platform` |
+| `POST /SFreeBot/qzoneDelivery` | 回写 QQ 空间投递结果 | `status,maxSpaceId,tid,error` |
 
 `addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。图片字段沿用动态接口的 `pic` 字符串格式；图片上传仍由现有前端/旧上传能力承担，Bot 只提交已可用的图片 URL。
 
@@ -166,7 +169,41 @@ https://prev.lcxqy.cn/#/pages/space/info?id=<spaceId>
 
 实际域名由后台 `QQ Bot设置 -> 动态 H5 地址` 控制。
 
-## 8. 部署配置
+## 8. QQ 空间每日同步
+
+后台 `QQ Bot设置 -> QQ 空间每日同步` 控制全部业务参数，AstrBot 插件只需保留后端地址、Bot Secret 和同步轮询开关。可调项包括：
+
+- 启用开关和每天发布时间，固定按 `Asia/Shanghai` 判断。
+- 每批 1 到 12 条动态、每条摘要 20 到 200 字。
+- 是否使用动态首图、是否显示校区和话题。
+- 图片标题、副标题、底部文案、说说正文、背景色、强调色、文字色、卡片色和可选背景图 URL。
+- QQ 空间可见范围：所有人、QQ 好友或仅自己。
+
+同步规则：
+
+- 数据源只包含 `starfree_space.status=1 AND onlyMe=0 AND type<>3`，动态仍是唯一内容核心。
+- 独立游标为 0 时取当前最新一批，避免补发全部历史；之后只取成功游标之后的增量。
+- 同一批动态生成一张 1080px 宽的竖版 PNG，只调用一次 NapCat OneBot `send_qzone_msg`。
+- 图片显示作者、校区/入学年份、摘要、话题和可选首图；没有首图或下载失败时自动使用纯文字布局。
+- 远程图片只允许公网 HTTP(S)，单图最大 8 MB，重定向目标也必须通过公网地址检查。
+- 没有新动态时不发布；失败只记录错误且不推进游标，插件最早 15 分钟后重试。
+- 发布成功后记录 `qzone_cursor_space_id`、`qzone_last_run_date`、`qzone_last_tid`、`qzone_last_success_at`，同一天不重复发布。
+
+NapCat 动作参数：
+
+~~~json
+{
+  "action": "send_qzone_msg",
+  "content": "后台配置的说说正文",
+  "images": ["base64://<生成的 PNG>"],
+  "ugc_right": 1,
+  "target_uins": []
+}
+~~~
+
+这里调用的是 NapCat 登录的个人 QQ 空间能力，不是 QQ 官方机器人接口。测试代码只验证渲染和调用协议，不会自动发布真实空间说说。
+
+## 9. 部署配置
 
 AstrBot 插件配置：
 
@@ -181,7 +218,7 @@ AstrBot 插件配置：
 }
 ~~~
 
-插件版本 `v0.2.5` 支持从论坛后台控制群聊普通对话。`v0.2.4` 开始支持群内引用同步动态直接评论；`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
+插件版本 `v0.3.0` 增加 QQ 空间每日动态合集，运行环境需要 `Pillow>=10.0.0`；AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
 
 本地针对性测试：
 
@@ -197,9 +234,10 @@ php -l admin/starfree-admin/source/admin/qqBotPost.php
 同一个 NapCat 账号只能保留一条承担回复的 AstrBot 消息链。本机与服务器 AstrBot 同时连接时，同一条消息会得到两套回复，表现为预览、LLM 回复和错误提示交错。需要切换回服务器 AstrBot 时，必须先停用本机连接，再启用 `wss://api.lcxqy.cn/onebot/v11/ws`，不能两边同时启用。
 
 生产部署在迁移 006 和 replacement JAR 完成后，以 root 执行
-`backend/deploy/production/promote-qqbot-routes.sh`。脚本只新增 12 个
+`backend/deploy/production/promote-qqbot-routes.sh`。脚本维护 14 个
 `location = /SFreeBot/...` 精确路由，备份原 Nginx include，并在 reload 后校验
-`X-Starfree-Backend: replacement-qqbot`。
+`X-Starfree-Backend: replacement-qqbot`。服务器已存在旧 12 条路由时，脚本只追加
+`qzoneBatch` 和 `qzoneDelivery`，仍会拒绝重复路由或 header 数量不一致的配置。
 
 服务器 AstrBot 的 6199 端口只绑定 `127.0.0.1`。只有切换回服务器 AstrBot 拓扑时，才以 root
 执行 `backend/deploy/production/promote-astrbot-onebot-route.sh`。脚本只新增

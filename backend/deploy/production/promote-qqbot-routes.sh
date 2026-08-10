@@ -22,6 +22,8 @@ ROUTES=(
     registerGroup
     latestSpaces
     delivery
+    qzoneBatch
+    qzoneDelivery
 )
 
 for required in cat cp curl grep mktemp nginx printf rm sleep; do
@@ -32,24 +34,28 @@ for required in cat cp curl grep mktemp nginx printf rm sleep; do
 done
 [[ -f "$CONF" ]] || { echo "Nginx include missing: $CONF" >&2; exit 2; }
 
-complete=true
-empty=true
+missing_routes=()
+existing_count=0
 header_total="$(grep -Fc "add_header X-Starfree-Backend $HEADER always;" "$CONF" || true)"
 for route in "${ROUTES[@]}"; do
     location_count="$(grep -Fc "location = /SFreeBot/$route {" "$CONF" || true)"
-    [[ "$location_count" == 1 ]] || complete=false
-    [[ "$location_count" == 0 ]] || empty=false
+    if [[ "$location_count" -gt 1 ]]; then
+        echo "Duplicate QQBot route detected: $route" >&2
+        exit 3
+    fi
+    if [[ "$location_count" == 1 ]]; then
+        existing_count=$((existing_count + 1))
+    else
+        missing_routes+=("$route")
+    fi
 done
-[[ "$header_total" == "${#ROUTES[@]}" ]] || complete=false
-[[ "$header_total" == 0 ]] || empty=false
-
-if [[ "$complete" == true ]]; then
+if [[ "$header_total" != "$existing_count" ]]; then
+    echo "QQBot route headers do not match existing exact routes." >&2
+    exit 3
+fi
+if [[ "${#missing_routes[@]}" == 0 ]]; then
     echo "QQBot routes are already promoted."
     exit 0
-fi
-if [[ "$empty" != true ]]; then
-    echo "Partial or duplicate QQBot routes detected." >&2
-    exit 3
 fi
 
 cp -p "$CONF" "$BACKUP"
@@ -60,7 +66,7 @@ rollback() {
     nginx -s reload
 }
 
-for route in "${ROUTES[@]}"; do
+for route in "${missing_routes[@]}"; do
     printf '
 location = /SFreeBot/%s {
     proxy_pass http://127.0.0.1:18082;
@@ -75,6 +81,17 @@ location = /SFreeBot/%s {
 }
 ' "$route" >>"$CONF"
 done
+
+for route in "${ROUTES[@]}"; do
+    [[ "$(grep -Fc "location = /SFreeBot/$route {" "$CONF" || true)" == 1 ]] || {
+        rollback
+        exit 4
+    }
+done
+[[ "$(grep -Fc "add_header X-Starfree-Backend $HEADER always;" "$CONF" || true)" == "${#ROUTES[@]}" ]] || {
+    rollback
+    exit 4
+}
 
 if ! nginx -t; then
     rollback

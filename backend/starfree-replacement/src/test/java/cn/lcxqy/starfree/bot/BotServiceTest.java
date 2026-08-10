@@ -67,6 +67,23 @@ class BotServiceTest {
     }
 
     @Test
+    void configReturnsQzoneScheduleAndTemplateSettings() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "admin-secret",
+                "qzone_enabled", "1", "qzone_publish_time", "19:45",
+                "qzone_batch_limit", "8", "qzone_title", "今晚校园动态");
+
+        Map<String, Object> response = fixture.service.config(botRequest("admin-secret", "10001"));
+
+        Map<?, ?> qzone = (Map<?, ?>) response.get("qzone");
+        assertThat(qzone.get("enabled")).isEqualTo(true);
+        assertThat(qzone.get("publishTime")).isEqualTo("19:45");
+        assertThat(qzone.get("batchLimit")).isEqualTo(8);
+        assertThat(qzone.get("title")).isEqualTo("今晚校园动态");
+        assertThat(qzone.get("timeZone")).isEqualTo("Asia/Shanghai");
+    }
+
+    @Test
     void bindLoginDoesNotCreateOrRevokeNormalForumLoginToken() {
         Fixture fixture = new Fixture();
         when(fixture.jdbc.queryForList(startsWith("SELECT bind_token,platform,qq_user_id"),
@@ -242,6 +259,86 @@ class BotServiceTest {
         request.put("limit", "1");
 
         assertThat(fixture.service.latestSpaces(request)).containsEntry("groupEnabled", true);
+    }
+
+    @Test
+    void qzoneBatchUsesLatestPublicDynamicsOnFirstRun() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_batch_limit", "2", "qzone_summary_length", "60",
+                "qzone_include_source_images", "1");
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(2)))
+                .thenReturn(new java.util.ArrayList<>(Arrays.asList(
+                        row("id", 12L, "uid", 2L, "text", "第二条", "pic", "b.png", "type", 0),
+                        row("id", 11L, "uid", 1L, "text", "第一条", "pic", "a.png", "type", 0))));
+        when(fixture.jdbc.queryForList(startsWith("SELECT m.mid AS id"), anyLong()))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        List<?> spaces = (List<?>) response.get("spaces");
+        assertThat(((Map<?, ?>) spaces.get(0)).get("id")).isEqualTo(11L);
+        assertThat(((Map<?, ?>) spaces.get(1)).get("id")).isEqualTo(12L);
+        verify(fixture.jdbc).queryForList(contains("s.status=1 AND s.onlyMe=0 AND s.type<>3"), eq(2));
+    }
+
+    @Test
+    void qzoneBatchReadsOnlyAfterSuccessfulCursor() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_cursor_space_id", "20", "qzone_batch_limit", "4",
+                "qzone_include_source_images", "0");
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id ASC LIMIT ?"), eq(20L), eq(4)))
+                .thenReturn(Collections.singletonList(row(
+                        "id", 21L, "uid", 1L, "text", "新动态", "pic", "ignored.png", "type", 0)));
+        when(fixture.jdbc.queryForList(startsWith("SELECT m.mid AS id"), eq(21L)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        Map<?, ?> space = (Map<?, ?>) ((List<?>) response.get("spaces")).get(0);
+        assertThat(space.get("images")).isEqualTo(Collections.emptyList());
+        assertThat(response).containsEntry("cursorSpaceId", 20L);
+    }
+
+    @Test
+    void qzoneDeliveryAdvancesCursorOnlyOnSuccess() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret", "qzone_cursor_space_id", "20");
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_config"), any(Object[].class)))
+                .thenReturn(1);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("status", "success");
+        request.put("maxSpaceId", "24");
+        request.put("tid", "qzone-tid");
+
+        Map<String, Object> response = fixture.service.qzoneDelivery(request);
+
+        assertThat(response).containsEntry("cursorAdvanced", true);
+        verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_config"),
+                eq("qzone_cursor_space_id"), eq("24"), any(java.sql.Timestamp.class));
+        verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_config"),
+                eq("qzone_last_tid"), eq("qzone-tid"), any(java.sql.Timestamp.class));
+    }
+
+    @Test
+    void qzoneDeliveryFailureRecordsErrorWithoutCursorAdvance() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret", "qzone_cursor_space_id", "20");
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_config"), any(Object[].class)))
+                .thenReturn(1);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("status", "error");
+        request.put("maxSpaceId", "24");
+        request.put("error", "NapCat 发布失败");
+
+        Map<String, Object> response = fixture.service.qzoneDelivery(request);
+
+        assertThat(response).containsEntry("cursorAdvanced", false);
+        verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_config"),
+                eq("qzone_last_error"), eq("NapCat 发布失败"), any(java.sql.Timestamp.class));
+        verify(fixture.jdbc, never()).update(startsWith("INSERT INTO lcxqy_bot_config"),
+                eq("qzone_cursor_space_id"), anyString(), any(java.sql.Timestamp.class));
     }
 
     @Test

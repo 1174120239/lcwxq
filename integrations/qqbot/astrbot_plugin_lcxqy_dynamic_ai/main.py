@@ -1,14 +1,20 @@
 import asyncio
+import base64
+import ipaddress
+import io
 import json
 import os
 import re
+import socket
 import time
 import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from zoneinfo import ZoneInfo
 
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, MessageEventResult, filter
@@ -24,6 +30,11 @@ try:
 except Exception:  # pragma: no cover - depends on AstrBot runtime version
     Comp = None
 
+try:
+    from PIL import Image, ImageDraw, ImageFont, ImageOps
+except ImportError:  # pragma: no cover - reported through qzone delivery status
+    Image = ImageDraw = ImageFont = ImageOps = None
+
 
 class BackendError(Exception):
     def __init__(self, message: str, data: Optional[Dict[str, Any]] = None):
@@ -35,8 +46,8 @@ class BackendError(Exception):
 @register(
     "lcxqy_dynamic_ai",
     "lcxqy",
-    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具、引用评论和群同步。",
-    "0.2.5",
+    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日合集。",
+    "0.3.0",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -97,6 +108,8 @@ class LcxqyDynamicAiPlugin(Star):
         self._comment_space_supported = False
         self._group_chat_enabled = True
         self._remote_config_refreshed_at = 0.0
+        self._qzone_lock = asyncio.Lock()
+        self._qzone_next_check_at = 0.0
         self._load_state()
 
     async def initialize(self):
@@ -683,6 +696,7 @@ class LcxqyDynamicAiPlugin(Star):
                 if config.get("enabled"):
                     for group in config.get("groups") or []:
                         await self._sync_group(group)
+                    await self._sync_qzone(config.get("qzone") or {})
                 await asyncio.sleep(max(10, interval))
             except asyncio.CancelledError:
                 raise
@@ -821,6 +835,327 @@ class LcxqyDynamicAiPlugin(Star):
             f"{topic_text}\n"
             f"{space.get('h5Url') or ''}"
         )
+
+    async def _sync_qzone(self, settings: Dict[str, Any]):
+        if not settings.get("enabled") or not settings.get("due"):
+            return
+        if settings.get("alreadyPublishedToday"):
+            return
+        now = time.time()
+        if now < getattr(self, "_qzone_next_check_at", 0.0):
+            return
+        lock = getattr(self, "_qzone_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._qzone_lock = lock
+        if lock.locked():
+            return
+        async with lock:
+            self._qzone_next_check_at = now + 15 * 60
+            batch = await self._api("/SFreeBot/qzoneBatch", {})
+            if not batch.get("enabled") or batch.get("alreadyPublishedToday"):
+                return
+            spaces = batch.get("spaces") or []
+            if not spaces:
+                return
+            max_space_id = max(int(item.get("id") or 0) for item in spaces)
+            try:
+                loop = asyncio.get_running_loop()
+                png = await loop.run_in_executor(None, self._render_qzone_image, batch, spaces)
+                result = await self._send_qzone_message(batch, png)
+                result_data = result.get("data") if isinstance(result, dict) else {}
+                tid = (result_data or {}).get("tid") if isinstance(result_data, dict) else ""
+                await self._api("/SFreeBot/qzoneDelivery", {
+                    "status": "success",
+                    "maxSpaceId": str(max_space_id),
+                    "tid": str(tid or ""),
+                })
+                self._qzone_next_check_at = time.time() + 24 * 60 * 60
+            except Exception as error:
+                try:
+                    await self._api("/SFreeBot/qzoneDelivery", {
+                        "status": "error",
+                        "maxSpaceId": str(max_space_id),
+                        "error": str(error),
+                    })
+                except Exception:
+                    logger.warning("lcxqy_dynamic_ai qzone error report failed:\n%s", traceback.format_exc())
+                raise
+
+    async def _send_qzone_message(self, settings: Dict[str, Any], png: bytes) -> Dict[str, Any]:
+        platform = self._onebot_platform()
+        bot = getattr(platform, "bot", None) if platform is not None else None
+        call_action = getattr(bot, "call_action", None)
+        if not callable(call_action):
+            raise RuntimeError("未找到 NapCat/aiocqhttp OneBot 连接")
+        content = str(settings.get("postText") or "今天的校园动态整理好了。")[:500]
+        ugc_right = int(settings.get("ugcRight") or 1)
+        if ugc_right not in {1, 4, 16, 64, 128}:
+            ugc_right = 1
+        result = await call_action(
+            "send_qzone_msg",
+            content=content,
+            images=["base64://" + base64.b64encode(png).decode("ascii")],
+            ugc_right=ugc_right,
+            target_uins=[],
+        )
+        if not isinstance(result, dict):
+            return {}
+        if result.get("status") == "failed" or int(result.get("retcode") or 0) != 0:
+            raise RuntimeError(str(result.get("message") or result.get("wording") or "NapCat 发布 QQ 空间失败"))
+        return result
+
+    def _onebot_platform(self) -> Any:
+        manager = getattr(self.context, "platform_manager", None)
+        platforms = getattr(manager, "platform_insts", None)
+        if platforms is None and manager is not None:
+            getter = getattr(manager, "get_insts", None)
+            platforms = getter() if getter else []
+        for platform in platforms or []:
+            try:
+                name = str(getattr(platform.meta(), "name", "") or "").lower()
+                if name == "aiocqhttp" or "onebot" in name:
+                    return platform
+            except Exception:
+                continue
+        return None
+
+    def _render_qzone_image(self, settings: Dict[str, Any], spaces: List[Dict[str, Any]]) -> bytes:
+        if Image is None:
+            raise RuntimeError("Pillow 未安装，无法生成 QQ 空间动态图片")
+        width = 1080
+        padding = 54
+        header_height = 230
+        footer_height = 130
+        gap = 22
+        include_images = self._truthy(settings.get("includeSourceImages", True))
+        source_images = []
+        for space in spaces:
+            image = None
+            urls = space.get("images") or []
+            if include_images and urls:
+                image = self._load_remote_image(str(urls[0]), str(space.get("h5Url") or ""))
+            source_images.append(image)
+
+        card_heights = [318 if image is not None else 260 for image in source_images]
+        height = header_height + footer_height + padding + sum(card_heights) + gap * max(0, len(spaces) - 1)
+        background_color = self._image_color(settings.get("backgroundColor"), "#F4F7F5")
+        canvas = Image.new("RGB", (width, height), background_color)
+        background_url = str(settings.get("backgroundImageUrl") or "").strip()
+        if background_url:
+            background = self._load_remote_image(background_url, "")
+            if background is not None:
+                background = ImageOps.fit(background.convert("RGB"), (width, height), method=Image.Resampling.LANCZOS)
+                overlay = Image.new("RGB", (width, height), background_color)
+                canvas = Image.blend(background, overlay, 0.78)
+
+        draw = ImageDraw.Draw(canvas)
+        accent = self._image_color(settings.get("accentColor"), "#1E7258")
+        text_color = self._image_color(settings.get("textColor"), "#18211E")
+        card_color = self._image_color(settings.get("cardColor"), "#FFFFFF")
+        muted = self._mix_color(text_color, background_color, 0.48)
+        title_font = self._image_font(54, bold=True)
+        subtitle_font = self._image_font(28)
+        author_font = self._image_font(31, bold=True)
+        meta_font = self._image_font(24)
+        body_font = self._image_font(29)
+        footer_font = self._image_font(25)
+
+        draw.rounded_rectangle((padding, 54, padding + 12, 166), radius=6, fill=accent)
+        title = self._truncate_image_text(
+            draw, str(settings.get("title") or "聊一今日动态"), title_font, 660)
+        draw.text((padding + 34, 48), title, font=title_font, fill=text_color)
+        subtitle = self._truncate_image_text(
+            draw, str(settings.get("subtitle") or "校园里今天发生了什么"), subtitle_font, 720)
+        date_text = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y.%m.%d")
+        draw.text((padding + 36, 126), subtitle, font=subtitle_font, fill=muted)
+        date_width = draw.textlength(date_text, font=meta_font)
+        draw.text((width - padding - date_width, 72), date_text, font=meta_font, fill=accent)
+
+        y = header_height
+        for index, (space, source_image, card_height) in enumerate(zip(spaces, source_images, card_heights), start=1):
+            x1, x2 = padding, width - padding
+            draw.rounded_rectangle((x1, y, x2, y + card_height), radius=8, fill=card_color)
+            draw.rounded_rectangle((x1 + 24, y + 30, x1 + 72, y + 78), radius=8, fill=accent)
+            number_text = str(index)
+            number_width = draw.textlength(number_text, font=meta_font)
+            draw.text((x1 + 48 - number_width / 2, y + 37), number_text, font=meta_font, fill="#FFFFFF")
+
+            author = space.get("author") or {}
+            author_name = self._truncate_image_text(
+                draw, str(author.get("name") or "论坛用户"), author_font, 540)
+            draw.text((x1 + 92, y + 27), author_name, font=author_font, fill=text_color)
+            meta_parts = []
+            if self._truthy(settings.get("showCampus", True)) and author.get("campus"):
+                meta_parts.append(str(author.get("campus")))
+            if author.get("grade"):
+                meta_parts.append(str(author.get("grade")))
+            meta = " · ".join(meta_parts)
+            if meta:
+                draw.text((x1 + 92, y + 70),
+                          self._truncate_image_text(draw, meta, meta_font, 560),
+                          font=meta_font, fill=muted)
+
+            image_width = 282 if source_image is not None else 0
+            body_x = x1 + 34
+            body_y = y + 112
+            body_width = x2 - body_x - 34 - image_width - (28 if source_image is not None else 0)
+            summary = self._compact_text(space.get("summary") or space.get("text") or "", 240)
+            lines = self._wrap_image_text(draw, summary, body_font, body_width, 3 if source_image is not None else 2)
+            for line_index, line in enumerate(lines):
+                draw.text((body_x, body_y + line_index * 43), line, font=body_font, fill=text_color)
+
+            if self._truthy(settings.get("showTopics", True)):
+                topics = ["#" + str(item.get("name")) for item in (space.get("topics") or []) if item.get("name")]
+                topic_text = self._truncate_image_text(
+                    draw, "  ".join(topics), meta_font, body_width)
+                if topic_text:
+                    draw.text((body_x, y + card_height - 46), topic_text, font=meta_font, fill=accent)
+
+            if source_image is not None:
+                image_box = (x2 - 316, y + 92, x2 - 34, y + card_height - 34)
+                thumb = ImageOps.fit(source_image.convert("RGB"),
+                                     (image_box[2] - image_box[0], image_box[3] - image_box[1]),
+                                     method=Image.Resampling.LANCZOS)
+                canvas.paste(thumb, (image_box[0], image_box[1]))
+            y += card_height + gap
+
+        footer = self._truncate_image_text(
+            draw, str(settings.get("footer") or "更多动态，来聊一看看"), footer_font, width - padding * 2 - 180)
+        footer_y = height - footer_height + 24
+        draw.line((padding, footer_y, width - padding, footer_y), fill=self._mix_color(accent, background_color, 0.65), width=2)
+        draw.text((padding, footer_y + 26), footer, font=footer_font, fill=muted)
+        draw.text((width - padding - draw.textlength("LCXQY", font=footer_font), footer_y + 26),
+                  "LCXQY", font=footer_font, fill=accent)
+        output = io.BytesIO()
+        canvas.save(output, format="PNG", optimize=True)
+        return output.getvalue()
+
+    def _load_remote_image(self, url: str, base_url: str) -> Any:
+        candidate = urllib.parse.urljoin(base_url, url.strip())
+        if not self._remote_url_allowed(candidate):
+            return None
+        try:
+            current = candidate
+            raw = b""
+            for _ in range(4):
+                request = urllib.request.Request(current, headers={"User-Agent": "lcxqy-qzone/0.3"})
+                opener = urllib.request.build_opener(self._no_redirect_handler())
+                try:
+                    response = opener.open(request, timeout=8)
+                except urllib.error.HTTPError as error:
+                    if error.code not in {301, 302, 303, 307, 308}:
+                        raise
+                    location = error.headers.get("Location") or ""
+                    current = urllib.parse.urljoin(current, location)
+                    if not self._remote_url_allowed(current):
+                        return None
+                    continue
+                with response:
+                    length = int(response.headers.get("Content-Length") or 0)
+                    if length > 8 * 1024 * 1024:
+                        return None
+                    raw = response.read(8 * 1024 * 1024 + 1)
+                break
+            if not raw:
+                return None
+            if len(raw) > 8 * 1024 * 1024:
+                return None
+            image = Image.open(io.BytesIO(raw))
+            image.load()
+            return ImageOps.exif_transpose(image).convert("RGB")
+        except Exception:
+            logger.warning("lcxqy_dynamic_ai skipped qzone image: %s", candidate)
+            return None
+
+    def _remote_url_allowed(self, url: str) -> bool:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+        try:
+            default_port = 443 if parsed.scheme == "https" else 80
+            addresses = socket.getaddrinfo(parsed.hostname, parsed.port or default_port, type=socket.SOCK_STREAM)
+            for address in addresses:
+                ip = ipaddress.ip_address(address[4][0])
+                if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+                        or ip.is_multicast or ip.is_unspecified):
+                    return False
+            return bool(addresses)
+        except (OSError, ValueError):
+            return False
+
+    def _no_redirect_handler(self) -> Any:
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+        return NoRedirect()
+
+    def _image_font(self, size: int, bold: bool = False) -> Any:
+        candidates = [
+            "C:/Windows/Fonts/NotoSansSC-VF.ttf",
+            "C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold
+            else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        ]
+        for path in candidates:
+            try:
+                if path and Path(path).exists():
+                    return ImageFont.truetype(path, size=size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    def _wrap_image_text(self, draw: Any, text: str, font: Any, max_width: int, max_lines: int) -> List[str]:
+        compact = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not compact:
+            return ["这条动态分享了一张图片。"]
+        lines = []
+        current = ""
+        for char in compact:
+            candidate = current + char
+            if current and draw.textlength(candidate, font=font) > max_width:
+                lines.append(current)
+                current = char
+                if len(lines) >= max_lines:
+                    break
+            else:
+                current = candidate
+        if len(lines) < max_lines and current:
+            lines.append(current)
+        consumed = sum(len(line) for line in lines)
+        if consumed < len(compact) and lines:
+            last = lines[-1]
+            while last and draw.textlength(last + "…", font=font) > max_width:
+                last = last[:-1]
+            lines[-1] = last + "…"
+        return lines[:max_lines]
+
+    def _image_color(self, value: Any, fallback: str) -> str:
+        candidate = str(value or "").strip()
+        return candidate.upper() if re.fullmatch(r"#[0-9a-fA-F]{6}", candidate) else fallback
+
+    def _mix_color(self, foreground: str, background: str, weight: float) -> str:
+        fg = tuple(int(foreground[index:index + 2], 16) for index in (1, 3, 5))
+        bg = tuple(int(background[index:index + 2], 16) for index in (1, 3, 5))
+        mixed = tuple(round(fg[i] * weight + bg[i] * (1 - weight)) for i in range(3))
+        return "#" + "".join(f"{item:02X}" for item in mixed)
+
+    def _compact_text(self, value: Any, limit: int) -> str:
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        return text if len(text) <= limit else text[:max(1, limit - 1)] + "…"
+
+    def _truncate_image_text(self, draw: Any, value: str, font: Any, max_width: int) -> str:
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        if draw.textlength(text, font=font) <= max_width:
+            return text
+        while text and draw.textlength(text + "…", font=font) > max_width:
+            text = text[:-1]
+        return text + "…" if text else ""
+
+    def _truthy(self, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     async def _api(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).rstrip("/")

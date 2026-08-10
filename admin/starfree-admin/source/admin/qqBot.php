@@ -19,7 +19,29 @@ function bot_config_defaults() {
         'tool_update_profile' => '1',
         'tool_status' => '1',
         'tool_signin' => '1',
-        'chat_in_groups' => '1'
+        'chat_in_groups' => '1',
+        'qzone_enabled' => '0',
+        'qzone_publish_time' => '20:30',
+        'qzone_batch_limit' => '6',
+        'qzone_summary_length' => '80',
+        'qzone_include_source_images' => '1',
+        'qzone_show_campus' => '1',
+        'qzone_show_topics' => '1',
+        'qzone_ugc_right' => '1',
+        'qzone_title' => '聊一今日动态',
+        'qzone_subtitle' => '校园里今天发生了什么',
+        'qzone_footer' => '更多动态，来聊一看看',
+        'qzone_post_text' => "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/",
+        'qzone_background_color' => '#F4F7F5',
+        'qzone_accent_color' => '#1E7258',
+        'qzone_text_color' => '#18211E',
+        'qzone_card_color' => '#FFFFFF',
+        'qzone_background_image_url' => '',
+        'qzone_cursor_space_id' => '0',
+        'qzone_last_run_date' => '',
+        'qzone_last_tid' => '',
+        'qzone_last_success_at' => '',
+        'qzone_last_error' => ''
     );
 }
 
@@ -158,6 +180,126 @@ if ($groupResult) {
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <hr>
+                    <h5 class="mb-3">QQ 空间每日同步</h5>
+                    <p class="text-muted">
+                        每天到达设定时间后，云云会把游标之后的公开动态合成一张图片，并通过本机 NapCat 个人 QQ 发布一条空间说说。
+                        没有新动态时不会发布；发布成功后才推进游标。
+                    </p>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label>启用 QQ 空间同步</label>
+                                <input type="checkbox" name="qzone_enabled" id="qzone_enabled" value="1" data-switch="success" <?php echo $botConfig['qzone_enabled'] === '1' ? 'checked' : ''; ?>>
+                                <label style="display:block;" for="qzone_enabled" data-on-label="开启" data-off-label="关闭"></label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="qzone_publish_time">每天发布时间</label>
+                                <input name="qzone_publish_time" class="form-control" type="time" id="qzone_publish_time"
+                                       value="<?php echo bot_h($botConfig['qzone_publish_time']); ?>" required>
+                                <small class="form-text text-muted">北京时间；到点后下一轮轮询执行。</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="qzone_batch_limit">每批动态数</label>
+                                <input name="qzone_batch_limit" class="form-control" type="number" min="1" max="12"
+                                       value="<?php echo bot_h($botConfig['qzone_batch_limit']); ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group mb-3">
+                                <label for="qzone_summary_length">每条摘要字数</label>
+                                <input name="qzone_summary_length" class="form-control" type="number" min="20" max="200"
+                                       value="<?php echo bot_h($botConfig['qzone_summary_length']); ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label>图片内容</label><br>
+                                <label class="mr-3"><input type="checkbox" name="qzone_include_source_images" value="1" <?php echo $botConfig['qzone_include_source_images'] === '1' ? 'checked' : ''; ?>> 使用动态首图</label>
+                                <label class="mr-3"><input type="checkbox" name="qzone_show_campus" value="1" <?php echo $botConfig['qzone_show_campus'] === '1' ? 'checked' : ''; ?>> 显示校区</label>
+                                <label><input type="checkbox" name="qzone_show_topics" value="1" <?php echo $botConfig['qzone_show_topics'] === '1' ? 'checked' : ''; ?>> 显示话题</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="qzone_ugc_right">空间可见范围</label>
+                                <select name="qzone_ugc_right" id="qzone_ugc_right" class="form-control">
+                                    <?php
+                                    $qzoneRights = array('1' => '所有人', '4' => 'QQ 好友', '64' => '仅自己');
+                                    foreach ($qzoneRights as $value => $label) {
+                                        echo '<option value="'.bot_h($value).'" '.($botConfig['qzone_ugc_right'] === $value ? 'selected' : '').'>'.bot_h($label).'</option>';
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="qzone_background_image_url">自定义背景图 URL</label>
+                                <input name="qzone_background_image_url" class="form-control" type="url" id="qzone_background_image_url"
+                                       placeholder="选填；留空使用背景色" value="<?php echo bot_h($botConfig['qzone_background_image_url']); ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="qzone_title">图片标题</label>
+                                <input name="qzone_title" class="form-control" maxlength="40" value="<?php echo bot_h($botConfig['qzone_title']); ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="qzone_subtitle">图片副标题</label>
+                                <input name="qzone_subtitle" class="form-control" maxlength="80" value="<?php echo bot_h($botConfig['qzone_subtitle']); ?>">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group mb-3">
+                                <label for="qzone_footer">图片底部文案</label>
+                                <input name="qzone_footer" class="form-control" maxlength="80" value="<?php echo bot_h($botConfig['qzone_footer']); ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="qzone_post_text">空间说说正文</label>
+                                <textarea name="qzone_post_text" id="qzone_post_text" class="form-control" rows="3" maxlength="500"><?php echo bot_h($botConfig['qzone_post_text']); ?></textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="row">
+                                <?php
+                                $qzoneColors = array(
+                                    'qzone_background_color' => '背景色',
+                                    'qzone_accent_color' => '强调色',
+                                    'qzone_text_color' => '文字色',
+                                    'qzone_card_color' => '卡片色'
+                                );
+                                foreach ($qzoneColors as $key => $label) {
+                                    echo '<div class="col-md-3"><div class="form-group mb-3">';
+                                    echo '<label for="'.bot_h($key).'">'.bot_h($label).'</label>';
+                                    echo '<input name="'.bot_h($key).'" id="'.bot_h($key).'" class="form-control" type="color" value="'.bot_h($botConfig[$key]).'">';
+                                    echo '</div></div>';
+                                }
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary py-2">
+                        当前游标：<?php echo intval($botConfig['qzone_cursor_space_id']); ?>；
+                        最近发布：<?php echo bot_h($botConfig['qzone_last_success_at'] === '' ? '暂无' : $botConfig['qzone_last_success_at']); ?>；
+                        最近 TID：<?php echo bot_h($botConfig['qzone_last_tid'] === '' ? '暂无' : $botConfig['qzone_last_tid']); ?>；
+                        最近错误：<?php echo bot_h($botConfig['qzone_last_error'] === '' ? '无' : $botConfig['qzone_last_error']); ?>
                     </div>
 
                     <hr>

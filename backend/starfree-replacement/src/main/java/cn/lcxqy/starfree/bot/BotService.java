@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -24,6 +25,9 @@ import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -37,6 +41,8 @@ public class BotService {
     private static final Logger LOG = LoggerFactory.getLogger(BotService.class);
     private static final int BIND_TOKEN_TTL_SECONDS = 900;
     private static final int MAX_DYNAMIC_TEXT = 1500;
+    private static final ZoneId QZONE_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter QZONE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private static final String DEFAULT_CHAT_SYSTEM_PROMPT =
             "你是云云，聊一下校园论坛的 QQ 动态助手。说话亲切、机灵、略微傲娇，"
                     + "可以偶尔自然说一次‘喵’，但不要刻意卖萌或写大段动作描写。"
@@ -86,6 +92,7 @@ public class BotService {
         tools.put("signin", bool(config, "tool_signin", true));
         response.put("tools", tools);
         response.put("groups", syncGroups());
+        response.put("qzone", qzoneSettings(config));
         return response;
     }
 
@@ -347,6 +354,77 @@ public class BotService {
         return response;
     }
 
+    public Map<String, Object> qzoneBatch(Map<String, String> request) {
+        requireBotSecret(request);
+        Map<String, String> config = configValues();
+        Map<String, Object> settings = qzoneSettings(config);
+        boolean enabled = Boolean.TRUE.equals(settings.get("enabled"));
+        long cursor = longValue(value(config, "qzone_cursor_space_id", "0"));
+        int limit = integer(config, "qzone_batch_limit", 6, 1, 12);
+        int summaryLength = integer(config, "qzone_summary_length", 80, 20, 200);
+        boolean includeImages = bool(config, "qzone_include_source_images", true);
+
+        List<Map<String, Object>> data = new ArrayList<>();
+        if (enabled) {
+            List<Map<String, Object>> rows;
+            if (cursor > 0) {
+                rows = jdbc.queryForList(dynamicSelect()
+                                + "WHERE s.id>? AND s.status=1 AND s.onlyMe=0 AND s.type<>3 "
+                                + "ORDER BY s.id ASC LIMIT ?",
+                        cursor, limit);
+            } else {
+                rows = jdbc.queryForList(dynamicSelect()
+                                + "WHERE s.status=1 AND s.onlyMe=0 AND s.type<>3 "
+                                + "ORDER BY s.id DESC LIMIT ?",
+                        limit);
+                Collections.reverse(rows);
+            }
+            for (Map<String, Object> row : rows) {
+                data.add(dynamicPayload(row, includeImages ? 1 : 0, summaryLength));
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.putAll(settings);
+        response.put("cursorSpaceId", cursor);
+        response.put("spaces", data);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> qzoneDelivery(Map<String, String> request) {
+        requireBotSecret(request);
+        String status = RequestValues.text(request, "status");
+        if (!"success".equals(status) && !"error".equals(status)) {
+            throw new IllegalArgumentException("QQ 空间投递状态不正确");
+        }
+        String error = safe(request.get("error"), 1000);
+        Timestamp now = Timestamp.from(Instant.now());
+        boolean success = "success".equals(status);
+        long maxSpaceId = longValue(RequestValues.text(request, "maxSpaceId"));
+        if (success) {
+            if (maxSpaceId <= 0) {
+                throw new IllegalArgumentException("缺少 QQ 空间批次动态 ID");
+            }
+            long currentCursor = longValue(value(configValues(), "qzone_cursor_space_id", "0"));
+            if (maxSpaceId < currentCursor) {
+                throw new IllegalArgumentException("QQ 空间批次游标不能倒退");
+            }
+            String runDate = LocalDate.now(QZONE_ZONE).toString();
+            saveConfigValue("qzone_cursor_space_id", String.valueOf(maxSpaceId), now);
+            saveConfigValue("qzone_last_run_date", runDate, now);
+            saveConfigValue("qzone_last_tid", safe(request.get("tid"), 128), now);
+            saveConfigValue("qzone_last_success_at", now.toString(), now);
+            saveConfigValue("qzone_last_error", "", now);
+        } else {
+            saveConfigValue("qzone_last_error", error.isEmpty() ? "QQ 空间发布失败" : error, now);
+        }
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("recorded", true);
+        response.put("cursorAdvanced", success);
+        return response;
+    }
+
     public Map<String, Object> chat(Map<String, String> request) {
         requireBotSecret(request);
         Map<String, String> config = configValues();
@@ -469,6 +547,16 @@ public class BotService {
         item.put("author", author);
         item.put("topics", topics(id));
         return item;
+    }
+
+    private String dynamicSelect() {
+        return "SELECT s.id,s.uid,s.created,s.modified,s.text,s.pic,s.type,s.views,s.likes,"
+                + "u.name AS user_name,u.screenName AS user_screenName,u.avatar AS user_avatar,"
+                + "u.mail AS user_mail,campus.name AS user_campus,grade.name AS user_grade "
+                + "FROM starfree_space s "
+                + "LEFT JOIN starfree_users u ON u.uid=s.uid "
+                + "LEFT JOIN starfree_identity_options campus ON campus.id=u.campus_option_id "
+                + "LEFT JOIN starfree_identity_options grade ON grade.id=u.grade_option_id ";
     }
 
     private List<Map<String, Object>> topics(long spaceId) {
@@ -690,6 +778,62 @@ public class BotService {
                         + "unified_msg_origin AS unifiedMsgOrigin,enabled,cursor_space_id AS cursorSpaceId,"
                         + "max_images AS maxImages,summary_length AS summaryLength "
                         + "FROM lcxqy_bot_group_sync WHERE enabled=1 ORDER BY id");
+    }
+
+    private Map<String, Object> qzoneSettings(Map<String, String> config) {
+        String publishTime = normalizedTime(value(config, "qzone_publish_time", "20:30"));
+        LocalDate today = LocalDate.now(QZONE_ZONE);
+        LocalTime now = LocalTime.now(QZONE_ZONE);
+        String lastRunDate = value(config, "qzone_last_run_date", "");
+        boolean enabled = bool(config, "enabled", false)
+                && bool(config, "qzone_enabled", false);
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("enabled", enabled);
+        settings.put("publishTime", publishTime);
+        settings.put("timeZone", QZONE_ZONE.getId());
+        settings.put("due", !now.isBefore(LocalTime.parse(publishTime, QZONE_TIME_FORMAT)));
+        settings.put("alreadyPublishedToday", today.toString().equals(lastRunDate));
+        settings.put("batchLimit", integer(config, "qzone_batch_limit", 6, 1, 12));
+        settings.put("summaryLength", integer(config, "qzone_summary_length", 80, 20, 200));
+        settings.put("includeSourceImages", bool(config, "qzone_include_source_images", true));
+        settings.put("showCampus", bool(config, "qzone_show_campus", true));
+        settings.put("showTopics", bool(config, "qzone_show_topics", true));
+        settings.put("ugcRight", integer(config, "qzone_ugc_right", 1, 1, 128));
+        settings.put("title", value(config, "qzone_title", "聊一今日动态"));
+        settings.put("subtitle", value(config, "qzone_subtitle", "校园里今天发生了什么"));
+        settings.put("footer", value(config, "qzone_footer", "更多动态，来聊一看看"));
+        settings.put("postText", value(config, "qzone_post_text",
+                "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/"));
+        settings.put("backgroundColor", color(config, "qzone_background_color", "#F4F7F5"));
+        settings.put("accentColor", color(config, "qzone_accent_color", "#1E7258"));
+        settings.put("textColor", color(config, "qzone_text_color", "#18211E"));
+        settings.put("cardColor", color(config, "qzone_card_color", "#FFFFFF"));
+        settings.put("backgroundImageUrl", value(config, "qzone_background_image_url", ""));
+        settings.put("lastRunDate", lastRunDate);
+        settings.put("lastTid", value(config, "qzone_last_tid", ""));
+        settings.put("lastSuccessAt", value(config, "qzone_last_success_at", ""));
+        settings.put("lastError", value(config, "qzone_last_error", ""));
+        return settings;
+    }
+
+    private String normalizedTime(String value) {
+        try {
+            return LocalTime.parse(value, QZONE_TIME_FORMAT).format(QZONE_TIME_FORMAT);
+        } catch (RuntimeException ignored) {
+            return "20:30";
+        }
+    }
+
+    private String color(Map<String, String> config, String key, String fallback) {
+        String candidate = value(config, key, fallback).trim();
+        return candidate.matches("#[0-9a-fA-F]{6}") ? candidate.toUpperCase() : fallback;
+    }
+
+    private void saveConfigValue(String key, String value, Timestamp now) {
+        jdbc.update("INSERT INTO lcxqy_bot_config(config_key,config_value,updated_at) "
+                        + "VALUES (?,?,?) ON DUPLICATE KEY UPDATE "
+                        + "config_value=VALUES(config_value),updated_at=VALUES(updated_at)",
+                key, value == null ? "" : value, now);
     }
 
     private GroupSyncSetting groupSetting(String platform, String groupId) {

@@ -88,6 +88,16 @@ public class BotController {
         return ApiResponse.success(bot.delivery(params));
     }
 
+    @RequestMapping(value = "/qzoneBatch", method = {RequestMethod.GET, RequestMethod.POST})
+    public ApiResponse qzoneBatch(@RequestParam Map<String, String> params) {
+        return ApiResponse.success(bot.qzoneBatch(params));
+    }
+
+    @RequestMapping(value = "/qzoneDelivery", method = {RequestMethod.GET, RequestMethod.POST})
+    public ApiResponse qzoneDelivery(@RequestParam Map<String, String> params) {
+        return ApiResponse.success(bot.qzoneDelivery(params));
+    }
+
     @RequestMapping(value = "/chat", method = RequestMethod.POST)
     public ApiResponse chat(@RequestParam Map<String, String> params) {
         try {

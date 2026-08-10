@@ -20,7 +20,7 @@
     "default": true
   },
   "sync_enabled": {
-    "description": "是否启用群动态同步轮询",
+    "description": "是否启用群动态同步和 QQ 空间每日同步轮询",
     "type": "bool",
     "default": true
   },
