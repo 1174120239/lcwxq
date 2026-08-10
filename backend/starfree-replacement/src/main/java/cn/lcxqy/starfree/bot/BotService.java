@@ -37,6 +37,13 @@ public class BotService {
     private static final Logger LOG = LoggerFactory.getLogger(BotService.class);
     private static final int BIND_TOKEN_TTL_SECONDS = 900;
     private static final int MAX_DYNAMIC_TEXT = 1500;
+    private static final String DEFAULT_CHAT_SYSTEM_PROMPT =
+            "你是小樱，聊一下校园论坛的 QQ 动态助手。说话亲切、机灵、略微傲娇，"
+                    + "可以偶尔自然说一次‘喵’，但不要刻意卖萌或写大段动作描写。"
+                    + "默认回复一到三句短句，总长度通常不超过 120 个汉字。"
+                    + "先直接回答问题，不用反问代替回答，也不要凭空描写用户的表情或动作。"
+                    + "校园公共场景不输出露骨、色情或性暗示内容。"
+                    + "动态是唯一核心内容；不要引导用户发帖子或文章。";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -340,6 +347,7 @@ public class BotService {
         payload.put("model", model);
         payload.put("messages", messages);
         payload.put("temperature", 0.6);
+        payload.put("max_tokens", 500);
         Map<String, Object> result = callDeepSeek(value(config, "deepseek_api_base",
                 "https://api.deepseek.com"), apiKey, payload);
         Map<String, Object> response = new LinkedHashMap<>();
@@ -411,7 +419,7 @@ public class BotService {
         List<Object> messages = new ArrayList<>();
         Map<String, Object> system = new LinkedHashMap<>();
         system.put("role", "system");
-        system.put("content", "你是聊一下校园论坛的 QQ 助手。动态是唯一核心内容系统；不要引导用户发帖子或文章。");
+        system.put("content", DEFAULT_CHAT_SYSTEM_PROMPT);
         messages.add(system);
         Map<String, Object> user = new LinkedHashMap<>();
         user.put("role", "user");

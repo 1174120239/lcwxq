@@ -255,8 +255,8 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
             }, ensure_ascii=False)}
 
         self.plugin._api = api
-        self.collect(DummyEvent("你好"))
-        self.collect(DummyEvent("你还记得吗", message_id="message-2"))
+        self.collect(DummyEvent("今天天气怎么样"))
+        self.collect(DummyEvent("你还记得我刚才问的吗", message_id="message-2"))
 
         second_messages = payloads[1]
         self.assertTrue(any(item["role"] == "assistant" and item["content"] == "记得"
@@ -267,6 +267,47 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
         self.assertEqual("chat", plan["intent"])
         self.assertEqual("这是普通回复，不是 JSON", plan["reply"])
+
+    def test_chat_prompt_uses_safe_xiaoying_forum_persona(self):
+        prompt = self.plugin._CHAT_SYSTEM_PROMPT
+
+        self.assertIn("你是小樱", prompt)
+        self.assertIn("一到三句", prompt)
+        self.assertIn("动态是论坛唯一核心内容", prompt)
+        self.assertIn("不输出露骨", prompt)
+        self.assertIn("先直接回答用户的问题", prompt)
+        self.assertIn("当用户问你是谁时", prompt)
+
+    def test_chat_reply_is_limited_to_three_short_sections(self):
+        plan = self.plugin._parse_plan(json.dumps({
+            "intent": "chat",
+            "reply": "第一句。第二句！第三句？第四句不会保留。",
+        }, ensure_ascii=False))
+
+        self.assertEqual("第一句。\n第二句！\n第三句？", plan["reply"])
+
+    def test_chat_reply_has_hard_length_limit(self):
+        plan = self.plugin._parse_plan(json.dumps({
+            "intent": "chat",
+            "reply": "很长" * 120,
+        }, ensure_ascii=False))
+
+        self.assertLessEqual(len(plan["reply"]), 181)
+        self.assertTrue(plan["reply"].endswith("…"))
+
+    def test_identity_question_uses_direct_short_forum_reply(self):
+        async def unexpected_api(*_args, **_kwargs):
+            raise AssertionError("identity reply should not call DeepSeek")
+
+        self.plugin._api = unexpected_api
+        result = self.collect(DummyEvent("你好，你是谁？简单说。"))
+
+        self.assertEqual(["我是小樱，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
+
+    def test_simple_greeting_uses_direct_short_reply(self):
+        result = self.collect(DummyEvent("你好"))
+
+        self.assertEqual(["在呢。\n我是小樱，有事直接说喵。"], result)
 
     def test_initial_sync_delivers_only_latest_space_with_active_platform_origin(self):
         captured = []
