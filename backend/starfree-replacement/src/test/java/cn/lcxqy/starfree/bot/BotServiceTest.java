@@ -51,8 +51,19 @@ class BotServiceTest {
 
         assertThat(response).containsEntry("enabled", true)
                 .containsEntry("dynamicOnly", true)
-                .containsEntry("commentSpace", true);
+                .containsEntry("commentSpace", true)
+                .containsEntry("chatInGroups", true);
         assertThat(((Map<?, ?>) response.get("tools")).get("commentSpace")).isEqualTo(true);
+    }
+
+    @Test
+    void configReturnsGroupChatSwitchSavedByAdmin() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "admin-secret", "chat_in_groups", "0");
+
+        Map<String, Object> response = fixture.service.config(botRequest("admin-secret", "10001"));
+
+        assertThat(response).containsEntry("chatInGroups", false);
     }
 
     @Test

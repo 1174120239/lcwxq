@@ -84,7 +84,8 @@ try {
         'tool_add_space' => qqbot_bool('tool_add_space'),
         'tool_update_profile' => qqbot_bool('tool_update_profile'),
         'tool_status' => qqbot_bool('tool_status'),
-        'tool_signin' => qqbot_bool('tool_signin')
+        'tool_signin' => qqbot_bool('tool_signin'),
+        'chat_in_groups' => qqbot_bool('chat_in_groups')
     );
     foreach ($configs as $key => $value) {
         qqbot_save_config($key, $value);

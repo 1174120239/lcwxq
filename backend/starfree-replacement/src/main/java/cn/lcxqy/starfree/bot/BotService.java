@@ -70,6 +70,7 @@ public class BotService {
         response.put("enabled", bool(config, "enabled", false));
         response.put("dynamicOnly", true);
         response.put("commentSpace", true);
+        response.put("chatInGroups", bool(config, "chat_in_groups", true));
         response.put("deepseekModel", value(config, "deepseek_model", "deepseek-chat"));
         response.put("backendChat", true);
         response.put("syncIntervalSeconds", integer(config, "sync_interval_seconds", 45, 10, 3600));

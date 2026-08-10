@@ -19,11 +19,6 @@
     "type": "bool",
     "default": true
   },
-  "chat_in_groups": {
-    "description": "兼容旧配置项。群聊现在始终只响应 @云云、叫云云、引用云云消息或正在进行的操作。",
-    "type": "bool",
-    "default": false
-  },
   "sync_enabled": {
     "description": "是否启用群动态同步轮询",
     "type": "bool",

@@ -36,12 +36,13 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具、引用评论和群同步。",
-    "0.2.4",
+    "0.2.5",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
     _SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
     _HISTORY_LIMIT = 12
+    _REMOTE_CONFIG_TTL_SECONDS = 15
     _SPACE_LINK_PATTERN = re.compile(r"/pages/space/info\?id=(\d+)")
     _CHAT_SYSTEM_PROMPT = (
         "你是云云，聊一下校园论坛的 QQ 动态助手，也是自然聊天伙伴。"
@@ -94,6 +95,8 @@ class LcxqyDynamicAiPlugin(Star):
         self._state_path = self._resolve_state_path()
         self._sync_task: Optional[asyncio.Task] = None
         self._comment_space_supported = False
+        self._group_chat_enabled = True
+        self._remote_config_refreshed_at = 0.0
         self._load_state()
 
     async def initialize(self):
@@ -192,6 +195,8 @@ class LcxqyDynamicAiPlugin(Star):
             return
         if not text and not images:
             if self._group_id(event) and self._group_is_addressed(event, text):
+                if not await self._group_chat_allowed():
+                    return
                 event.stop_event()
                 yield event.plain_result("我在呢。想聊什么？")
             return
@@ -260,6 +265,9 @@ class LcxqyDynamicAiPlugin(Star):
         if deterministic is not None:
             event.stop_event()
             yield event.plain_result(deterministic)
+            return
+
+        if self._group_id(event) and not await self._group_chat_allowed():
             return
 
         if not self._cfg_bool("chat_enabled", True):
@@ -1033,10 +1041,31 @@ class LcxqyDynamicAiPlugin(Star):
         if getattr(self, "_comment_space_supported", False):
             return True
         data = await self._api("/SFreeBot/config", {})
+        self._apply_remote_config(data)
         supported = data.get("commentSpace") is True
         if supported:
             self._comment_space_supported = True
         return supported
+
+    async def _group_chat_allowed(self) -> bool:
+        now = time.time()
+        if now - getattr(self, "_remote_config_refreshed_at", 0.0) > self._REMOTE_CONFIG_TTL_SECONDS:
+            try:
+                data = await self._api("/SFreeBot/config", {})
+                self._apply_remote_config(data)
+            except BackendError:
+                pass
+        return bool(getattr(self, "_group_chat_enabled", True))
+
+    def _apply_remote_config(self, data: Dict[str, Any]) -> None:
+        value = data.get("chatInGroups", True)
+        if isinstance(value, str):
+            self._group_chat_enabled = value.strip().lower() in {"1", "true", "yes", "on"}
+        else:
+            self._group_chat_enabled = bool(value)
+        if data.get("commentSpace") is True:
+            self._comment_space_supported = True
+        self._remote_config_refreshed_at = time.time()
 
     def _is_unbound_error(self, error: BackendError) -> bool:
         return "绑定" in error.message or error.data.get("bound") is False

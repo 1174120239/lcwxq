@@ -325,7 +325,7 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
-| `SFreeBot/config` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 Bot 开关、工具开关、DeepSeek 模型、群同步配置和 `commentSpace=true` 能力标记；不返回 DeepSeek Key。插件未读到该标记时不得提交 `type=3`，避免旧后端把评论误发为普通动态。 |
+| `SFreeBot/config` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 Bot 开关、工具开关、DeepSeek 模型、群同步配置、`chatInGroups` 群聊普通对话开关和 `commentSpace=true` 能力标记；不返回 DeepSeek Key。插件未读到评论标记时不得提交 `type=3`，避免旧后端把评论误发为普通动态。 |
 | `SFreeBot/chat` | POST / Bot secret | `message` 或 `messages` JSON | 公网新 | 后端代理 DeepSeek Chat Completions；插件通过 `messages` 传入受限意图规划提示和最近对话，DeepSeek Key 只在后台配置表。 |
 | `SFreeBot/bindChallenge` | GET/POST / Bot secret | `qqUserId,platform` | 公网新 | 生成短期一次性 QQ 绑定链接。 |
 | `SFreeBot/bindPage` | GET / 无 | `token` | 公网新 | 独立 HTML 登录页；只用于绑定 QQ，不创建普通登录态。 |

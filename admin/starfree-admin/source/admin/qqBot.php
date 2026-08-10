@@ -18,7 +18,8 @@ function bot_config_defaults() {
         'tool_add_space' => '1',
         'tool_update_profile' => '1',
         'tool_status' => '1',
-        'tool_signin' => '1'
+        'tool_signin' => '1',
+        'chat_in_groups' => '1'
     );
 }
 
@@ -122,6 +123,16 @@ if ($groupResult) {
                                     echo '</div></div>';
                                 }
                                 ?>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group mb-3">
+                                        <label>群聊普通对话</label>
+                                        <input type="checkbox" name="chat_in_groups" id="chat_in_groups" value="1" data-switch="success" <?php echo $botConfig['chat_in_groups'] === '1' ? 'checked' : ''; ?>>
+                                        <label style="display:block;" for="chat_in_groups" data-on-label="开启" data-off-label="关闭"></label>
+                                        <small class="form-text text-muted">关闭后群里闲聊不回复；动态同步、引用动态评论和明确的论坛操作仍可用。</small>
+                                    </div>
+                                </div>
                             </div>
                             <div class="row">
                                 <div class="col-md-4">

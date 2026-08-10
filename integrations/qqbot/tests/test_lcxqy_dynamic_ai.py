@@ -134,6 +134,8 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         plugin._state_path = state_path
         plugin._sync_task = None
         plugin._comment_space_supported = True
+        plugin._group_chat_enabled = True
+        plugin._remote_config_refreshed_at = float("inf")
         return plugin
 
     def collect(self, event):
@@ -153,10 +155,18 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("今天晚霞很好看", session["pending"]["payload"]["text"])
 
     def test_forum_operation_works_in_group_when_group_chat_is_disabled(self):
+        self.plugin._group_chat_enabled = False
         result = self.collect(DummyEvent("云云，帮我发个动态", group_id="638978650"))
 
         self.assertIn("想发什么内容", result[0])
         self.assertTrue(self.plugin._sessions["638978650:10001"])
+
+    def test_group_chat_is_ignored_when_disabled_by_backend(self):
+        self.plugin._group_chat_enabled = False
+
+        result = self.collect(DummyEvent("云云，你是谁", group_id="638978650"))
+
+        self.assertEqual([], result)
 
     def test_unaddressed_group_chat_is_ignored(self):
         result = self.collect(DummyEvent("今天天气真不错", group_id="638978650"))
@@ -185,6 +195,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual(["我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"], result)
 
     def test_group_follow_up_continues_pending_operation_without_mention(self):
+        self.plugin._group_chat_enabled = False
         first = self.collect(DummyEvent("云云，帮我发个动态", group_id="638978650"))
         second = self.collect(DummyEvent("今天晚霞很好看", message_id="message-2", group_id="638978650"))
 
@@ -193,6 +204,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
     def test_reply_to_synced_dynamic_posts_comment_with_bound_forum_account(self):
         calls = []
+        self.plugin._group_chat_enabled = False
 
         async def api(path, payload):
             calls.append((path, payload))
@@ -344,6 +356,37 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         result = self.collect(event)
 
         self.assertEqual(["我在呢。想聊什么？"], result)
+
+    def test_group_pure_mention_is_ignored_when_disabled_by_backend(self):
+        self.plugin._group_chat_enabled = False
+        event = DummyEvent("", group_id="638978650")
+        event.message_obj.message.insert(0, SimpleNamespace(qq="987654321"))
+
+        result = self.collect(event)
+
+        self.assertEqual([], result)
+
+    def test_group_chat_refreshes_remote_switch(self):
+        calls = []
+
+        async def api(path, _payload):
+            calls.append(path)
+            return {"chatInGroups": False, "commentSpace": True}
+
+        self.plugin._remote_config_refreshed_at = 0.0
+        self.plugin._api = api
+
+        result = self.collect(DummyEvent("云云，你是谁", group_id="638978650"))
+
+        self.assertEqual([], result)
+        self.assertFalse(self.plugin._group_chat_enabled)
+        self.assertEqual(["/SFreeBot/config"], calls)
+
+    def test_old_backend_config_defaults_group_chat_to_enabled(self):
+        self.plugin._group_chat_enabled = False
+        self.plugin._apply_remote_config({"commentSpace": True})
+
+        self.assertTrue(self.plugin._group_chat_enabled)
 
     def test_command_handler_stops_default_llm_pipeline(self):
         event = DummyEvent("发动态")
