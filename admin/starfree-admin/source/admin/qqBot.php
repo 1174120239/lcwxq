@@ -362,7 +362,7 @@ if ($groupResult) {
                         </table>
                     </div>
                     <div class="form-group mb-3 text_right">
-                        <button class="btn btn-warning mr-2" type="submit" name="action" value="publish_now">立刻发布</button>
+                        <button class="btn btn-warning mr-2" type="submit" name="action" value="publish_now">立刻发布最新一批</button>
                         <button class="btn btn-success" type="submit" name="action" value="save">保存 QQ Bot 设置</button>
                     </div>
                 </form>

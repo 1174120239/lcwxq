@@ -350,6 +350,23 @@ class BotServiceTest {
     }
 
     @Test
+    void qzonePendingManualPublishReplaysLatestBatchInsteadOfCursorIncrement() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_cursor_space_id", "496", "qzone_batch_limit", "6",
+                "qzone_publish_now_token", "manual-2", "qzone_publish_now_handled_token", "manual-1");
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(6)))
+                .thenReturn(Collections.emptyList());
+
+        fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        verify(fixture.jdbc).queryForList(
+                contains("s.status=1 AND s.onlyMe=0 AND s.type<>3"), eq(6));
+        verify(fixture.jdbc, never()).queryForList(
+                contains("s.id>? AND s.status=1"), eq(496L), eq(6));
+    }
+
+    @Test
     void qzoneDeliveryAdvancesCursorOnlyOnSuccess() {
         Fixture fixture = new Fixture();
         fixture.config("bot_secret", "test-secret", "qzone_cursor_space_id", "20");

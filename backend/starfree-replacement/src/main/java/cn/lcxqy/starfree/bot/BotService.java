@@ -367,7 +367,8 @@ public class BotService {
         List<Map<String, Object>> data = new ArrayList<>();
         if (enabled) {
             List<Map<String, Object>> rows;
-            if (cursor > 0) {
+            boolean publishNowPending = Boolean.TRUE.equals(settings.get("publishNowPending"));
+            if (cursor > 0 && !publishNowPending) {
                 rows = jdbc.queryForList(dynamicSelect()
                                 + "WHERE s.id>? AND s.status=1 AND s.onlyMe=0 AND s.type<>3 "
                                 + "ORDER BY s.id ASC LIMIT ?",

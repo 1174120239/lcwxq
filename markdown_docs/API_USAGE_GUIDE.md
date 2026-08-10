@@ -337,7 +337,7 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeBot/registerGroup` | GET/POST / Bot secret | `groupId,groupName,unifiedMsgOrigin(可选)` | 公网新 | 登记 QQ 群动态同步目标；来源为空时自动生成 `lcxqy_onebot:GroupMessage:<groupId>`，后台只需维护群号、群名、开关和摘要策略。 |
 | `SFreeBot/latestSpaces` | GET/POST / Bot secret | `groupId,afterId,limit` | 公网新 | 拉取公开、已审核、非私密、非回复动态，返回 H5 链接、摘要、图片和作者信息。 |
 | `SFreeBot/delivery` | GET/POST / Bot secret | `groupId,spaceId,status,messageId,error` | 公网新 | 记录群投递结果；只有 `status=success` 推进群游标。 |
-| `SFreeBot/qzoneBatch` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 `scheduled/realtime` 发布模式、立即发布任务 token、当天是否已发布、图片模板配置和一批公开已审核非回复动态。游标为 0 时取最新一批，之后只取成功游标后的增量。 |
+| `SFreeBot/qzoneBatch` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 `scheduled/realtime` 发布模式、立即发布任务 token、当天是否已发布、图片模板配置和一批公开已审核非回复动态。立即任务固定读取最新一批，普通同步在游标为 0 时取最新一批，之后只取成功游标后的增量。 |
 | `SFreeBot/qzoneDelivery` | GET/POST / Bot secret | `status,maxSpaceId,tid,error,publishNowToken` | 公网新 | 回写 QQ 空间发布结果；成功时推进独立空间游标并记录当天、TID 和成功时间，匹配的一次性立即任务同时标记完成；失败只记录错误且保留任务重试。 |
 
 QQ 空间由 AstrBot 插件通过 NapCat `get_cookies` 获取个人 QQ 空间会话，再调用 QQ 空间图片上传和说说发布 HTTP 接口，不使用 NapCat 不支持的 `send_qzone_msg`，也不使用 QQ 官方机器人接口。同一批动态每条生成一张带 P 编号的 1080x1350 PNG，并在一条说说中发布；正文只使用后台填写的简短文案。`scheduled` 模式按 `Asia/Shanghai` 每天定时一次，`realtime` 模式发现游标后有新动态即发布；后台“立刻发布”生成一次性任务。远程原图只允许公网 HTTP(S)，单图限制 8 MB。
