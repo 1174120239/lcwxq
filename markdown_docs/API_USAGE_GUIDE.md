@@ -325,14 +325,14 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
-| `SFreeBot/config` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 Bot 开关、工具开关、DeepSeek 模型、群同步配置；不返回 DeepSeek Key。 |
+| `SFreeBot/config` | GET/POST / Bot secret | `botSecret,platform` | 公网新 | 返回 Bot 开关、工具开关、DeepSeek 模型、群同步配置和 `commentSpace=true` 能力标记；不返回 DeepSeek Key。插件未读到该标记时不得提交 `type=3`，避免旧后端把评论误发为普通动态。 |
 | `SFreeBot/chat` | POST / Bot secret | `message` 或 `messages` JSON | 公网新 | 后端代理 DeepSeek Chat Completions；插件通过 `messages` 传入受限意图规划提示和最近对话，DeepSeek Key 只在后台配置表。 |
 | `SFreeBot/bindChallenge` | GET/POST / Bot secret | `qqUserId,platform` | 公网新 | 生成短期一次性 QQ 绑定链接。 |
 | `SFreeBot/bindPage` | GET / 无 | `token` | 公网新 | 独立 HTML 登录页；只用于绑定 QQ，不创建普通登录态。 |
 | `SFreeBot/bindLogin` | POST / 无 | `token,account,password` | 公网新 | 校验论坛账号密码并写 `lcxqy_bot_bindings`；不调用 userLogin、不改 `authCode`、不写 Redis session。 |
 | `SFreeBot/meStatus` | GET/POST / Bot secret | `qqUserId,platform` | 公网新 | 返回绑定状态、脱敏用户快照、积分/经验/余额和签到连续天数。 |
 | `SFreeBot/signin` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId` | 公网新 | 对绑定 uid 执行签到；沿用 uid+日期幂等。 |
-| `SFreeBot/addSpace` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId,text,pic,topicIds,onlyMe` | 公网新 | 仅发布普通动态 `type=0,toid=0`，复用 `SpaceService` 审核、违禁词、经验门槛、防刷和奖励逻辑。 |
+| `SFreeBot/addSpace` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId,text,pic,topicIds,onlyMe,type,toid` | 公网新 | 默认发布普通动态并强制 `type=0,toid=0`；群内引用云云同步动态评论时仅允许 `type=3` 且 `toid` 为正整数，强制公开并忽略图片/话题。两种操作都复用 `SpaceService` 的目标可见性、锁定、审核、违禁词、经验门槛、防刷、重复评论、奖励和通知逻辑。 |
 | `SFreeBot/updateProfile` | GET/POST / Bot secret + 绑定 | `qqUserId,requestId,screenName,introduce,avatar,campusId,gradeId` | 公网新 | 只允许普通资料白名单字段；不允许改密码、邮箱、手机、积分、余额、经验、VIP、角色。 |
 | `SFreeBot/registerGroup` | GET/POST / Bot secret | `groupId,groupName,unifiedMsgOrigin(可选)` | 公网新 | 登记 QQ 群动态同步目标；来源为空时自动生成 `lcxqy_onebot:GroupMessage:<groupId>`，后台只需维护群号、群名、开关和摘要策略。 |
 | `SFreeBot/latestSpaces` | GET/POST / Bot secret | `groupId,afterId,limit` | 公网新 | 拉取公开、已审核、非私密、非回复动态，返回 H5 链接、摘要、图片和作者信息。 |

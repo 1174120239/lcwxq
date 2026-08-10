@@ -12,10 +12,11 @@
 
 1. DeepSeek 聊天：个人 QQ 号收到消息后由 AstrBot 插件调用后端 `SFreeBot/chat`，DeepSeek Key 只保存在后端配置表。
 2. QQ 绑定论坛账号：NapCat 账号助手生成绑定链接，用户在独立绑定页输入论坛账号密码；后端只验证密码并写 QQ 绑定关系，不创建普通登录 token，不改 `authCode`，不写 Redis session。
-3. 动态工具：发动态、修改资料、查询积分/签到状态、签到。
+3. 动态工具：发动态、评论动态、修改资料、查询积分/签到状态、签到。
 4. 群动态同步：后台配置或群命令登记 QQ 群后，插件轮询最新公开已审核动态并发送动态 H5 链接、摘要和图片。
-5. 幂等与投递：发动态、改资料、签到记录 requestId；群同步只有发送成功后才推进游标。
-6. 对话状态：草稿、绑定续接和最近对话保存在 AstrBot 插件数据目录，插件重启后仍可恢复。
+5. 群内引用评论：用户引用云云同步的动态并输入正文，即以当前 QQ 已绑定的论坛账号评论该动态。
+6. 幂等与投递：发动态、评论动态、改资料、签到记录 requestId；群同步只有发送成功后才推进游标。
+7. 对话状态：草稿、绑定续接和最近对话保存在 AstrBot 插件数据目录，插件重启后仍可恢复。
 
 明确不做：
 
@@ -67,20 +68,22 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
-| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群 | `botSecret,platform` |
+| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群和引用评论能力标记 | `botSecret,platform` |
 | `POST /SFreeBot/chat` | DeepSeek 聊天代理 | `message` 或 `messages` JSON |
 | `POST /SFreeBot/bindChallenge` | 生成 QQ 绑定链接 | `qqUserId` |
 | `GET /SFreeBot/bindPage` | 独立绑定登录页 | `token` |
 | `POST /SFreeBot/bindLogin` | 验证论坛账号密码并绑定 QQ | `token,account,password` |
 | `POST /SFreeBot/meStatus` | 查询论坛账号、积分、经验、余额、签到连续天数 | `qqUserId` |
 | `POST /SFreeBot/signin` | QQ 绑定用户签到 | `qqUserId,requestId` |
-| `POST /SFreeBot/addSpace` | 发动态 | `qqUserId,requestId,text,pic,topicIds,onlyMe` |
+| `POST /SFreeBot/addSpace` | 发动态或评论动态 | 发动态使用 `qqUserId,requestId,text,pic,topicIds,onlyMe`；评论额外使用 `type=3,toid=<动态ID>` |
 | `POST /SFreeBot/updateProfile` | 修改资料白名单字段 | `qqUserId,requestId,screenName,introduce,avatar,campusId,gradeId` |
 | `POST /SFreeBot/registerGroup` | 登记当前群同步 | `groupId,groupName,unifiedMsgOrigin` |
 | `POST /SFreeBot/latestSpaces` | 拉取公开已审核动态 | `groupId,afterId,limit` |
 | `POST /SFreeBot/delivery` | 回写群投递结果 | `groupId,spaceId,status,messageId,error` |
 
-`addSpace` 只写 `starfree_space.type=0` 普通动态，`toid=0`，复用 `SpaceService` 既有校验。图片字段沿用动态接口的 `pic` 字符串格式；图片上传仍由现有前端/旧上传能力承担，Bot 只提交已可用的图片 URL。
+`addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。图片字段沿用动态接口的 `pic` 字符串格式；图片上传仍由现有前端/旧上传能力承担，Bot 只提交已可用的图片 URL。
+
+新后端在 `config` 返回顶层 `commentSpace=true`。插件提交评论前必须先确认该标记；旧后端没有标记时只提示后端尚未升级，绝不能继续调用 `addSpace`，以免旧实现把 `type=3` 强制改成普通动态。
 
 ## 5. 绑定流程
 
@@ -125,6 +128,8 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 如果确认时发现 QQ 尚未绑定论坛账号，插件保留原草稿并发送绑定链接。用户完成登录后回复 `好了`，插件调用 `meStatus` 验证绑定，恢复原操作并再次询问是否继续，不会未经确认自动发布。
 
+在群里引用云云同步的动态时，引用消息必须由云云本人发送，并包含精确的动态 H5 链接 `/pages/space/info?id=<动态ID>`。用户当前输入的正文会直接作为评论，不再增加发布预览；空正文会继续追问，超过 1500 字会要求精简。若 QQ 尚未绑定论坛账号，插件会保留动态 ID、评论正文和原 `requestId`，发送绑定链接；绑定完成后由用户回复 `继续` 才提交。
+
 每个 QQ 私聊或群内用户会话保存最近 12 条对话和当前操作阶段，状态文件位于 `StarTools.get_data_dir("lcxqy_dynamic_ai")/state.json`，采用临时文件替换方式写入，默认保留 7 天。
 
 普通聊天默认可在私聊中启用；群聊普通聊天默认关闭，避免群内每句话触发 AI。群同步不依赖普通聊天开关。
@@ -149,6 +154,7 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 - 默认排除动态回复 `type=3`。
 - 群游标为 0 时只发送当前最新一条动态，再从该位置继续监听，避免首次启用补发全部历史动态。
 - 消息包含作者显示名、摘要、话题、动态 H5 链接和最多 N 张图片。
+- 群友可直接引用这条同步消息并输入评论；插件只认云云本人发送且带上述精确 H5 链接的引用，引用其他群友或云云普通聊天消息不会触发论坛评论。
 - 发送成功后调用 `SFreeBot/delivery status=success`，后端才推进 `cursor_space_id`。
 - 发送失败只记录错误，不推进游标，下一轮可继续重试。
 
@@ -176,7 +182,7 @@ AstrBot 插件配置：
 }
 ~~~
 
-插件版本 `v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
+插件版本 `v0.2.4` 支持群内引用同步动态直接评论。`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
 
 本地针对性测试：
 

@@ -69,6 +69,7 @@ public class BotService {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enabled", bool(config, "enabled", false));
         response.put("dynamicOnly", true);
+        response.put("commentSpace", true);
         response.put("deepseekModel", value(config, "deepseek_model", "deepseek-chat"));
         response.put("backendChat", true);
         response.put("syncIntervalSeconds", integer(config, "sync_interval_seconds", 45, 10, 3600));
@@ -76,7 +77,9 @@ public class BotService {
         response.put("syncSummaryLength", integer(config, "sync_summary_length", 120, 20, 500));
 
         Map<String, Object> tools = new LinkedHashMap<>();
-        tools.put("addSpace", bool(config, "tool_add_space", true));
+        boolean addSpaceEnabled = bool(config, "tool_add_space", true);
+        tools.put("addSpace", addSpaceEnabled);
+        tools.put("commentSpace", addSpaceEnabled);
         tools.put("updateProfile", bool(config, "tool_update_profile", true));
         tools.put("status", bool(config, "tool_status", true));
         tools.put("signin", bool(config, "tool_signin", true));
@@ -188,22 +191,34 @@ public class BotService {
         requireTool(request, "tool_add_space", "发动态功能已关闭");
         Binding binding = requireBinding(request);
         String requestId = requiredText(request, "requestId", "缺少 requestId");
-        return runOperation(requestId, "addSpace", binding, () -> {
+        String requestedType = RequestValues.text(request, "type");
+        if (!requestedType.isEmpty() && !"0".equals(requestedType) && !"3".equals(requestedType)) {
+            throw new IllegalArgumentException("不支持的动态类型");
+        }
+        boolean comment = "3".equals(requestedType);
+        int targetId = comment ? RequestValues.integer(request, "toid", 0) : 0;
+        if (comment && targetId <= 0) {
+            throw new IllegalArgumentException("缺少评论目标");
+        }
+        return runOperation(requestId, comment ? "commentSpace" : "addSpace", binding, () -> {
             Map<String, String> dynamic = new LinkedHashMap<>();
-            dynamic.put("type", "0");
-            dynamic.put("toid", "0");
-            dynamic.put("onlyMe", RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0");
+            dynamic.put("type", comment ? "3" : "0");
+            dynamic.put("toid", comment ? String.valueOf(targetId) : "0");
+            dynamic.put("onlyMe", comment ? "0"
+                    : (RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0"));
             dynamic.put("text", boundedText(request.get("text"), MAX_DYNAMIC_TEXT, true));
-            dynamic.put("pic", RequestValues.text(request, "pic"));
-            dynamic.put("topicIds", RequestValues.text(request, "topicIds"));
+            dynamic.put("pic", comment ? "" : RequestValues.text(request, "pic"));
+            dynamic.put("topicIds", comment ? "" : RequestValues.text(request, "topicIds"));
             boolean pending = spaces.addForBotUid(binding.uid, dynamic, ip);
             Long latestId = latestSpaceId(binding.uid);
             touchBinding(binding);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("pending", pending);
             result.put("spaceId", latestId == null ? 0 : latestId);
-            result.put("h5Url", h5Url(latestId == null ? 0 : latestId));
-            result.put("msg", pending ? "动态已提交审核" : "动态已发布");
+            result.put("h5Url", h5Url(comment ? targetId : (latestId == null ? 0 : latestId)));
+            result.put("msg", comment
+                    ? (pending ? "评论已提交审核" : "评论已发布")
+                    : (pending ? "动态已提交审核" : "动态已发布"));
             return result;
         });
     }

@@ -50,7 +50,9 @@ class BotServiceTest {
         Map<String, Object> response = fixture.service.config(botRequest("admin-secret", "10001"));
 
         assertThat(response).containsEntry("enabled", true)
-                .containsEntry("dynamicOnly", true);
+                .containsEntry("dynamicOnly", true)
+                .containsEntry("commentSpace", true);
+        assertThat(((Map<?, ?>) response.get("tools")).get("commentSpace")).isEqualTo(true);
     }
 
     @Test
@@ -98,7 +100,6 @@ class BotServiceTest {
         Map<String, String> request = botRequest("test-secret", "10001");
         request.put("requestId", "request-1");
         request.put("text", "今天操场晚霞很好看");
-        request.put("type", "3");
         request.put("toid", "999");
 
         Map<String, Object> result = fixture.service.addSpace(request, "127.0.0.1");
@@ -109,6 +110,79 @@ class BotServiceTest {
                 .containsEntry("toid", "0")
                 .containsEntry("text", "今天操场晚霞很好看");
         assertThat(result).containsEntry("spaceId", 88L);
+    }
+
+    @Test
+    void addSpaceAllowsCommentForBoundForumUid() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret",
+                "tool_add_space", "1", "h5_base_url", "https://prev.lcxqy.cn");
+        fixture.binding(77L);
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_operation_log"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.update(startsWith("UPDATE lcxqy_bot_operation_log"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.update(startsWith("UPDATE lcxqy_bot_bindings"), any(Object[].class)))
+                .thenReturn(1);
+        when(fixture.jdbc.query(eq("SELECT id FROM starfree_space WHERE uid=? ORDER BY id DESC LIMIT 1"),
+                any(Object[].class), any(RowMapper.class))).thenReturn(Collections.singletonList(91L));
+        when(fixture.spaces.addForBotUid(eq(77L), any(), eq("127.0.0.1"))).thenReturn(false);
+
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("requestId", "comment-request-1");
+        request.put("text", "同意这个观点");
+        request.put("type", "3");
+        request.put("toid", "88");
+        request.put("onlyMe", "1");
+        request.put("pic", "ignored.png");
+        request.put("topicIds", "7,8");
+
+        Map<String, Object> result = fixture.service.addSpace(request, "127.0.0.1");
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(fixture.spaces).addForBotUid(eq(77L), captor.capture(), eq("127.0.0.1"));
+        assertThat(captor.getValue()).containsEntry("type", "3")
+                .containsEntry("toid", "88")
+                .containsEntry("onlyMe", "0")
+                .containsEntry("pic", "")
+                .containsEntry("topicIds", "")
+                .containsEntry("text", "同意这个观点");
+        assertThat(result).containsEntry("spaceId", 91L)
+                .containsEntry("h5Url", "https://prev.lcxqy.cn/#/pages/space/info?id=88")
+                .containsEntry("msg", "评论已发布");
+    }
+
+    @Test
+    void addSpaceRejectsCommentWithoutPositiveTarget() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "tool_add_space", "1");
+        fixture.binding(77L);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("requestId", "comment-request-invalid-target");
+        request.put("text", "评论内容");
+        request.put("type", "3");
+        request.put("toid", "0");
+
+        assertThatThrownBy(() -> fixture.service.addSpace(request, "127.0.0.1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("缺少评论目标");
+        verify(fixture.spaces, never()).addForBotUid(anyLong(), any(), anyString());
+    }
+
+    @Test
+    void addSpaceRejectsTypesOtherThanNormalDynamicOrComment() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "tool_add_space", "1");
+        fixture.binding(77L);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("requestId", "unsupported-type");
+        request.put("text", "不能通过 Bot 发布的视频动态");
+        request.put("type", "4");
+
+        assertThatThrownBy(() -> fixture.service.addSpace(request, "127.0.0.1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("不支持的动态类型");
+        verify(fixture.spaces, never()).addForBotUid(anyLong(), any(), anyString());
     }
 
     @Test

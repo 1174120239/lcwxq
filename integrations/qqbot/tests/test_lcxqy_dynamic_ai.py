@@ -102,6 +102,17 @@ class DummyEvent:
         return self.message_obj.message
 
 
+def quoted_group_event(text, quoted_text, sender_id="987654321", message_id="message-1"):
+    event = DummyEvent(text, message_id=message_id, group_id="638978650")
+    event.message_obj.message.insert(0, SimpleNamespace(
+        sender_id=sender_id,
+        message_str=quoted_text,
+        text=quoted_text,
+        chain=[SimpleNamespace(text=quoted_text)],
+    ))
+    return event
+
+
 class LcxqyDynamicAiPluginTest(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -122,6 +133,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         plugin._sessions = {}
         plugin._state_path = state_path
         plugin._sync_task = None
+        plugin._comment_space_supported = True
         return plugin
 
     def collect(self, event):
@@ -178,6 +190,152 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
 
         self.assertIn("想发什么内容", first[0])
         self.assertIn("今天晚霞很好看", second[0])
+
+    def test_reply_to_synced_dynamic_posts_comment_with_bound_forum_account(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, payload))
+            return {"msg": "评论已发布", "spaceId": 91}
+
+        self.plugin._api = api
+        event = quoted_group_event(
+            "晚霞确实很好看",
+            "论坛有新动态\nAlice：操场晚霞\nhttps://prev.lcxqy.cn/#/pages/space/info?id=88",
+        )
+
+        result = self.collect(event)
+
+        self.assertEqual(["评论已发布"], result)
+        self.assertTrue(event.stopped)
+        self.assertEqual("/SFreeBot/addSpace", calls[0][0])
+        self.assertEqual("3", calls[0][1]["type"])
+        self.assertEqual("88", calls[0][1]["toid"])
+        self.assertEqual("晚霞确实很好看", calls[0][1]["text"])
+        self.assertEqual("10001", calls[0][1]["qqUserId"])
+
+    def test_reply_to_other_group_member_is_not_treated_as_forum_comment(self):
+        async def unexpected_api(*_args, **_kwargs):
+            raise AssertionError("other member reply must not call backend")
+
+        self.plugin._api = unexpected_api
+        event = quoted_group_event(
+            "我来评论",
+            "https://prev.lcxqy.cn/#/pages/space/info?id=88",
+            sender_id="123456",
+        )
+
+        self.assertEqual([], self.collect(event))
+
+    def test_reply_to_yunyun_chat_without_dynamic_link_stays_chat(self):
+        calls = []
+
+        async def api(path, _payload):
+            calls.append(path)
+            raise AssertionError("short greeting should not call backend")
+
+        self.plugin._api = api
+        event = quoted_group_event("你好", "我是云云，有事直接说。")
+
+        result = self.collect(event)
+
+        self.assertEqual(["在呢。\n我是云云，有事直接说喵。"], result)
+        self.assertEqual([], calls)
+
+    def test_empty_reply_to_synced_dynamic_asks_for_comment_and_accepts_follow_up(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, payload))
+            return {"msg": "评论已发布"}
+
+        self.plugin._api = api
+        first = self.collect(quoted_group_event(
+            "", "https://prev.lcxqy.cn/#/pages/space/info?id=88"))
+        second = self.collect(DummyEvent(
+            "补上的评论", message_id="message-2", group_id="638978650"))
+
+        self.assertEqual(["想评论什么？"], first)
+        self.assertEqual(["评论已发布"], second)
+        self.assertEqual("88", calls[0][1]["toid"])
+        self.assertEqual("补上的评论", calls[0][1]["text"])
+
+    def test_unbound_quoted_comment_survives_binding_with_same_request_id(self):
+        bound = False
+        comment_payloads = []
+
+        async def api(path, payload):
+            nonlocal bound
+            if path == "/SFreeBot/addSpace":
+                comment_payloads.append(dict(payload))
+                if not bound:
+                    raise BackendError("QQ 尚未绑定论坛账号", {"bound": False})
+                return {"msg": "评论已发布"}
+            if path == "/SFreeBot/bindChallenge":
+                return {"bindUrl": "https://example.test/bind"}
+            if path == "/SFreeBot/meStatus":
+                return {"bound": bound, "user": {"screenName": "Alice"}}
+            raise AssertionError(path)
+
+        self.plugin._api = api
+        first = self.collect(quoted_group_event(
+            "同意这个观点",
+            "https://prev.lcxqy.cn/#/pages/space/info?id=88",
+            message_id="message-comment",
+        ))[0]
+        session = self.plugin._sessions["638978650:10001"]
+
+        self.assertIn("刚才的评论已经保留", first)
+        self.assertIn("https://example.test/bind", first)
+        self.assertEqual("awaiting_binding", session["stage"])
+        self.assertEqual("commentSpace", session["pending"]["type"])
+
+        bound = True
+        resumed = self.collect(DummyEvent(
+            "好了", message_id="message-2", group_id="638978650"))[0]
+        posted = self.collect(DummyEvent(
+            "继续", message_id="message-3", group_id="638978650"))[0]
+
+        self.assertIn("继续发送刚才的评论", resumed)
+        self.assertEqual("评论已发布", posted)
+        self.assertEqual(2, len(comment_payloads))
+        self.assertEqual(comment_payloads[0]["requestId"], comment_payloads[1]["requestId"])
+        self.assertEqual("3", comment_payloads[1]["type"])
+        self.assertEqual("88", comment_payloads[1]["toid"])
+
+    def test_quoted_comment_over_limit_is_rejected_before_backend_call(self):
+        async def unexpected_api(*_args, **_kwargs):
+            raise AssertionError("oversized comment must not call backend")
+
+        self.plugin._api = unexpected_api
+        result = self.collect(quoted_group_event(
+            "a" * 1501,
+            "https://prev.lcxqy.cn/#/pages/space/info?id=88",
+        ))
+
+        self.assertIn("评论最多 1500 字", result[0])
+        session = self.plugin._sessions["638978650:10001"]
+        self.assertEqual("awaiting_comment_content", session["stage"])
+        self.assertEqual("", session["pending"]["payload"]["text"])
+
+    def test_old_backend_without_comment_capability_cannot_mispost_as_dynamic(self):
+        calls = []
+
+        async def api(path, _payload):
+            calls.append(path)
+            if path == "/SFreeBot/config":
+                return {"dynamicOnly": True}
+            raise AssertionError("old backend must not receive comment addSpace")
+
+        self.plugin._comment_space_supported = False
+        self.plugin._api = api
+        result = self.collect(quoted_group_event(
+            "这是一条评论",
+            "https://prev.lcxqy.cn/#/pages/space/info?id=88",
+        ))
+
+        self.assertIn("后端尚未升级", result[0])
+        self.assertEqual(["/SFreeBot/config"], calls)
 
     def test_group_pure_mention_gets_short_ack(self):
         event = DummyEvent("", group_id="638978650")

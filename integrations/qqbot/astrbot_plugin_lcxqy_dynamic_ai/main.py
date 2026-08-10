@@ -35,13 +35,14 @@ class BackendError(Exception):
 @register(
     "lcxqy_dynamic_ai",
     "lcxqy",
-    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具和群同步。",
-    "0.2.3",
+    "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、账号绑定、动态工具、引用评论和群同步。",
+    "0.2.4",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
     _SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
     _HISTORY_LIMIT = 12
+    _SPACE_LINK_PATTERN = re.compile(r"/pages/space/info\?id=(\d+)")
     _CHAT_SYSTEM_PROMPT = (
         "你是云云，聊一下校园论坛的 QQ 动态助手，也是自然聊天伙伴。"
         "人设是带一点猫娘气质的年轻女孩：亲切、机灵、略微傲娇，但不刻意卖萌。"
@@ -92,6 +93,7 @@ class LcxqyDynamicAiPlugin(Star):
         self._sessions: Dict[str, Dict[str, Any]] = {}
         self._state_path = self._resolve_state_path()
         self._sync_task: Optional[asyncio.Task] = None
+        self._comment_space_supported = False
         self._load_state()
 
     async def initialize(self):
@@ -183,6 +185,11 @@ class LcxqyDynamicAiPlugin(Star):
     async def _handle_message(self, event: AstrMessageEvent):
         text = (event.message_str or "").strip()
         images = self._images_from_event(event)
+        quoted_space_id = self._quoted_space_id(event)
+        if quoted_space_id is not None:
+            event.stop_event()
+            yield event.plain_result(await self._comment_space(event, quoted_space_id, text))
+            return
         if not text and not images:
             if self._group_id(event) and self._group_is_addressed(event, text):
                 event.stop_event()
@@ -202,6 +209,19 @@ class LcxqyDynamicAiPlugin(Star):
                 normalized in self._BIND_DONE_WORDS or normalized in self._CONFIRM_WORDS):
             event.stop_event()
             yield event.plain_result(await self._resume_after_binding(event, session))
+            return
+
+        if session.get("stage") == "awaiting_comment_content":
+            event.stop_event()
+            pending = session.get("pending") or {}
+            payload = pending.get("payload") or {}
+            space_id = self._positive_int(payload.get("toid"))
+            if space_id is None:
+                self._clear_action(session)
+                yield event.plain_result("没有找到要评论的动态，请重新引用动态后发送评论。")
+                return
+            yield event.plain_result(await self._comment_space(
+                event, space_id, text, str(payload.get("requestId") or "")))
             return
 
         if normalized in self._CONFIRM_WORDS and session.get("pending"):
@@ -330,6 +350,41 @@ class LcxqyDynamicAiPlugin(Star):
                 pass
         return list(getattr(getattr(event, "message_obj", None), "message", None) or [])
 
+    def _quoted_space_id(self, event: AstrMessageEvent) -> Optional[int]:
+        if not self._group_id(event):
+            return None
+        self_id = self._self_id(event)
+        if not self_id:
+            return None
+        components = self._message_components(event)
+        quoted = getattr(getattr(event, "message_obj", None), "reply", None)
+        if quoted is not None and quoted not in components:
+            components.append(quoted)
+        for component in components:
+            if str(getattr(component, "sender_id", "") or "") != self_id:
+                continue
+            quoted_text = self._quoted_component_text(component)
+            match = self._SPACE_LINK_PATTERN.search(quoted_text)
+            if match:
+                return self._positive_int(match.group(1))
+        return None
+
+    def _quoted_component_text(self, component: Any) -> str:
+        parts: List[str] = []
+        for field in ("message_str", "text"):
+            value = getattr(component, field, None)
+            if isinstance(value, str) and value:
+                parts.append(value)
+        data = getattr(component, "data", None)
+        if isinstance(data, dict):
+            for field in ("message_str", "text"):
+                value = data.get(field)
+                if isinstance(value, str) and value:
+                    parts.append(value)
+        for nested in getattr(component, "chain", None) or []:
+            parts.append(self._quoted_component_text(nested))
+        return "\n".join(parts)
+
     def _self_id(self, event: AstrMessageEvent) -> str:
         getter = getattr(event, "get_self_id", None)
         if getter:
@@ -338,6 +393,47 @@ class LcxqyDynamicAiPlugin(Star):
             except Exception:
                 pass
         return str(getattr(getattr(event, "message_obj", None), "self_id", "") or "")
+
+    async def _comment_space(self, event: AstrMessageEvent, space_id: int, text: str,
+                             request_id: str = "") -> str:
+        session = self._session(event)
+        comment = (text or "").strip()
+        payload = {
+            "qqUserId": self._sender_id(event),
+            "requestId": request_id or self._request_id(event, "comment"),
+            "type": "3",
+            "toid": str(space_id),
+            "text": comment,
+            "onlyMe": "0",
+        }
+        if not comment:
+            session["pending"] = {"type": "commentSpace", "payload": payload}
+            session["stage"] = "awaiting_comment_content"
+            self._touch_session(session)
+            return "想评论什么？"
+        if len(comment) > 1500:
+            payload["text"] = ""
+            session["pending"] = {"type": "commentSpace", "payload": payload}
+            session["stage"] = "awaiting_comment_content"
+            self._touch_session(session)
+            return f"评论最多 1500 字，当前有 {len(comment)} 字。请精简后重新发送。"
+        try:
+            if not await self._comment_space_ready():
+                self._clear_action(session)
+                return "引用评论功能的论坛后端尚未升级，暂时没有提交。"
+            data = await self._api("/SFreeBot/addSpace", payload)
+            msg = data.get("msg") or ("评论已提交审核" if data.get("pending") else "评论已发布")
+            self._clear_action(session)
+            return str(msg)
+        except BackendError as error:
+            if self._is_unbound_error(error):
+                session["pending"] = {"type": "commentSpace", "payload": payload}
+                session["stage"] = "awaiting_binding"
+                session["resume_stage"] = self._stage_for_action("commentSpace")
+                self._touch_session(session)
+                return await self._bind_hint(event, "刚才的评论已经保留。")
+            self._clear_action(session)
+            return error.message
 
     async def _plan(self, event: AstrMessageEvent, session: Dict[str, Any], text: str) -> Dict[str, str]:
         messages: List[Dict[str, str]] = [{"role": "system", "content": self._CHAT_SYSTEM_PROMPT}]
@@ -462,7 +558,7 @@ class LcxqyDynamicAiPlugin(Star):
         session = self._session(event)
         pending = session.get("pending") or {}
         action_type = pending.get("type")
-        if action_type not in ("addSpace", "updateProfile", "signin", "status"):
+        if action_type not in ("addSpace", "commentSpace", "updateProfile", "signin", "status"):
             return "目前没有待确认操作。"
         try:
             if action_type == "addSpace":
@@ -471,6 +567,14 @@ class LcxqyDynamicAiPlugin(Star):
                 url = data.get("h5Url")
                 self._clear_action(session)
                 return f"{msg}\n{url}" if url else msg
+            elif action_type == "commentSpace":
+                if not await self._comment_space_ready():
+                    self._clear_action(session)
+                    return "引用评论功能的论坛后端尚未升级，暂时没有提交。"
+                data = await self._api("/SFreeBot/addSpace", pending["payload"])
+                msg = data.get("msg") or ("评论已提交审核" if data.get("pending") else "评论已发布")
+                self._clear_action(session)
+                return str(msg)
             elif action_type == "updateProfile":
                 await self._api("/SFreeBot/updateProfile", pending["payload"])
                 self._clear_action(session)
@@ -505,6 +609,7 @@ class LcxqyDynamicAiPlugin(Star):
             self._touch_session(session)
             questions = {
                 "addSpace": "绑定成功，继续发布刚才的动态吗？",
+                "commentSpace": "绑定成功，继续发送刚才的评论吗？",
                 "updateProfile": "绑定成功，继续提交刚才的资料修改吗？",
                 "signin": "绑定成功，继续签到吗？",
                 "status": "绑定成功，继续查询状态吗？",
@@ -564,6 +669,8 @@ class LcxqyDynamicAiPlugin(Star):
         while True:
             try:
                 config = await self._api("/SFreeBot/config", {})
+                if config.get("commentSpace") is True:
+                    self._comment_space_supported = True
                 interval = int(config.get("syncIntervalSeconds") or 45)
                 if config.get("enabled"):
                     for group in config.get("groups") or []:
@@ -909,10 +1016,27 @@ class LcxqyDynamicAiPlugin(Star):
     def _stage_for_action(self, action_type: str) -> str:
         return {
             "addSpace": "confirm_add_space",
+            "commentSpace": "confirm_comment_space",
             "updateProfile": "confirm_update_profile",
             "signin": "confirm_signin",
             "status": "confirm_status",
         }.get(action_type, "idle")
+
+    def _positive_int(self, value: Any) -> Optional[int]:
+        try:
+            parsed = int(str(value))
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
+    async def _comment_space_ready(self) -> bool:
+        if getattr(self, "_comment_space_supported", False):
+            return True
+        data = await self._api("/SFreeBot/config", {})
+        supported = data.get("commentSpace") is True
+        if supported:
+            self._comment_space_supported = True
+        return supported
 
     def _is_unbound_error(self, error: BackendError) -> bool:
         return "绑定" in error.message or error.data.get("bound") is False
