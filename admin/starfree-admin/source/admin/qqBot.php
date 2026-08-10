@@ -21,6 +21,7 @@ function bot_config_defaults() {
         'tool_signin' => '1',
         'chat_in_groups' => '1',
         'qzone_enabled' => '0',
+        'qzone_publish_mode' => 'scheduled',
         'qzone_publish_time' => '20:30',
         'qzone_batch_limit' => '6',
         'qzone_summary_length' => '80',
@@ -31,7 +32,7 @@ function bot_config_defaults() {
         'qzone_title' => '聊一今日动态',
         'qzone_subtitle' => '校园里今天发生了什么',
         'qzone_footer' => '更多动态，来聊一看看',
-        'qzone_post_text' => "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/",
+        'qzone_post_text' => '今日校园动态',
         'qzone_background_color' => '#F4F7F5',
         'qzone_accent_color' => '#1E7258',
         'qzone_text_color' => '#18211E',
@@ -41,7 +42,9 @@ function bot_config_defaults() {
         'qzone_last_run_date' => '',
         'qzone_last_tid' => '',
         'qzone_last_success_at' => '',
-        'qzone_last_error' => ''
+        'qzone_last_error' => '',
+        'qzone_publish_now_token' => '',
+        'qzone_publish_now_handled_token' => ''
     );
 }
 
@@ -183,13 +186,13 @@ if ($groupResult) {
                     </div>
 
                     <hr>
-                    <h5 class="mb-3">QQ 空间每日同步</h5>
+                    <h5 class="mb-3">QQ 空间同步</h5>
                     <p class="text-muted">
-                        每天到达设定时间后，云云会把游标之后的公开动态各生成一张 P1-P9 编号图片，并通过本机 NapCat 个人 QQ 发布一条空间说说。
+                        云云会把游标之后的公开动态各生成一张 P1-P9 编号图片，并通过本机 NapCat 个人 QQ 发布一条空间说说。
                         没有新动态时不会发布；发布成功后才推进游标。
                     </p>
                     <div class="row">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group mb-3">
                                 <label>启用 QQ 空间同步</label>
                                 <input type="checkbox" name="qzone_enabled" id="qzone_enabled" value="1" data-switch="success" <?php echo $botConfig['qzone_enabled'] === '1' ? 'checked' : ''; ?>>
@@ -198,13 +201,23 @@ if ($groupResult) {
                         </div>
                         <div class="col-md-3">
                             <div class="form-group mb-3">
+                                <label for="qzone_publish_mode">发布模式</label>
+                                <select name="qzone_publish_mode" id="qzone_publish_mode" class="form-control">
+                                    <option value="scheduled" <?php echo $botConfig['qzone_publish_mode'] === 'scheduled' ? 'selected' : ''; ?>>按时间发布</option>
+                                    <option value="realtime" <?php echo $botConfig['qzone_publish_mode'] === 'realtime' ? 'selected' : ''; ?>>随时发布</option>
+                                </select>
+                                <small class="form-text text-muted">随时发布会在发现新动态后立即生成下一批。</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group mb-3">
                                 <label for="qzone_publish_time">每天发布时间</label>
                                 <input name="qzone_publish_time" class="form-control" type="time" id="qzone_publish_time"
                                        value="<?php echo bot_h($botConfig['qzone_publish_time']); ?>" required>
                                 <small class="form-text text-muted">北京时间；到点后下一轮轮询执行。</small>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <div class="form-group mb-3">
                                 <label for="qzone_batch_limit">每批动态数</label>
                                 <input name="qzone_batch_limit" class="form-control" type="number" min="1" max="9"
@@ -273,8 +286,9 @@ if ($groupResult) {
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
-                                <label for="qzone_post_text">空间说说正文</label>
-                                <textarea name="qzone_post_text" id="qzone_post_text" class="form-control" rows="3" maxlength="500"><?php echo bot_h($botConfig['qzone_post_text']); ?></textarea>
+                                <label for="qzone_post_text">空间简短正文</label>
+                                <textarea name="qzone_post_text" id="qzone_post_text" class="form-control" rows="2" maxlength="120"><?php echo bot_h($botConfig['qzone_post_text']); ?></textarea>
+                                <small class="form-text text-muted">只发送这里填写的文字，不会再自动追加 P 编号、作者和摘要。</small>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -301,6 +315,7 @@ if ($groupResult) {
                         最近发布：<?php echo bot_h($botConfig['qzone_last_success_at'] === '' ? '暂无' : $botConfig['qzone_last_success_at']); ?>；
                         最近 TID：<?php echo bot_h($botConfig['qzone_last_tid'] === '' ? '暂无' : $botConfig['qzone_last_tid']); ?>；
                         最近错误：<?php echo bot_h($botConfig['qzone_last_error'] === '' ? '无' : $botConfig['qzone_last_error']); ?>
+                        ；立即发布任务：<?php echo ($botConfig['qzone_publish_now_token'] !== '' && $botConfig['qzone_publish_now_token'] !== $botConfig['qzone_publish_now_handled_token']) ? '等待执行' : '无'; ?>
                     </div>
 
                     <hr>
@@ -347,7 +362,8 @@ if ($groupResult) {
                         </table>
                     </div>
                     <div class="form-group mb-3 text_right">
-                        <button class="btn btn-success" type="submit">保存 QQ Bot 设置</button>
+                        <button class="btn btn-warning mr-2" type="submit" name="action" value="publish_now">立刻发布</button>
+                        <button class="btn btn-success" type="submit" name="action" value="save">保存 QQ Bot 设置</button>
                     </div>
                 </form>
             </div>

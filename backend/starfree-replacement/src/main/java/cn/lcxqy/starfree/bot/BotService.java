@@ -416,6 +416,11 @@ public class BotService {
             saveConfigValue("qzone_last_tid", safe(request.get("tid"), 128), now);
             saveConfigValue("qzone_last_success_at", now.toString(), now);
             saveConfigValue("qzone_last_error", "", now);
+            String publishNowToken = safe(request.get("publishNowToken"), 128);
+            String pendingToken = value(configValues(), "qzone_publish_now_token", "");
+            if (!publishNowToken.isEmpty() && publishNowToken.equals(pendingToken)) {
+                saveConfigValue("qzone_publish_now_handled_token", publishNowToken, now);
+            }
         } else {
             saveConfigValue("qzone_last_error", error.isEmpty() ? "QQ 空间发布失败" : error, now);
         }
@@ -785,14 +790,29 @@ public class BotService {
         LocalDate today = LocalDate.now(QZONE_ZONE);
         LocalTime now = LocalTime.now(QZONE_ZONE);
         String lastRunDate = value(config, "qzone_last_run_date", "");
+        String publishMode = value(config, "qzone_publish_mode", "scheduled");
+        if (!"realtime".equals(publishMode)) {
+            publishMode = "scheduled";
+        }
+        String publishNowToken = value(config, "qzone_publish_now_token", "");
+        String handledPublishNowToken = value(config, "qzone_publish_now_handled_token", "");
+        boolean publishNowPending = !publishNowToken.isEmpty()
+                && !publishNowToken.equals(handledPublishNowToken);
+        boolean realtime = "realtime".equals(publishMode);
+        boolean scheduledDue = !now.isBefore(LocalTime.parse(publishTime, QZONE_TIME_FORMAT));
+        boolean alreadyPublishedToday = !realtime && !publishNowPending
+                && today.toString().equals(lastRunDate);
         boolean enabled = bool(config, "enabled", false)
                 && bool(config, "qzone_enabled", false);
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("enabled", enabled);
+        settings.put("publishMode", publishMode);
         settings.put("publishTime", publishTime);
         settings.put("timeZone", QZONE_ZONE.getId());
-        settings.put("due", !now.isBefore(LocalTime.parse(publishTime, QZONE_TIME_FORMAT)));
-        settings.put("alreadyPublishedToday", today.toString().equals(lastRunDate));
+        settings.put("due", realtime || scheduledDue || publishNowPending);
+        settings.put("alreadyPublishedToday", alreadyPublishedToday);
+        settings.put("publishNowPending", publishNowPending);
+        settings.put("publishNowToken", publishNowPending ? publishNowToken : "");
         settings.put("batchLimit", integer(config, "qzone_batch_limit", 6, 1, 9));
         settings.put("summaryLength", integer(config, "qzone_summary_length", 80, 20, 200));
         settings.put("includeSourceImages", bool(config, "qzone_include_source_images", true));

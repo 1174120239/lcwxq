@@ -848,7 +848,9 @@ class LcxqyDynamicAiPlugin(Star):
         if settings.get("alreadyPublishedToday"):
             return
         now = time.time()
-        if now < getattr(self, "_qzone_next_check_at", 0.0):
+        publish_now_pending = self._truthy(settings.get("publishNowPending", False))
+        realtime = str(settings.get("publishMode") or "scheduled") == "realtime"
+        if now < getattr(self, "_qzone_next_check_at", 0.0) and not publish_now_pending and not realtime:
             return
         lock = getattr(self, "_qzone_lock", None)
         if lock is None:
@@ -875,8 +877,12 @@ class LcxqyDynamicAiPlugin(Star):
                     "status": "success",
                     "maxSpaceId": str(max_space_id),
                     "tid": str(tid or ""),
+                    "publishNowToken": str(batch.get("publishNowToken") or ""),
                 })
-                self._qzone_next_check_at = time.time() + 24 * 60 * 60
+                if batch.get("publishNowPending") or str(batch.get("publishMode") or "") == "realtime":
+                    self._qzone_next_check_at = 0.0
+                else:
+                    self._qzone_next_check_at = time.time() + 24 * 60 * 60
             except Exception as error:
                 try:
                     await self._api("/SFreeBot/qzoneDelivery", {
@@ -895,7 +901,7 @@ class LcxqyDynamicAiPlugin(Star):
         call_action = getattr(bot, "call_action", None)
         if not callable(call_action):
             raise RuntimeError("未找到 NapCat/aiocqhttp OneBot 连接")
-        content = self._qzone_post_content(settings, spaces)
+        content = self._qzone_post_content(settings)
         ugc_right = int(settings.get("ugcRight") or 1)
         if ugc_right not in {1, 4, 16, 64, 128}:
             ugc_right = 1
@@ -1049,14 +1055,8 @@ class LcxqyDynamicAiPlugin(Star):
                 continue
         return None
 
-    def _qzone_post_content(self, settings: Dict[str, Any], spaces: List[Dict[str, Any]]) -> str:
-        lines = [str(settings.get("postText") or "今天的校园动态整理好了。").strip()]
-        for index, space in enumerate(spaces[:9], start=1):
-            author = space.get("author") or {}
-            name = self._compact_text(author.get("name") or "论坛用户", 16)
-            summary = self._compact_text(space.get("summary") or space.get("text") or "", 32)
-            lines.append(f"P{index} {name}：{summary}")
-        return self._compact_text("\n".join(line for line in lines if line), 500)
+    def _qzone_post_content(self, settings: Dict[str, Any]) -> str:
+        return self._compact_text(str(settings.get("postText") or "").strip(), 500)
 
     def _render_qzone_images(self, settings: Dict[str, Any],
                              spaces: List[Dict[str, Any]]) -> List[bytes]:

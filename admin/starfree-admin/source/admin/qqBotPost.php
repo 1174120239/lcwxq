@@ -74,6 +74,18 @@ function qqbot_group_origin() {
 }
 
 try {
+    $action = qqbot_post_value('action', 'save');
+    if ($action === 'publish_now') {
+        $token = gmdate('YmdHis') . '-' . bin2hex(random_bytes(8));
+        qqbot_save_config('qzone_publish_now_token', $token);
+        qqbot_save_config('qzone_last_error', '');
+        echo "<script>alert('已提交立即发布任务，AstrBot 下一轮轮询执行');window.location.href='qqBot.php';</script>";
+        exit;
+    }
+    if ($action !== 'save') {
+        throw new Exception("QQ Bot 操作不正确");
+    }
+
     $newBotSecret = qqbot_post_value('bot_secret');
     if ($newBotSecret !== '') {
         $secretLength = strlen($newBotSecret);
@@ -90,6 +102,10 @@ try {
     $qzoneUgcRight = qqbot_post_value('qzone_ugc_right', '1');
     if (!in_array($qzoneUgcRight, array('1', '4', '64'), true)) {
         throw new Exception("QQ 空间可见范围不正确");
+    }
+    $qzonePublishMode = qqbot_post_value('qzone_publish_mode', 'scheduled');
+    if (!in_array($qzonePublishMode, array('scheduled', 'realtime'), true)) {
+        throw new Exception("QQ 空间发布模式不正确");
     }
     $qzoneBackgroundImageUrl = qqbot_post_value('qzone_background_image_url');
     if ($qzoneBackgroundImageUrl !== ''
@@ -115,6 +131,7 @@ try {
         'tool_signin' => qqbot_bool('tool_signin'),
         'chat_in_groups' => qqbot_bool('chat_in_groups'),
         'qzone_enabled' => qqbot_bool('qzone_enabled'),
+        'qzone_publish_mode' => $qzonePublishMode,
         'qzone_publish_time' => $qzonePublishTime,
         'qzone_batch_limit' => qqbot_int_range(qqbot_post_value('qzone_batch_limit'), 6, 1, 9),
         'qzone_summary_length' => qqbot_int_range(qqbot_post_value('qzone_summary_length'), 80, 20, 200),
@@ -125,7 +142,7 @@ try {
         'qzone_title' => qqbot_limited_text('qzone_title', '聊一今日动态', 40),
         'qzone_subtitle' => qqbot_limited_text('qzone_subtitle', '校园里今天发生了什么', 80),
         'qzone_footer' => qqbot_limited_text('qzone_footer', '更多动态，来聊一看看', 80),
-        'qzone_post_text' => qqbot_limited_text('qzone_post_text', "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/", 500),
+        'qzone_post_text' => qqbot_limited_text('qzone_post_text', '今日校园动态', 120),
         'qzone_background_color' => qqbot_color('qzone_background_color', '#F4F7F5'),
         'qzone_accent_color' => qqbot_color('qzone_accent_color', '#1E7258'),
         'qzone_text_color' => qqbot_color('qzone_text_color', '#18211E'),

@@ -69,7 +69,7 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 | 接口 | 用途 | 关键参数 |
 |---|---|---|
-| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群、QQ 空间设置和引用评论能力标记 | `botSecret,platform` |
+| `POST /SFreeBot/config` | 读取 Bot 开关、工具开关、同步群、QQ 空间模式、立即发布任务和引用评论能力标记 | `botSecret,platform` |
 | `POST /SFreeBot/chat` | DeepSeek 聊天代理 | `message` 或 `messages` JSON |
 | `POST /SFreeBot/bindChallenge` | 生成 QQ 绑定链接 | `qqUserId` |
 | `GET /SFreeBot/bindPage` | 独立绑定登录页 | `token` |
@@ -81,8 +81,8 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 | `POST /SFreeBot/registerGroup` | 登记当前群同步 | `groupId,groupName,unifiedMsgOrigin` |
 | `POST /SFreeBot/latestSpaces` | 拉取公开已审核动态 | `groupId,afterId,limit` |
 | `POST /SFreeBot/delivery` | 回写群投递结果 | `groupId,spaceId,status,messageId,error` |
-| `POST /SFreeBot/qzoneBatch` | 读取 QQ 空间待发布批次和图片模板配置 | `botSecret,platform` |
-| `POST /SFreeBot/qzoneDelivery` | 回写 QQ 空间投递结果 | `status,maxSpaceId,tid,error` |
+| `POST /SFreeBot/qzoneBatch` | 读取 QQ 空间待发布批次、发布模式、立即任务 token 和图片模板配置 | `botSecret,platform` |
+| `POST /SFreeBot/qzoneDelivery` | 回写 QQ 空间投递结果，并在成功时完成对应立即任务 | `status,maxSpaceId,tid,error,publishNowToken` |
 
 `addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。图片字段沿用动态接口的 `pic` 字符串格式；图片上传仍由现有前端/旧上传能力承担，Bot 只提交已可用的图片 URL。
 
@@ -169,21 +169,23 @@ https://prev.lcxqy.cn/#/pages/space/info?id=<spaceId>
 
 实际域名由后台 `QQ Bot设置 -> 动态 H5 地址` 控制。
 
-## 8. QQ 空间每日同步
+## 8. QQ 空间同步
 
 后台 `QQ Bot设置 -> QQ 空间每日同步` 控制全部业务参数，AstrBot 插件只需保留后端地址、Bot Secret 和同步轮询开关。可调项包括：
 
 - 启用开关和每天发布时间，固定按 `Asia/Shanghai` 判断。
+- 发布模式：`按时间发布` 每天到点执行一次；`随时发布` 在发现游标后有新动态时执行。
+- `立刻发布` 按钮生成一次性任务，绕过当天已发布限制；成功后才完成任务，失败保留并重试。
 - 每批 1 到 9 条动态、每条摘要 20 到 200 字；QQ 空间单条说说最多使用 9 张图片。
 - 是否使用动态首图、是否显示校区和话题。
-- 图片标题、副标题、底部文案、说说正文、背景色、强调色、文字色、卡片色和可选背景图 URL。
+- 图片标题、副标题、底部文案、简短说说正文、背景色、强调色、文字色、卡片色和可选背景图 URL。
 - QQ 空间可见范围：所有人、QQ 好友或仅自己。
 
 同步规则：
 
 - 数据源只包含 `starfree_space.status=1 AND onlyMe=0 AND type<>3`，动态仍是唯一内容核心。
 - 独立游标为 0 时取当前最新一批，避免补发全部历史；之后只取成功游标之后的增量。
-- 同一批动态各生成一张 1080px 宽的竖版 PNG，按 `P1-P9` 编号。NapCat 只通过 OneBot `get_cookies(domain=user.qzone.qq.com)` 提供当前个人 QQ 的空间凭据；插件上传图片后直接调用 QQ 空间发布接口，不使用 NapCat 不支持的 `send_qzone_msg`。
+- 同一批动态各生成一张 1080px 宽的竖版 PNG，按 `P1-P9` 编号。说说正文只使用后台填写的简短文案，不再自动追加 P 编号、作者和摘要清单。NapCat 只通过 OneBot `get_cookies(domain=user.qzone.qq.com)` 提供当前个人 QQ 的空间凭据；插件上传图片后直接调用 QQ 空间发布接口，不使用 NapCat 不支持的 `send_qzone_msg`。
 - 图片显示作者、校区/入学年份、摘要、话题和可选首图；没有首图或下载失败时自动使用纯文字布局。
 - 远程图片只允许公网 HTTP(S)，单图最大 8 MB，重定向目标也必须通过公网地址检查。
 - 没有新动态时不发布；失败只记录错误且不推进游标，插件最早 15 分钟后重试。
@@ -215,7 +217,7 @@ AstrBot 插件配置：
 }
 ~~~
 
-插件版本 `v0.3.2` 使用 NapCat `get_cookies` 与 QQ 空间 HTTP 接口发布 P1-P9 图集；`v0.3.1` 将 QQ 空间同步改为每条动态一张编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
+插件版本 `v0.3.3` 只发送后台设置的简短空间正文，不再自动追加图片索引清单；`v0.3.2` 使用 NapCat `get_cookies` 与 QQ 空间 HTTP 接口发布图集；`v0.3.1` 将 QQ 空间同步改为每条动态一张编号图片；`v0.3.0` 增加 QQ 空间每日同步。运行环境需要 `Pillow>=10.0.0`，AstrBot 安装插件时会读取 `requirements.txt`。`v0.2.5` 支持从论坛后台控制群聊普通对话，`v0.2.4` 开始支持群内引用同步动态直接评论，`v0.2.0` 开始要求 AstrBot 提供 `StarTools.get_data_dir`；旧版本 AstrBot 无该能力时插件仍可运行，但不会持久化会话，应优先升级服务器 AstrBot。
 
 本地针对性测试：
 

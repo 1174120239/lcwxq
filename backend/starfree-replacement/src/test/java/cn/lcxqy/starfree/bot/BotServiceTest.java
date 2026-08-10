@@ -316,6 +316,40 @@ class BotServiceTest {
     }
 
     @Test
+    void qzoneRealtimeModeIgnoresDailyPublishMarker() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_publish_mode", "realtime", "qzone_last_run_date",
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).toString());
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(6)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        assertThat(response).containsEntry("publishMode", "realtime");
+        assertThat(response).containsEntry("due", true);
+        assertThat(response).containsEntry("alreadyPublishedToday", false);
+    }
+
+    @Test
+    void qzonePendingManualPublishOverridesDailyMarker() {
+        Fixture fixture = new Fixture();
+        fixture.config("enabled", "1", "bot_secret", "test-secret", "qzone_enabled", "1",
+                "qzone_publish_mode", "scheduled", "qzone_last_run_date",
+                java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).toString(),
+                "qzone_publish_now_token", "manual-1", "qzone_publish_now_handled_token", "");
+        when(fixture.jdbc.queryForList(contains("ORDER BY s.id DESC LIMIT ?"), eq(6)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, Object> response = fixture.service.qzoneBatch(botRequest("test-secret", "10001"));
+
+        assertThat(response).containsEntry("publishNowPending", true);
+        assertThat(response).containsEntry("publishNowToken", "manual-1");
+        assertThat(response).containsEntry("due", true);
+        assertThat(response).containsEntry("alreadyPublishedToday", false);
+    }
+
+    @Test
     void qzoneDeliveryAdvancesCursorOnlyOnSuccess() {
         Fixture fixture = new Fixture();
         fixture.config("bot_secret", "test-secret", "qzone_cursor_space_id", "20");
@@ -333,6 +367,25 @@ class BotServiceTest {
                 eq("qzone_cursor_space_id"), eq("24"), any(java.sql.Timestamp.class));
         verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_config"),
                 eq("qzone_last_tid"), eq("qzone-tid"), any(java.sql.Timestamp.class));
+    }
+
+    @Test
+    void qzoneDeliveryCompletesMatchingManualPublishTask() {
+        Fixture fixture = new Fixture();
+        fixture.config("bot_secret", "test-secret", "qzone_cursor_space_id", "20",
+                "qzone_publish_now_token", "manual-1");
+        when(fixture.jdbc.update(startsWith("INSERT INTO lcxqy_bot_config"), any(Object[].class)))
+                .thenReturn(1);
+        Map<String, String> request = botRequest("test-secret", "10001");
+        request.put("status", "success");
+        request.put("maxSpaceId", "24");
+        request.put("tid", "qzone-tid");
+        request.put("publishNowToken", "manual-1");
+
+        fixture.service.qzoneDelivery(request);
+
+        verify(fixture.jdbc).update(startsWith("INSERT INTO lcxqy_bot_config"),
+                eq("qzone_publish_now_handled_token"), eq("manual-1"), any(java.sql.Timestamp.class));
     }
 
     @Test

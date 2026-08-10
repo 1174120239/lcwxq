@@ -3,6 +3,7 @@ import io
 import json
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -655,6 +656,8 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
                 return {
                     "enabled": True,
                     "alreadyPublishedToday": False,
+                    "publishNowPending": True,
+                    "publishNowToken": "manual-1",
                     "postText": "今日动态",
                     "ugcRight": 1,
                     "includeSourceImages": False,
@@ -683,6 +686,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("success", calls[1][1]["status"])
         self.assertEqual("32", calls[1][1]["maxSpaceId"])
         self.assertEqual("tid-32", calls[1][1]["tid"])
+        self.assertEqual("manual-1", calls[1][1]["publishNowToken"])
 
     def test_qzone_sync_skips_empty_batch(self):
         calls = []
@@ -695,6 +699,30 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.plugin._qzone_next_check_at = 0
         asyncio.run(self.plugin._sync_qzone({
             "enabled": True, "due": True, "alreadyPublishedToday": False,
+        }))
+
+        self.assertEqual(["/SFreeBot/qzoneBatch"], [item[0] for item in calls])
+
+    def test_qzone_manual_publish_bypasses_local_daily_backoff(self):
+        calls = []
+
+        async def api(path, payload):
+            calls.append((path, dict(payload)))
+            return {
+                "enabled": True,
+                "alreadyPublishedToday": False,
+                "publishNowPending": True,
+                "publishNowToken": "manual-1",
+                "spaces": [],
+            }
+
+        self.plugin._api = api
+        self.plugin._qzone_next_check_at = time.time() + 24 * 60 * 60
+        asyncio.run(self.plugin._sync_qzone({
+            "enabled": True,
+            "due": True,
+            "alreadyPublishedToday": False,
+            "publishNowPending": True,
         }))
 
         self.assertEqual(["/SFreeBot/qzoneBatch"], [item[0] for item in calls])
@@ -734,8 +762,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("get_cookies", calls[0][0])
         http_calls = [item for item in calls if item[0] == "http"]
         self.assertEqual(3, len(http_calls))
-        self.assertTrue(http_calls[-1][1]["data"]["con"].startswith("今天的动态"))
-        self.assertIn("P1 A：第一条", http_calls[-1][1]["data"]["con"])
+        self.assertEqual("今天的动态", http_calls[-1][1]["data"]["con"])
         self.assertEqual("4", http_calls[-1][1]["data"]["ugc_right"])
         self.assertEqual("pic-bo,pic-bo", http_calls[-1][1]["data"]["pic_bo"])
         self.assertNotIn("send_qzone_msg", [item[0] for item in calls])
