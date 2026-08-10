@@ -157,6 +157,56 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("confirm_add_space", session["stage"])
         self.assertEqual("今天晚霞很好看", session["pending"]["payload"]["text"])
 
+    def test_space_draft_accepts_text_then_image_in_separate_messages(self):
+        self.collect(DummyEvent("帮我发个动态"))
+        text_preview = self.collect(DummyEvent("今天晚霞很好看", message_id="message-2"))[0]
+        session = self.plugin._sessions[":10001"]
+        request_id = session["pending"]["payload"]["requestId"]
+
+        image_preview = self.collect(DummyEvent(
+            "", message_id="message-3", images=[{"file": "napcat-image-1"}]))[0]
+
+        payload = session["pending"]["payload"]
+        self.assertIn("继续发送文字或图片", text_preview)
+        self.assertIn("图片：1 张", image_preview)
+        self.assertEqual("今天晚霞很好看", payload["text"])
+        self.assertEqual([{"file": "napcat-image-1"}], payload["_imageSources"])
+        self.assertEqual(request_id, payload["requestId"])
+
+    def test_space_draft_accepts_image_then_text_in_separate_messages(self):
+        self.collect(DummyEvent("帮我发个动态"))
+        self.collect(DummyEvent(
+            "", message_id="message-2", images=[{"file": "napcat-image-1"}]))
+
+        preview = self.collect(DummyEvent("配上这句文字", message_id="message-3"))[0]
+        payload = self.plugin._sessions[":10001"]["pending"]["payload"]
+
+        self.assertIn("配上这句文字", preview)
+        self.assertIn("图片：1 张", preview)
+        self.assertEqual("配上这句文字", payload["text"])
+        self.assertEqual(1, len(payload["_imageSources"]))
+
+    def test_space_draft_appends_multiple_text_messages(self):
+        self.collect(DummyEvent("帮我发个动态"))
+        self.collect(DummyEvent("第一段", message_id="message-2"))
+
+        self.collect(DummyEvent("第二段", message_id="message-3"))
+
+        payload = self.plugin._sessions[":10001"]["pending"]["payload"]
+        self.assertEqual("第一段\n第二段", payload["text"])
+
+    def test_space_draft_rejects_tenth_image_without_losing_existing_draft(self):
+        first_nine = [{"file": f"image-{index}"} for index in range(9)]
+        self.plugin._prepare_space(DummyEvent(""), "九张图片", first_nine)
+
+        result = self.collect(DummyEvent(
+            "", message_id="message-2", images=[{"file": "image-10"}]))[0]
+        payload = self.plugin._sessions[":10001"]["pending"]["payload"]
+
+        self.assertIn("最多 9 张", result)
+        self.assertEqual("九张图片", payload["text"])
+        self.assertEqual(9, len(payload["_imageSources"]))
+
     def test_image_segment_keeps_url_file_and_path_for_napcat_fallback(self):
         event = DummyEvent("发动态", images=[{
             "url": "https://multimedia.nt.qq.com.cn/temp.jpg",

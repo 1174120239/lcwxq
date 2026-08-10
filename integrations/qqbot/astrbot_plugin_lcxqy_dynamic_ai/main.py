@@ -53,7 +53,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
-    "0.3.4",
+    "0.3.5",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -252,6 +252,13 @@ class LcxqyDynamicAiPlugin(Star):
             event.stop_event()
             async for item in self._confirm(event):
                 yield item
+            return
+
+        if (session.get("stage") == "confirm_add_space"
+                and (session.get("pending") or {}).get("type") == "addSpace"
+                and (text or images)):
+            event.stop_event()
+            yield event.plain_result(self._append_space_draft(event, text, images))
             return
 
         if session.get("stage") == "awaiting_space_content":
@@ -542,10 +549,53 @@ class LcxqyDynamicAiPlugin(Star):
             "payload": payload,
         }
         session["stage"] = "confirm_add_space"
-        preview = text if len(text) <= 180 else text[:180] + "..."
-        image_note = f"\n图片：{len(images)} 张" if images else ""
         self._touch_session(session)
-        return f"动态预览：\n{preview or '（仅图片）'}{image_note}\n现在发布吗？回复“发吧”或“取消”。"
+        return self._space_preview(payload)
+
+    def _append_space_draft(self, event: AstrMessageEvent, text: str, images: List[Any]) -> str:
+        session = self._session(event)
+        pending = session.get("pending") or {}
+        if pending.get("type") != "addSpace":
+            return self._prepare_space(event, text, images)
+        payload = pending.get("payload") or {}
+        old_text = str(payload.get("text") or "").strip()
+        extra_text = str(text or "").strip()
+        merged_text = "\n".join(item for item in (old_text, extra_text) if item)
+        if len(merged_text) > 1500:
+            return f"合并后会超过 1500 字，目前草稿 {len(old_text)} 字。请精简后再补充。"
+
+        old_sources = [self._normalize_image_source(item)
+                       for item in (payload.get("_imageSources") or [])]
+        new_sources = [self._normalize_image_source(item) for item in images]
+        merged_sources = []
+        seen = set()
+        for source in old_sources + new_sources:
+            identity = tuple(source.get(key, "") for key in ("url", "file", "path"))
+            if source and identity not in seen:
+                merged_sources.append(source)
+                seen.add(identity)
+        if len(merged_sources) > 9:
+            return f"一条动态最多 9 张图片，当前草稿已有 {len(old_sources)} 张。请减少后再发送。"
+
+        payload["text"] = merged_text
+        payload["_imageSources"] = merged_sources
+        image_urls = [self._image_source_display_url(item) for item in merged_sources]
+        payload["pic"] = ",".join(item for item in image_urls if item)
+        pending["payload"] = payload
+        session["pending"] = pending
+        session["stage"] = "confirm_add_space"
+        self._touch_session(session)
+        return self._space_preview(payload)
+
+    def _space_preview(self, payload: Dict[str, Any]) -> str:
+        text = str(payload.get("text") or "").strip()
+        preview = text if len(text) <= 180 else text[:180] + "..."
+        image_count = len(payload.get("_imageSources") or [])
+        image_note = f"\n图片：{image_count} 张" if image_count else ""
+        return (
+            f"动态预览：\n{preview or '（仅图片）'}{image_note}\n"
+            "还可以继续发送文字或图片补充。完成后回复“发吧”，不发请回复“取消”。"
+        )
 
     def _prepare_profile(self, event: AstrMessageEvent, field: Optional[str], value: Optional[str]) -> str:
         session = self._session(event)
