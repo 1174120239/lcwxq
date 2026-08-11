@@ -14,10 +14,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +65,50 @@ class VerificationEmailSenderTest {
                 () -> sender.send("student@qq.com", "验证码", "body"));
 
         assertThat(error.getKind()).isEqualTo(VerificationMailException.Kind.AUTHENTICATION);
+    }
+
+    @Test
+    void authenticationFailureBlocksFurtherSmtpAttemptsUntilBackoffExpires() {
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        org.mockito.Mockito.doThrow(new MailAuthenticationException("535 Login fail"))
+                .doNothing().when(mailSender).send(message);
+        AtomicLong clock = new AtomicLong(10_000L);
+        VerificationEmailSender sender = new VerificationEmailSender(
+                mailSender, "sender@qq.com", "auth-code", "sender@qq.com", true, 2,
+                300_000L, 1_000L, clock::get);
+
+        VerificationMailException first = assertThrows(VerificationMailException.class,
+                () -> sender.send("first@qq.com", "验证码", "body"));
+        VerificationMailException blocked = assertThrows(VerificationMailException.class,
+                () -> sender.send("second@qq.com", "验证码", "body"));
+
+        assertThat(first.getKind()).isEqualTo(VerificationMailException.Kind.AUTHENTICATION);
+        assertThat(blocked.getKind()).isEqualTo(VerificationMailException.Kind.AUTHENTICATION);
+        verify(mailSender).send(message);
+
+        clock.set(310_000L);
+        sender.send("third@qq.com", "验证码", "body");
+        verify(mailSender, times(2)).send(message);
+    }
+
+    @Test
+    void minimumAttemptIntervalRejectsImmediateSequentialSend() {
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        AtomicLong clock = new AtomicLong(20_000L);
+        VerificationEmailSender sender = new VerificationEmailSender(
+                mailSender, "sender@qq.com", "auth-code", "sender@qq.com", true, 2,
+                300_000L, 1_000L, clock::get);
+
+        sender.send("first@qq.com", "验证码", "body");
+        VerificationMailException blocked = assertThrows(VerificationMailException.class,
+                () -> sender.send("second@qq.com", "验证码", "body"));
+
+        assertThat(blocked.getKind()).isEqualTo(VerificationMailException.Kind.BUSY);
+        verify(mailSender).send(message);
     }
 
     @Test

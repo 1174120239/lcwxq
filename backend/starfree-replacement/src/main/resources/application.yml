@@ -67,3 +67,5 @@ verification:
   email:
     enabled: ${VERIFICATION_EMAIL_ENABLED:true}
     max-concurrent: ${VERIFICATION_EMAIL_MAX_CONCURRENT:2}
+    authentication-backoff-seconds: ${VERIFICATION_EMAIL_AUTHENTICATION_BACKOFF_SECONDS:300}
+    minimum-attempt-interval-millis: ${VERIFICATION_EMAIL_MINIMUM_ATTEMPT_INTERVAL_MILLIS:1000}

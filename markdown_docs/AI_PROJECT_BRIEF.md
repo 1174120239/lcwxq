@@ -19,7 +19,7 @@
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 294 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 296 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -104,6 +104,8 @@ manifest.json 使用的应用图标位于 static/branding/icons，不再依赖�
 | SPRING_MAIL_CONNECTION_TIMEOUT、SPRING_MAIL_READ_TIMEOUT、SPRING_MAIL_WRITE_TIMEOUT | SMTP 连接、读取和写入超时毫秒数，默认 10/15/15 秒 |
 | VERIFICATION_EMAIL_ENABLED | 是否允许新后端发送邮箱验证码，默认 true |
 | VERIFICATION_EMAIL_MAX_CONCURRENT | 验证码 SMTP 同时发送上限，默认 2，防止请求堆积和供应商限频 |
+| VERIFICATION_EMAIL_AUTHENTICATION_BACKOFF_SECONDS | SMTP 认证失败后的全局退避秒数，默认 300，退避期间不再连接供应商 |
+| VERIFICATION_EMAIL_MINIMUM_ATTEMPT_INTERVAL_MILLIS | 两次真实 SMTP 尝试的最小间隔毫秒数，默认 1000 |
 
 生产 JAR 会在运行环境未显式提供 SMTP 值时，仅从 `/opt/application.properties`
 兼容读取 `spring.mail.host/port/username/password/from`；不会导入该文件中的端口、数据库、
@@ -348,13 +350,13 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 294
+Tests run: 296
 Failures: 0
 Errors: 0
 Skipped: 0
 ~~~
 
-测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托、匿名动态权限与隐私边界、经济操作、轻量邀请奖励，以及邮箱验证码协议、限流、SMTP 异常分类和失败清理。
+测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托、匿名动态权限与隐私边界、经济操作、轻量邀请奖励，以及邮箱验证码协议、限流、SMTP 异常分类、认证退避和失败清理。
 
 ### 11.2 本地集成脚本
 

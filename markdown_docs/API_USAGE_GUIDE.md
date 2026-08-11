@@ -171,7 +171,7 @@ form_post("SFreeUsers/userRegister", {
 })
 ```
 
-邮箱验证码发送成功只返回 `code=1,msg=邮件发送成功`，不会返回验证码。SMTP 未配置、授权码失效、连接失败和投递失败会返回不同的业务消息；发送失败会删除刚写入的验证码并释放本次冷却占位。邮件正文优先使用后台 `starfree_emailtemplate.verifyTemplate`，兼容 `{{userName}}` 和 `{{code}}` 占位符；模板为空时使用内置模板。
+邮箱验证码发送成功只返回 `code=1,msg=邮件发送成功`，不会返回验证码。SMTP 未配置、QQ 拒绝登录、连接失败和投递失败会返回不同的业务消息；发送失败会删除刚写入的验证码，SMTP 失败保留收件人冷却，只有本地模板或运行错误才释放冷却。认证失败后默认全局退避 300 秒，退避期间不连接 SMTP；真实 SMTP 尝试默认至少间隔 1000 毫秒。邮件正文优先使用后台 `starfree_emailtemplate.verifyTemplate`，兼容 `{{userName}}` 和 `{{code}}` 占位符；模板为空时使用内置模板。
 
 ### 3.3 站内信、关注与用户管理
 

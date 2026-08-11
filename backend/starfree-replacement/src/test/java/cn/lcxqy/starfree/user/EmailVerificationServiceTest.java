@@ -111,7 +111,7 @@ class EmailVerificationServiceTest {
     }
 
     @Test
-    void smtpAuthenticationFailureRemovesCodeAndCooldown() {
+    void smtpAuthenticationFailureRemovesCodeButRetainsCooldown() {
         org.mockito.Mockito.doThrow(new VerificationMailException(
                 VerificationMailException.Kind.AUTHENTICATION))
                 .when(sender).send(anyString(), anyString(), anyString());
@@ -119,9 +119,10 @@ class EmailVerificationServiceTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.sendRegistrationCode("user@qq.com", "203.0.113.7"));
 
-        assertThat(error.getMessage()).isEqualTo("邮箱授权码无效或SMTP服务未开启");
+        assertThat(error.getMessage()).isEqualTo(
+                "QQ邮箱拒绝登录：请检查授权码、SMTP状态或稍后再试");
         verify(redis).consumeVerificationCode("user@qq.com");
-        verify(redis).releaseEmailSend("user@qq.com", "203.0.113.7");
+        verify(redis, never()).releaseEmailSend("user@qq.com", "203.0.113.7");
     }
 
     @Test

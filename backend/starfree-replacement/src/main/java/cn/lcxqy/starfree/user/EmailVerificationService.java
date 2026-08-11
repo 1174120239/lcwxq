@@ -101,20 +101,24 @@ class EmailVerificationService {
             redis.storeVerificationCode(redisKeyPart, code, CODE_TTL_SECONDS);
             sender.send(mail, subject(config), body(config, userName, code));
         } catch (VerificationMailException error) {
-            cleanupFailedSend(redisKeyPart, remoteAddress);
+            cleanupFailedSend(redisKeyPart, remoteAddress, false);
             LOG.warn("Verification email delivery failed: {}", error.getKind());
             throw new IllegalArgumentException(message(error.getKind()));
         } catch (RuntimeException error) {
-            cleanupFailedSend(redisKeyPart, remoteAddress);
+            cleanupFailedSend(redisKeyPart, remoteAddress, true);
             throw error;
         }
     }
 
-    private void cleanupFailedSend(String redisKeyPart, String remoteAddress) {
+    private void cleanupFailedSend(String redisKeyPart, String remoteAddress,
+                                   boolean releaseCooldown) {
         try {
             redis.consumeVerificationCode(redisKeyPart);
         } catch (RuntimeException error) {
             LOG.error("Could not remove failed verification code", error);
+        }
+        if (!releaseCooldown) {
+            return;
         }
         try {
             redis.releaseEmailSend(redisKeyPart, remoteAddress);
@@ -153,7 +157,7 @@ class EmailVerificationService {
             case CONFIGURATION:
                 return "邮件服务未配置，请联系管理员";
             case AUTHENTICATION:
-                return "邮箱授权码无效或SMTP服务未开启";
+                return "QQ邮箱拒绝登录：请检查授权码、SMTP状态或稍后再试";
             case CONNECTION:
                 return "邮件服务器暂时无法连接，请稍后再试";
             case BUSY:
