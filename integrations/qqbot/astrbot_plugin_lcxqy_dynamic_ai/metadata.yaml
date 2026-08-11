@@ -1,6 +1,6 @@
 name: lcxqy_dynamic_ai
 desc: 聊一下论坛动态 QQ 助手，面向 NapCat 个人 QQ 账号接入，支持 DeepSeek 聊天、账号绑定、动态工具、群动态同步和 QQ 空间每日图集。
 help: 可以直接聊天或说“帮我发个动态”“签到顺便看看积分”“把昵称改成小明”。该插件只面向动态，不提供帖子或文章能力。
-version: v0.3.5
+version: v0.3.7
 author: lcxqy
 repo: ""

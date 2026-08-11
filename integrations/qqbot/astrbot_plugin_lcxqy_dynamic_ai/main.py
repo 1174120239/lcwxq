@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import ipaddress
 import io
 import json
@@ -53,7 +54,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
-    "0.3.5",
+    "0.3.7",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -167,7 +168,8 @@ class LcxqyDynamicAiPlugin(Star):
     async def prepare_space(self, event: AstrMessageEvent):
         event.stop_event()
         text = self._command_tail(event, ("发动态", "动态")).strip()
-        yield event.plain_result(self._prepare_space(event, text, self._images_from_event(event)))
+        images = await self._stabilize_event_images(event, self._images_from_event(event))
+        yield event.plain_result(self._prepare_space(event, text, images))
 
     @filter.command("修改资料")
     async def prepare_profile(self, event: AstrMessageEvent):
@@ -258,12 +260,14 @@ class LcxqyDynamicAiPlugin(Star):
                 and (session.get("pending") or {}).get("type") == "addSpace"
                 and (text or images)):
             event.stop_event()
-            yield event.plain_result(self._append_space_draft(event, text, images))
+            stable_images = await self._stabilize_event_images(event, images)
+            yield event.plain_result(self._append_space_draft(event, text, stable_images))
             return
 
         if session.get("stage") == "awaiting_space_content":
             event.stop_event()
-            yield event.plain_result(self._prepare_space(event, text, images))
+            stable_images = await self._stabilize_event_images(event, images)
+            yield event.plain_result(self._prepare_space(event, text, stable_images))
             return
 
         if session.get("stage") == "awaiting_profile_value":
@@ -342,7 +346,8 @@ class LcxqyDynamicAiPlugin(Star):
             return self._prepare_profile(event, field, value)
         if self._looks_like_space_request(text):
             content = self._natural_space_content(text)
-            return self._prepare_space(event, content, images)
+            stable_images = await self._stabilize_event_images(event, images)
+            return self._prepare_space(event, content, stable_images)
         return None
 
     def _direct_chat_reply(self, text: str) -> Optional[str]:
@@ -490,7 +495,8 @@ class LcxqyDynamicAiPlugin(Star):
                             plan: Dict[str, str], images: List[Any]) -> str:
         intent = plan.get("intent", "chat")
         if intent == "add_space":
-            return self._prepare_space(event, plan.get("text", ""), images)
+            stable_images = await self._stabilize_event_images(event, images)
+            return self._prepare_space(event, plan.get("text", ""), stable_images)
         if intent == "update_profile":
             field = self._PROFILE_FIELDS.get(plan.get("field", ""), "")
             return self._prepare_profile(event, field, plan.get("value", ""))
@@ -566,6 +572,7 @@ class LcxqyDynamicAiPlugin(Star):
 
         old_sources = [self._normalize_image_source(item)
                        for item in (payload.get("_imageSources") or [])]
+        old_sources = [item for item in old_sources if not self._image_source_is_expired(item)]
         new_sources = [self._normalize_image_source(item) for item in images]
         merged_sources = []
         seen = set()
@@ -652,7 +659,7 @@ class LcxqyDynamicAiPlugin(Star):
             return "目前没有待确认操作。"
         try:
             if action_type == "addSpace":
-                data = await self._publish_space(pending["payload"])
+                data = await self._publish_space(pending["payload"], event)
                 msg = data.get("msg") or ("动态已提交审核" if data.get("pending") else "动态已发布")
                 url = data.get("h5Url")
                 self._clear_action(session)
@@ -1122,6 +1129,13 @@ class LcxqyDynamicAiPlugin(Star):
                 continue
         return None
 
+    def _onebot_bot(self, event: Optional[AstrMessageEvent] = None) -> Any:
+        direct = getattr(event, "bot", None) if event is not None else None
+        if callable(getattr(direct, "call_action", None)):
+            return direct
+        platform = self._onebot_platform()
+        return getattr(platform, "bot", None) if platform is not None else None
+
     def _qzone_post_content(self, settings: Dict[str, Any]) -> str:
         return self._compact_text(str(settings.get("postText") or "").strip(), 500)
 
@@ -1363,14 +1377,15 @@ class LcxqyDynamicAiPlugin(Star):
             return value
         return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
-    async def _publish_space(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def _publish_space(self, payload: Dict[str, Any],
+                             event: Optional[AstrMessageEvent] = None) -> Dict[str, Any]:
         sources = payload.get("_imageSources") or []
         if not sources:
             return await self._api("/SFreeBot/addSpace", payload)
         files = []
         try:
             for index, source in enumerate(sources[:9], start=1):
-                files.append(await self._read_image_for_upload(source, index))
+                files.append(await self._read_image_for_upload(source, index, event))
         except BackendError as error:
             data = dict(error.data)
             data["imageUpload"] = True
@@ -1380,7 +1395,7 @@ class LcxqyDynamicAiPlugin(Star):
         return await self._api_multipart("/SFreeBot/addSpace", payload, files)
 
     async def _api(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).rstrip("/")
+        base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).strip().rstrip("/")
         secret = str(self._cfg("bot_secret", ""))
         if not secret:
             raise BackendError("插件未配置 bot_secret")
@@ -1403,7 +1418,7 @@ class LcxqyDynamicAiPlugin(Star):
         return response_data if isinstance(response_data, dict) else {}
 
     async def _api_multipart(self, path: str, payload: Dict[str, Any], files: List[Dict[str, Any]]) -> Dict[str, Any]:
-        base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).rstrip("/")
+        base = str(self._cfg("backend_base_url", "http://127.0.0.1:18082")).strip().rstrip("/")
         secret = str(self._cfg("bot_secret", ""))
         if not secret:
             raise BackendError("插件未配置 bot_secret")
@@ -1442,7 +1457,26 @@ class LcxqyDynamicAiPlugin(Star):
         response_data = parsed.get("data")
         return response_data if isinstance(response_data, dict) else {}
 
-    async def _read_image_for_upload(self, source: Dict[str, str], index: int) -> Dict[str, Any]:
+    async def _read_image_for_upload(self, source: Dict[str, str], index: int,
+                                     event: Optional[AstrMessageEvent] = None) -> Dict[str, Any]:
+        # NapCat's CDN URL is short-lived and may fail TLS in the embedded Python runtime.
+        # Resolve its stable file id through the live OneBot connection first.
+        file_id = str(source.get("file") or "").strip()
+        if file_id and not file_id.lower().startswith(("http://", "https://", "file://", "base64://", "data:")):
+            bot = self._onebot_bot(event)
+            call_action = getattr(bot, "call_action", None) if bot is not None else None
+            if callable(call_action):
+                try:
+                    result = await call_action("get_image", file=file_id)
+                    for kind, ref in self._image_refs_from_action(result):
+                        try:
+                            raw = self._read_image_candidate(ref, kind)
+                            return self._image_upload_part(raw, source, index)
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+
         candidates = []
         for key in ("path", "file"):
             value = str(source.get(key) or "").strip()
@@ -1457,10 +1491,11 @@ class LcxqyDynamicAiPlugin(Star):
                 return self._image_upload_part(raw, source, index)
             except Exception:
                 continue
-        file_id = str(source.get("file") or "").strip()
         if file_id:
-            platform = self._onebot_platform()
-            bot = getattr(platform, "bot", None) if platform is not None else None
+            bot = self._onebot_bot(event)
+            if bot is None:
+                platform = self._onebot_platform()
+                bot = getattr(platform, "bot", None) if platform is not None else None
             call_action = getattr(bot, "call_action", None)
             if callable(call_action):
                 try:
@@ -1478,6 +1513,16 @@ class LcxqyDynamicAiPlugin(Star):
 
     def _read_image_candidate(self, candidate: Any, kind: str) -> bytes:
         value = str(candidate[1] if isinstance(candidate, tuple) else candidate).strip()
+        if value.startswith("base64://"):
+            raw = base64.b64decode(value[9:], validate=True)
+            if not self._image_mime(raw):
+                raise ValueError("文件不是支持的图片格式")
+            return raw
+        if value.startswith("data:") and ";base64," in value:
+            raw = base64.b64decode(value.split(",", 1)[1], validate=True)
+            if not self._image_mime(raw):
+                raise ValueError("文件不是支持的图片格式")
+            return raw
         if kind == "url":
             if not self._remote_url_allowed(value):
                 raise ValueError("图片地址不可访问")
@@ -1485,7 +1530,12 @@ class LcxqyDynamicAiPlugin(Star):
             with urllib.request.urlopen(request, timeout=12) as response:
                 raw = response.read(8 * 1024 * 1024 + 1)
         else:
-            path = Path(value.replace("file://", ""))
+            if value.lower().startswith("file://"):
+                parsed = urllib.parse.urlparse(value)
+                value = urllib.request.url2pathname(urllib.parse.unquote(parsed.path))
+                if parsed.netloc and not value.startswith("\\\\"):
+                    value = "//" + parsed.netloc + value
+            path = Path(value)
             if not path.exists() or not path.is_file():
                 raise FileNotFoundError(value)
             if path.stat().st_size > 8 * 1024 * 1024:
@@ -1664,6 +1714,136 @@ class LcxqyDynamicAiPlugin(Star):
                 result.append(source)
         return result
 
+    async def _stabilize_event_images(self, event: AstrMessageEvent,
+                                      images: List[Any]) -> List[Dict[str, str]]:
+        """Copy AstrBot/NapCat temporary images into the persistent draft directory."""
+        stable: List[Dict[str, str]] = []
+        for index, value in enumerate(images or [], start=1):
+            source = self._normalize_image_source(value)
+            if not source:
+                continue
+            if self._is_persisted_draft_image(source):
+                stable.append(source)
+                continue
+            try:
+                part = await self._read_image_for_upload(source, index, event)
+                stable.append(self._persist_draft_image(event, source, part, index))
+            except BackendError as error:
+                logger.warning(
+                    "lcxqy_dynamic_ai could not persist incoming image %s: %s",
+                    index,
+                    error.message,
+                )
+                # Keep the original reference so NapCat still gets one final chance at confirmation.
+                stable.append(source)
+        return stable
+
+    def _persist_draft_image(self, event: AstrMessageEvent, source: Dict[str, str],
+                             part: Dict[str, Any], index: int) -> Dict[str, str]:
+        root = self._draft_image_root()
+        if root is None:
+            return source
+        raw = bytes(part.get("content") or b"")
+        if not raw:
+            raise BackendError("图片内容为空")
+        content_type = str(part.get("content_type") or self._image_mime(raw) or "")
+        extension = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "webp",
+        }.get(content_type)
+        if not extension:
+            raise BackendError("图片格式不受支持")
+        session_hash = hashlib.sha256(
+            self._pending_key(event).encode("utf-8", errors="ignore")
+        ).hexdigest()[:12]
+        target = root / f"{session_hash}-{time.time_ns()}-{index}.{extension}"
+        temp_path = target.with_suffix(target.suffix + ".tmp")
+        temp_path.write_bytes(raw)
+        os.replace(str(temp_path), str(target))
+        return {
+            "path": str(target),
+            "file": str(target),
+            "name": str(part.get("filename") or source.get("name") or target.name),
+        }
+
+    def _draft_image_root(self) -> Optional[Path]:
+        state_path = getattr(self, "_state_path", None)
+        if state_path is None:
+            return None
+        root = state_path.parent / "draft_images"
+        root.mkdir(parents=True, exist_ok=True)
+        return root
+
+    def _is_persisted_draft_image(self, source: Dict[str, str]) -> bool:
+        root = self._draft_image_root()
+        if root is None:
+            return False
+        for key in ("path", "file"):
+            value = str(source.get(key) or "").strip()
+            if not value:
+                continue
+            try:
+                path = Path(value).resolve()
+                if path.is_file() and path.parent == root.resolve():
+                    return True
+            except (OSError, ValueError):
+                continue
+        return False
+
+    def _image_source_is_expired(self, source: Dict[str, str]) -> bool:
+        """Return true only when every image reference is a missing local path."""
+        found_reference = False
+        for key in ("path", "file", "url"):
+            value = str(source.get(key) or "").strip()
+            if not value:
+                continue
+            found_reference = True
+            lowered = value.lower()
+            if lowered.startswith(("http://", "https://", "base64://", "data:")):
+                return False
+            looks_local = bool(
+                lowered.startswith("file://")
+                or re.match(r"^[a-zA-Z]:[\\/]", value)
+                or value.startswith(("/", "\\\\"))
+            )
+            if not looks_local:
+                return False
+            local_value = value
+            if lowered.startswith("file://"):
+                parsed = urllib.parse.urlparse(value)
+                local_value = urllib.request.url2pathname(urllib.parse.unquote(parsed.path))
+                if parsed.netloc and not local_value.startswith("\\\\"):
+                    local_value = "//" + parsed.netloc + local_value
+            if Path(local_value).is_file():
+                return False
+        return found_reference
+
+    def _cleanup_draft_images(self, pending: Any) -> None:
+        if not isinstance(pending, dict):
+            return
+        payload = pending.get("payload") or {}
+        root = self._draft_image_root()
+        if root is None:
+            return
+        try:
+            resolved_root = root.resolve()
+        except OSError:
+            return
+        for source in payload.get("_imageSources") or []:
+            normalized = self._normalize_image_source(source)
+            for key in ("path", "file"):
+                value = str(normalized.get(key) or "").strip()
+                if not value:
+                    continue
+                try:
+                    path = Path(value).resolve()
+                    if path.parent == resolved_root and path.is_file():
+                        path.unlink()
+                except (OSError, ValueError):
+                    pass
+
     def _normalize_image_source(self, value: Any) -> Dict[str, str]:
         if isinstance(value, dict):
             return {key: str(value.get(key)) for key in ("url", "file", "path", "name")
@@ -1713,6 +1893,7 @@ class LcxqyDynamicAiPlugin(Star):
         self._save_state()
 
     def _clear_action(self, session: Dict[str, Any]) -> None:
+        self._cleanup_draft_images(session.get("pending"))
         session["stage"] = "idle"
         session["pending"] = None
         session.pop("resume_stage", None)

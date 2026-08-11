@@ -10,6 +10,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -21,6 +23,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class BotImageUploadServiceTest {
+    @Test
+    void readsLegacyWebKeyWhenSpringPropertyIsMissing() throws Exception {
+        Path properties = Files.createTempFile("lcxqy-legacy-", ".properties");
+        try {
+            Files.write(properties, Collections.singletonList("webinfo.key=server-config-key"),
+                    StandardCharsets.UTF_8);
+
+            assertThat(BotImageUploadService.resolveWebKey("", properties))
+                    .isEqualTo("server-config-key");
+            assertThat(BotImageUploadService.resolveWebKey("explicit-key", properties))
+                    .isEqualTo("explicit-key");
+        } finally {
+            Files.deleteIfExists(properties);
+        }
+    }
+
     @Test
     void uploadsImageThroughLegacyWebKeyWithoutExposingItToPlugin() {
         RestTemplate rest = mock(RestTemplate.class);

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import io
 import json
 import sys
@@ -263,6 +264,48 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("confirm_add_space", session["stage"])
         self.assertEqual("图片稍后重试", session["pending"]["payload"]["text"])
 
+    def test_space_draft_persists_temporary_image_until_confirm(self):
+        temporary_path = Path(self.temp_dir.name) / "astrbot-temp.jpg"
+        temporary_path.write_bytes(b"\xff\xd8\xfftemporary-image")
+        calls = []
+
+        async def multipart(path, payload, files):
+            calls.append((path, payload, files))
+            return {"msg": "动态已发布"}
+
+        self.plugin._api_multipart = multipart
+        self.collect(DummyEvent("帮我发个动态"))
+        preview = self.collect(DummyEvent(
+            "", message_id="message-2", images=[{"path": str(temporary_path)}]))[0]
+        payload = self.plugin._sessions[":10001"]["pending"]["payload"]
+        persisted_path = Path(payload["_imageSources"][0]["path"])
+
+        self.assertIn("图片：1 张", preview)
+        self.assertNotEqual(temporary_path, persisted_path)
+        self.assertTrue(persisted_path.is_file())
+
+        temporary_path.unlink()
+        result = self.collect(DummyEvent("发吧", message_id="message-3"))
+
+        self.assertIn("动态已发布", result[0])
+        self.assertEqual(1, len(calls[0][2]))
+        self.assertFalse(persisted_path.exists())
+
+    def test_resending_image_discards_expired_temporary_source(self):
+        expired_path = Path(self.temp_dir.name) / "expired.jpg"
+        self.plugin._prepare_space(
+            DummyEvent(""), "旧草稿", [{"path": str(expired_path), "file": str(expired_path)}])
+        replacement_path = Path(self.temp_dir.name) / "replacement.png"
+        replacement_path.write_bytes(b"\x89PNG\r\n\x1a\nreplacement")
+
+        preview = self.collect(DummyEvent(
+            "", message_id="message-2", images=[{"path": str(replacement_path)}]))[0]
+        sources = self.plugin._sessions[":10001"]["pending"]["payload"]["_imageSources"]
+
+        self.assertIn("图片：1 张", preview)
+        self.assertEqual(1, len(sources))
+        self.assertTrue(Path(sources[0]["path"]).is_file())
+
     def test_napcat_get_image_falls_back_to_local_file(self):
         image_path = Path(self.temp_dir.name) / "napcat.jpg"
         image_path.write_bytes(b"\xff\xd8\xffimage-data")
@@ -285,6 +328,34 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertEqual("get_image", actions[0][0])
         self.assertEqual("napcat-file-id", actions[0][1]["file"])
         self.assertEqual("image/jpeg", part["content_type"])
+
+    def test_napcat_get_image_prefers_the_current_event_bot(self):
+        image_path = Path(self.temp_dir.name) / "event-napcat.png"
+        image_path.write_bytes(b"\x89PNG\r\n\x1a\nimage-data")
+        actions = []
+
+        async def call_action(action, **payload):
+            actions.append((action, payload))
+            return {"file": str(image_path)}
+
+        event = DummyEvent("发吧")
+        event.bot = SimpleNamespace(call_action=call_action)
+        part = asyncio.run(self.plugin._read_image_for_upload(
+            {"file": "napcat-event-file-id"}, 1, event))
+
+        self.assertEqual("get_image", actions[0][0])
+        self.assertEqual("napcat-event-file-id", actions[0][1]["file"])
+        self.assertEqual("image/png", part["content_type"])
+
+    def test_image_upload_accepts_base64_source(self):
+        raw = b"\xff\xd8\xffimage-data"
+        encoded = base64.b64encode(raw).decode("ascii")
+
+        part = asyncio.run(self.plugin._read_image_for_upload(
+            {"file": "base64://" + encoded}, 1))
+
+        self.assertEqual("image/jpeg", part["content_type"])
+        self.assertEqual(raw, part["content"])
 
     def test_plain_text_space_still_uses_form_api(self):
         calls = []

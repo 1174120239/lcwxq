@@ -15,11 +15,17 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 @Service
 public class BotImageUploadService {
@@ -37,7 +43,7 @@ public class BotImageUploadService {
         this.restTemplate = restTemplate;
         this.mapper = mapper;
         this.legacyBaseUrl = legacyBaseUrl.replaceAll("/$", "");
-        this.webKey = webKey == null ? "" : webKey.trim();
+        this.webKey = resolveWebKey(webKey, legacyPropertiesPath());
     }
 
     public List<String> upload(List<MultipartFile> images) {
@@ -134,5 +140,25 @@ public class BotImageUploadService {
         Object value = parsed.get("msg");
         return value == null || String.valueOf(value).trim().isEmpty()
                 ? fallback : String.valueOf(value).trim();
+    }
+
+    static String resolveWebKey(String configured, Path legacyProperties) {
+        String value = configured == null ? "" : configured.trim();
+        if (!value.isEmpty() || legacyProperties == null || !Files.isRegularFile(legacyProperties)) {
+            return value;
+        }
+        Properties properties = new Properties();
+        try (Reader reader = Files.newBufferedReader(legacyProperties, StandardCharsets.UTF_8)) {
+            properties.load(reader);
+            return properties.getProperty("webinfo.key", "").trim();
+        } catch (IOException ignored) {
+            return "";
+        }
+    }
+
+    private static Path legacyPropertiesPath() {
+        String configured = System.getenv("LEGACY_PROPERTIES_PATH");
+        return Paths.get(configured == null || configured.trim().isEmpty()
+                ? "/opt/application.properties" : configured.trim());
     }
 }
