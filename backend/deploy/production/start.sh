@@ -46,6 +46,20 @@ export LEGACY_REDIS_ENABLED="${LEGACY_REDIS_ENABLED:-true}"
 export LEGACY_REDIS_PREFIX="${LEGACY_REDIS_PREFIX:-$(read_property web.prefix)}"
 export LEGACY_REDIS_SESSION_TTL="${LEGACY_REDIS_SESSION_TTL:-$(read_property webinfo.usertime)}"
 
+# Reuse the closed API's SMTP runtime configuration without copying secrets into
+# the repository. Verification and dynamic-comment notices share the SMTP account,
+# while their failure handling remains independent.
+SPRING_MAIL_HOST_VALUE="${SPRING_MAIL_HOST:-$(read_property spring.mail.host)}"
+SPRING_MAIL_PORT_VALUE="${SPRING_MAIL_PORT:-$(read_property spring.mail.port)}"
+export SPRING_MAIL_HOST="${SPRING_MAIL_HOST_VALUE:-smtp.qq.com}"
+export SPRING_MAIL_PORT="${SPRING_MAIL_PORT_VALUE:-465}"
+export SPRING_MAIL_USERNAME="${SPRING_MAIL_USERNAME:-$(read_property spring.mail.username)}"
+export SPRING_MAIL_PASSWORD="${SPRING_MAIL_PASSWORD:-$(read_property spring.mail.password)}"
+export SPRING_MAIL_FROM="${SPRING_MAIL_FROM:-$SPRING_MAIL_USERNAME}"
+export VERIFICATION_EMAIL_ENABLED="${VERIFICATION_EMAIL_ENABLED:-true}"
+export VERIFICATION_EMAIL_MAX_CONCURRENT="${VERIFICATION_EMAIL_MAX_CONCURRENT:-2}"
+export NOTIFICATION_EMAIL_ENABLED="${NOTIFICATION_EMAIL_ENABLED:-true}"
+
 # UniPush is opt-in. When enabled on the server, the operator adds these keys to
 # /opt/application.properties (unipush.enabled=true, unipush.app-id, unipush.app-key,
 # unipush.app-secret) or exports the matching environment variables. Empty values

@@ -14,7 +14,7 @@
 |---|---|---|
 | Nginx | api.lcxqy.cn | 按精确 location 将请求分流到新旧后端 |
 | 新后端 | 127.0.0.1:18082 | Spring Boot 重建服务 |
-| 旧后端 | 127.0.0.1:8081 | 保留支付、验证码、上传、聊天等未迁移能力 |
+| 旧后端 | 127.0.0.1:8081 | 保留支付、短信验证码、上传、聊天等未迁移能力 |
 | PHP admin | admin.lcxqy.cn | 原管理后台，不重建 |
 | MySQL | lcxqy | 新旧后端共享业务数据 |
 | Redis | 旧配置指定 | 共享登录态、限额和缓存 |
@@ -328,7 +328,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 13 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 13 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 当前边界
 
@@ -346,7 +346,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 仍保留旧端：
 
-- 邮件/短信验证码发送和第三方社交登录绑定。
+- 短信验证码发送和第三方社交登录绑定；邮箱验证码由新端实现，需单独切流。
 - upload/full 文件上传。
 - 聊天和群聊。
 - 官方充值、支付创建、卡密及支付回调的原始实现。
@@ -354,6 +354,8 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - API 手册中标为“旧端”或“待抓包确认”的其他路径。
 
 部分新接口会主动委托旧端处理不支持的付费、草稿、商品关联或未知类型请求。不能只看 URL 判断最终写入者。
+
+邮箱验证码上线前必须确认新后端运行环境同时具备：`LEGACY_REDIS_ENABLED=true`、与旧端一致的 Redis 前缀、`SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD/FROM`，以及 `VERIFICATION_EMAIL_ENABLED=true`。生产 `start.sh` 会从 `/opt/application.properties` 读取旧端 SMTP 配置，但不会输出凭据；QQ 邮箱的 password 必须填写 SMTP 授权码，不是 QQ 登录密码。`NOTIFICATION_EMAIL_ENABLED` 默认保持 true，动态评论邮件提醒继续使用同一 SMTP，且失败不会影响评论落库。先在本机 `18082` 使用测试邮箱验证成功和失败清理，再运行 `backend/deploy/production/promote-email-verification-routes.sh`；脚本只切 `RegSendCode` 和 `SendCode`，不修改短信、登录或其他账号接口。
 
 ### 9.3 路由识别
 

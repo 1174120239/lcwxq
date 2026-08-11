@@ -151,9 +151,9 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
 | `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | `uid` 优先；资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
-| `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | 旧端参数待抓包确认 | 旧端 | 邮箱注册验证码发送；新后端只兼容消费验证码。 |
+| `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
-| `SFreeUsers/SendCode` | GET/POST / 登录态/策略 | 旧端参数待抓包确认 | 旧端 | 历史通用验证码发送。 |
+| `SFreeUsers/SendCode` | GET/POST / 无 | `params.name` | 代码新/公网旧 | 找回密码验证码；name 可为用户名或邮箱，实际发送到账号已绑定邮箱，但兼容写入 `starfree_sendCode<用户名>`。有效期 30 分钟、同账号 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/apiLogin` | GET/POST / 第三方凭据 | 旧端参数待抓包确认 | 旧端 | 不要信任客户端直接传来的 openId；重建时必须校验提供方 code/token。 |
 | `SFreeUsers/apiBind` | GET/POST / token+第三方凭据 | 旧端参数待抓包确认 | 旧端 | 社会化绑定，重建时校验 audience、过期和回调状态。 |
 | `SFreeUsers/userBindStatus` | GET/POST / token | 旧端参数待抓包确认 | 旧端 | 查询第三方绑定状态。 |
@@ -170,6 +170,8 @@ form_post("SFreeUsers/userRegister", {
     }, ensure_ascii=False)
 })
 ```
+
+邮箱验证码发送成功只返回 `code=1,msg=邮件发送成功`，不会返回验证码。SMTP 未配置、授权码失效、连接失败和投递失败会返回不同的业务消息；发送失败会删除刚写入的验证码并释放本次冷却占位。邮件正文优先使用后台 `starfree_emailtemplate.verifyTemplate`，兼容 `{{userName}}` 和 `{{code}}` 占位符；模板为空时使用内置模板。
 
 ### 3.3 站内信、关注与用户管理
 

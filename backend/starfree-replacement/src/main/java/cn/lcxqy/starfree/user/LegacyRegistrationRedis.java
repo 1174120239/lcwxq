@@ -39,6 +39,40 @@ public class LegacyRegistrationRedis {
         }
     }
 
+    public void storeVerificationCode(String keyPart, String code, int seconds) {
+        requireEnabled();
+        set(codeKey(keyPart), code, seconds);
+    }
+
+    public void claimEmailSend(String recipientKey, String remoteAddress,
+                               int recipientCooldownSeconds, int ipCooldownSeconds) {
+        requireEnabled();
+        String recipient = normalizeKeyPart(recipientKey);
+        String address = normalizeAddress(remoteAddress);
+        ValueOperations<Object, Object> values = redis.opsForValue();
+        String recipientKeyName = prefix + "_emailCodeRecipient_" + recipient;
+        Boolean recipientClaimed = values.setIfAbsent(
+                recipientKeyName, "1", recipientCooldownSeconds, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(recipientClaimed)) {
+            throw new IllegalArgumentException("验证码发送过于频繁，请稍后再试");
+        }
+        String ipKeyName = prefix + "_emailCodeIp_" + address;
+        Boolean ipClaimed = values.setIfAbsent(
+                ipKeyName, "1", ipCooldownSeconds, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(ipClaimed)) {
+            redis.delete(recipientKeyName);
+            throw new IllegalArgumentException("请求过于频繁，请稍后再试");
+        }
+    }
+
+    public void releaseEmailSend(String recipientKey, String remoteAddress) {
+        if (!enabled) {
+            return;
+        }
+        redis.delete(prefix + "_emailCodeRecipient_" + normalizeKeyPart(recipientKey));
+        redis.delete(prefix + "_emailCodeIp_" + normalizeAddress(remoteAddress));
+    }
+
     public String phoneVerificationCode(String phone) {
         if (!enabled) {
             return null;
@@ -102,6 +136,25 @@ public class LegacyRegistrationRedis {
     private void set(String key, String value, int seconds) {
         ValueOperations<Object, Object> values = redis.opsForValue();
         values.set(key, value, seconds, TimeUnit.SECONDS);
+    }
+
+    private void requireEnabled() {
+        if (!enabled) {
+            throw new IllegalStateException("Legacy Redis verification storage is disabled");
+        }
+    }
+
+    private String normalizeKeyPart(String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("验证码接收账号不正确");
+        }
+        return normalized;
+    }
+
+    private String normalizeAddress(String value) {
+        String normalized = value == null ? "" : value.trim();
+        return normalized.isEmpty() ? "unknown" : normalized;
     }
 
     private String codeKey(String email) {

@@ -45,8 +45,8 @@ else
     }
     cat >>"$CONF" <<'NGINX'
 
-# Account configuration and maintenance are rebuilt locally. Email/SMS code
-# delivery remains on the legacy catch-all; these routes only consume codes.
+# Account configuration and maintenance are rebuilt locally. Verification-code
+# delivery is promoted independently by promote-email-verification-routes.sh.
 location = /SFreeUsers/regConfig {
     proxy_pass http://127.0.0.1:18082;
     add_header X-Starfree-Backend replacement-account-reg-config always;
@@ -115,14 +115,6 @@ for route in regConfig userFoget userEdit setClientId; do
         exit 21
     fi
     echo "$route=$observed"
-done
-
-for legacy_route in SendCode RegSendCode; do
-    count="$(grep -Fc "location = /SFreeUsers/$legacy_route {" "$CONF" || true)"
-    [[ "$count" == 0 ]] || {
-        echo "$legacy_route must remain on the legacy catch-all" >&2
-        exit 22
-    }
 done
 
 echo "rollback=$BACKUP"
