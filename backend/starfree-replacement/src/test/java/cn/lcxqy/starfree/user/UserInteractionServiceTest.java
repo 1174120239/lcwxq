@@ -256,6 +256,33 @@ class UserInteractionServiceTest {
                 .containsEntry("title", "校园问题");
     }
 
+    @Test
+    void inboxPrefersNicknameAndBuildsQqAvatar() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(8L);
+        when(tokens.userById(7L)).thenReturn(row(
+                "uid", 7L, "name", "3910886328", "screenName", "校园昵称",
+                "mail", "3910886328@qq.com", "avatar", "", "vip", 0L,
+                "group", "visitor"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
+        when(jdbc.queryForList(startsWith("SELECT id,type,uid,text,touid,isread,value,created,cid"),
+                any(Object.class))).thenReturn(Collections.singletonList(row(
+                        "id", 1L, "type", "system", "uid", 7L, "text", "notice",
+                        "touid", 8L, "isread", 0, "value", 0L,
+                        "created", 1700000000L, "cid", 0L)));
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+
+        Map<String, Object> notification = new UserInteractionService(jdbc, tokens)
+                .inbox(request).getData().get(0);
+        Map<String, Object> user = (Map<String, Object>) notification.get("userJson");
+
+        assertThat(user).containsEntry("name", "校园昵称")
+                .containsEntry("avatar", "https://q1.qlogo.cn/g?b=qq&nk=3910886328&s=640");
+    }
+
     private static Map<String, Object> row(Object... values) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (int index = 0; index + 1 < values.length; index += 2) {

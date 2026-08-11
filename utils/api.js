@@ -137,7 +137,7 @@ module.exports = {
 		return GithubUrl;
 	},
 	GetWebUrl:function(){
-		return STAR_URL;
+		return WEB_URL;
 	},
 	GetGroupUrl:function(){
 		return GroupUrl;
@@ -239,6 +239,13 @@ module.exports = {
 	},
 	invitationExcel:function(){
 		return API_URL + 'SFreeUsers/invitationExcel';
+	},
+	//轻量邀请分享
+	invitationConfig:function(){
+		return API_URL + 'SFreeInvitation/config';
+	},
+	invitationMe:function(){
+		return API_URL + 'SFreeInvitation/me';
 	},
 	setClientId:function(){
 		return API_URL + 'SFreeUsers/setClientId';
@@ -351,6 +358,9 @@ module.exports = {
 	// 校园问答
 	qaQuestionList:function(){
 		return API_URL + 'SFreeQa/questionList';
+	},
+	qaQuestionAdd:function(){
+		return API_URL + 'SFreeQa/questionAdd';
 	},
 	qaQuestionInfo:function(){
 		return API_URL + 'SFreeQa/questionInfo';
@@ -647,6 +657,15 @@ module.exports = {
 	},
 	spaceUserReplies:function(){
 		return API_URL + 'SFreeSpace/userReplies';
+	},
+	spaceReportAdd:function(){
+		return API_URL + 'SFreeSpace/reportAdd';
+	},
+	spaceReportList:function(){
+		return API_URL + 'SFreeSpace/reportList';
+	},
+	spaceReportReview:function(){
+		return API_URL + 'SFreeSpace/reportReview';
 	},
 	
 	SMuser:function(){

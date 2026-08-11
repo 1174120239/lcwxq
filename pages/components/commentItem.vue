@@ -3,9 +3,9 @@
 		<view class="cu-item">
 			<view class="cu-list menu-avatar comment">
 				<view class="cu-item">
-					<view class="cu-avatar round" @tap="toUserContents(item)" :style="item.style"></view>
+					<campus-avatar class="cu-avatar round" :src="item.avatar" :name="item.author" @tap.stop="toUserContents(item)"></campus-avatar>
 					<view class="content">
-						<view class="text-grey">
+						<view class="text-grey" @tap.stop="toUserContents(item)">
 						<block v-if="item.isvip>0">
 							<block v-if="item.vip==1">
 								<text class="text-red">
@@ -32,7 +32,7 @@
 							<text class="userlv customize" v-if="item.customize&&item.customize!=''">{{item.customize}}</text>
 						</block>
 						</view>
-						<view class="text-content text-df break-all">
+						<view class="text-content text-df break-all" user-select @longpress.stop="copyComment(item.text)">
 							<rich-text :nodes="markHtml(item.text)"></rich-text>
 							
 						</view>
@@ -71,6 +71,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { copyText } from '@/utils/clipboard.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -122,6 +123,9 @@
 			// #endif
 		},
 		methods: {
+			copyComment(text){
+				copyText(text, '评论已复制');
+			},
 			subText(text,num){
 				if(text.length < null){
 					return text.substring(0,num)+"……"
@@ -194,13 +198,20 @@
 				// #endif
 			},
 			toUserContents(data){
-				var that = this;
-				var name = data.author;
-				var title = data.author+"的信息";
-				var id= data.authorId;
-				var type="user";
+				var name = data && data.author ? data.author : '用户';
+				var title = name + "的信息";
+				var id = Number(data && data.authorId ? data.authorId : 0);
+				if(!id){
+					uni.showToast({ title: '用户不存在或已注销', icon: 'none' });
+					return false;
+				}
 				uni.navigateTo({
-				    url: '/pages/contents/userinfo?title='+title+"&name="+name+"&uid="+id+"&avatar="+encodeURIComponent(data.avatar)
+					url: '/pages/contents/userinfo?title=' + encodeURIComponent(title)
+						+ '&name=' + encodeURIComponent(name) + '&uid=' + id
+						+ '&avatar=' + encodeURIComponent(data.avatar || ''),
+					fail: function(){
+						uni.showToast({ title: '无法打开用户主页', icon: 'none' });
+					}
 				});
 			},
 			getUserLv(i){

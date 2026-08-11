@@ -57,9 +57,9 @@
 					<text class="auth-field-icon cuIcon-lock"></text>
 					<input name="input" v-model="repassword" type="password" placeholder="再次输入密码" confirm-type="done" @confirm="userRegister"></input>
 				</view>
-				<view class="cu-form-group auth-field" v-if="isInvite==1">
+				<view class="cu-form-group auth-field" v-if="isInvite==1 || inviteCode">
 					<text class="auth-field-icon cuIcon-ticket"></text>
-					<input name="input" v-model="inviteCode" type="text" placeholder="请输入邀请码（必填）"></input>
+					<input name="input" v-model="inviteCode" type="text" :disabled="!!inviteFromShare" :placeholder="isInvite==1 ? '请输入邀请码（必填）' : '邀请码（可选）'"></input>
 				</view>
 				<view class="user-btn flex flex-direction">
 					<button class="cu-btn auth-primary lg" @click.prevent="userRegister">立即注册</button>
@@ -135,6 +135,8 @@
 				isEmail:1,
 				isInvite:0,
 				inviteCode:"",
+				inviteFromShare:false,
+				fromInvitation:false,
 				campusOptions: [],
 				gradeOptions: [],
 				campusId: 0,
@@ -174,7 +176,7 @@
 		onUnload() {
 			this.stopCampusThemeClock();
 		},
-		onLoad() {
+		onLoad(query) {
 			const modelViewTime = uni.getStorageSync('modelView');
 						if(modelViewTime){
 							console.log(modelViewTime);
@@ -186,6 +188,15 @@
 						}
 			
 			var that = this;
+			if (query && query.invite) {
+				try {
+					that.inviteCode = decodeURIComponent(query.invite).trim().toUpperCase();
+				} catch (e) {
+					that.inviteCode = String(query.invite).trim().toUpperCase();
+				}
+				that.inviteFromShare = !!that.inviteCode;
+			}
+			that.fromInvitation = !!(query && String(query.fromInvitation) === '1');
 			// #ifdef APP-PLUS || MP
 			that.NavBar = this.CustomBar;
 			// #endif
@@ -276,6 +287,20 @@
 			back(){
 				uni.navigateBack({
 					delta: 1
+				});
+			},
+			returnToInvitation() {
+				var invitationUrl = '/pages/user/invitation?download=1';
+				if (this.inviteCode) {
+					invitationUrl += '&invite=' + encodeURIComponent(this.inviteCode);
+				}
+				uni.setStorageSync('invitationDownloadFocus', Date.now());
+				uni.navigateBack({
+					delta: 1,
+					fail: function() {
+						uni.removeStorageSync('invitationDownloadFocus');
+						uni.redirectTo({ url: invitationUrl });
+					}
 				});
 			},
 			okBtn() {
@@ -462,7 +487,11 @@
 							icon: 'none'
 						})
 						if(res.data.code==1){
-							that.back();
+							if (that.fromInvitation) {
+								that.returnToInvitation();
+							} else {
+								that.back();
+							}
 						}
 					},
 					fail: function(res) {

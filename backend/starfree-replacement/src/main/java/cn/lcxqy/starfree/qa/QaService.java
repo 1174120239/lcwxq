@@ -74,6 +74,32 @@ public class QaService {
         return normalizeQuestion(rows.get(0));
     }
 
+    @Transactional
+    public Map<String, Object> questionAdd(String token, Map<String, Object> body) {
+        StaffAccess.Actor actor = access.requireUser(token);
+        String title = validateText(body.get("title"), 4, 160,
+                "问题标题至少需要4个字", "问题标题不能超过160个字");
+        String description = optionalText(body.get("description"), 5000, "问题说明不能超过5000个字");
+        String topic = optionalText(body.get("topic"), 80, "话题不能超过80个字");
+        long now = Instant.now().getEpochSecond();
+        rejectBanned(actor, now);
+        Integer duplicate = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_qa_questions "
+                        + "WHERE created_by=? AND title=? AND description=? AND created>=?",
+                Integer.class, actor.getUid(), title, description, now - 20);
+        if (duplicate != null && duplicate > 0) {
+            throw new IllegalArgumentException("问题已提交，请勿重复发送");
+        }
+        long id = insertKey("INSERT INTO starfree_qa_questions"
+                        + "(title,description,topic,cover_url,status,recommended,sort_order,created_by,created,modified) "
+                        + "VALUES(?,?,?,'',0,0,0,?,?,?)",
+                title, description, topic, actor.getUid(), now, now);
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("id", id);
+        result.put("status", 0);
+        result.put("createdBy", actor.getUid());
+        return result;
+    }
+
     public Page answerList(Map<String, String> request) {
         long questionId = positiveId(request.get("questionId"), "问题不存在");
         requirePublicQuestion(questionId);
@@ -502,13 +528,28 @@ public class QaService {
             result.put("grade", "");
             return result;
         }
-        result.put("name", text(source.get("name")));
-        result.put("avatar", text(source.get("avatar")));
+        String screenName = text(source.get("screenName"));
+        String accountName = text(source.get("name"));
+        result.put("name", screenName.isEmpty() ? accountName : screenName);
+        result.put("avatar", publicAvatar(source));
         result.put("group", text(source.get("group")));
         result.put("vip", number(source.get("vip")));
         result.put("campus", text(source.get("campus")));
         result.put("grade", text(source.get("grade")));
         return result;
+    }
+
+    private String publicAvatar(Map<String, Object> user) {
+        String avatar = text(user.get("avatar"));
+        if (!avatar.isEmpty()) {
+            return avatar;
+        }
+        String mail = text(user.get("mail")).toLowerCase();
+        if (mail.endsWith("@qq.com") && mail.length() > 7) {
+            return "https://q1.qlogo.cn/g?b=qq&nk="
+                    + mail.substring(0, mail.length() - 7) + "&s=640";
+        }
+        return "";
     }
 
     private void writeNotice(String type, long fromUid, long toUid, long questionId, long answerId,
@@ -547,6 +588,13 @@ public class QaService {
     private void requireOwnerOrStaff(StaffAccess.Actor actor, long ownerUid) {
         if (actor.getUid() != ownerUid && !actor.isStaff()) {
             throw new IllegalArgumentException("你没有操作权限");
+        }
+    }
+
+    private void rejectBanned(StaffAccess.Actor actor, long now) {
+        long bannedUntil = number(actor.getUser().get("bantime"));
+        if (bannedUntil == 1 || bannedUntil > now) {
+            throw new IllegalArgumentException("账号当前不可发布内容");
         }
     }
 

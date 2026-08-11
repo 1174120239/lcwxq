@@ -227,10 +227,31 @@ public class UserInteractionService {
             return removed;
         }
         Map<String, Object> result = new LinkedHashMap<>(source);
+        String screenName = text(source.get("screenName"));
+        String accountName = text(source.get("name"));
+        result.put("name", screenName.isEmpty() ? accountName : screenName);
+        result.put("avatar", publicAvatar(source));
         String group = String.valueOf(source.get("group"));
         result.put("groupKey", group);
         result.put("isvip", isVip(source.get("vip")) ? 1 : 0);
         return result;
+    }
+
+    private String publicAvatar(Map<String, Object> user) {
+        String avatar = text(user.get("avatar"));
+        if (!avatar.isEmpty()) {
+            return avatar;
+        }
+        String mail = text(user.get("mail")).toLowerCase();
+        if (mail.endsWith("@qq.com") && mail.length() > 7) {
+            return "https://q1.qlogo.cn/g?b=qq&nk="
+                    + mail.substring(0, mail.length() - 7) + "&s=640";
+        }
+        return "";
+    }
+
+    private String text(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     private long requireUser(Map<String, String> request) {

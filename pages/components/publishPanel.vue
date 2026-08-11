@@ -21,6 +21,11 @@
 							<text class="publish-option-label">发布动态</text>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
+						<view class="publish-option" @tap="goPublish('/pages/qa/post')">
+							<view class="publish-option-icon question-icon"><text class="cuIcon-question"></text></view>
+							<text class="publish-option-label">提出问题</text>
+							<text class="publish-option-arrow cuIcon-right"></text>
+						</view>
 						<view class="publish-option" @tap="goPublish('/pages/space/post?anonymous=1')">
 							<view class="publish-option-icon anonymous-icon"><text class="cuIcon-notice"></text></view>
 							<text class="publish-option-label">匿名动态</text>
@@ -381,6 +386,10 @@
 		transition: transform 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
 	}
 
+	.publish-option + .publish-option {
+		margin-top: 18rpx;
+	}
+
 	.publish-option:active {
 		transform: scale(0.975);
 		background: rgba(238, 247, 252, 0.98);
@@ -398,6 +407,12 @@
 		background: rgba(222, 239, 255, 0.9);
 		font-size: 38rpx;
 		color: #168cf0;
+	}
+
+	.publish-option-icon.question-icon {
+		border-color: rgba(116, 194, 164, 0.72);
+		background: rgba(221, 244, 235, 0.92);
+		color: #238267;
 	}
 
 	.publish-option-label {

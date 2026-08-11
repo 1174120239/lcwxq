@@ -6,10 +6,28 @@ import uView from '@/uni_modules/uview-ui'
 Vue.use(uView)
 import App from './App'
 import store from './store/index.js'
-import { CAMPUS_THEME_RESOLVED_EVENT } from './utils/campusTheme.js'
+import {
+	CAMPUS_THEME_EVENT,
+	CAMPUS_THEME_RESOLVED_EVENT,
+	getCampusThemeMode
+} from './utils/campusTheme.js'
 Vue.prototype.$store = store
 
 Vue.mixin({
+	created() {
+		if (!this.$data || !Object.prototype.hasOwnProperty.call(this.$data, 'campusThemeMode')) return
+		this.campusThemeMode = getCampusThemeMode()
+		this._campusThemeModeHandler = (mode) => {
+			this.campusThemeMode = mode
+		}
+		uni.$on(CAMPUS_THEME_EVENT, this._campusThemeModeHandler)
+	},
+	beforeDestroy() {
+		if (this._campusThemeModeHandler) {
+			uni.$off(CAMPUS_THEME_EVENT, this._campusThemeModeHandler)
+			this._campusThemeModeHandler = null
+		}
+	},
 	computed: {
 		campusResolvedAppStyle() {
 			return this.$store ? this.$store.state.AppStyle : ''

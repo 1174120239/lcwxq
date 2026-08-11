@@ -28,4 +28,17 @@ class SpaceControllerCompatibilityTest {
         RequestMapping mapping = method.getAnnotation(RequestMapping.class);
         assertThat(mapping.value()).containsExactly("/userReplies");
     }
+
+    @Test
+    void dynamicReportsExposeSubmitListAndReviewRoutes() throws Exception {
+        assertRoute("reportAdd", "/reportAdd");
+        assertRoute("reportList", "/reportList");
+        assertRoute("reportReview", "/reportReview");
+    }
+
+    private void assertRoute(String methodName, String route) throws Exception {
+        Method method = SpaceController.class.getMethod(methodName, java.util.Map.class);
+        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+        assertThat(mapping.value()).containsExactly(route);
+    }
 }

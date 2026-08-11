@@ -7,9 +7,9 @@
 				<view class="cu-item cu-item2" :class="{'is-entering': index < 3}" :style="index < 3 ? {'animation-delay': (index * 55) + 'ms'} : null" @tap="toInfo(item.id,index)">
 					<view class="cu-list menu-avatar">
 						<view class="cu-item cu-item2">
-							<campus-avatar class="cu-avatar round lg" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
+							<campus-avatar :key="'space-avatar-' + item.id + '-' + item.userJson.uid + '-' + item.userJson.avatar" class="cu-avatar round lg" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content flex-sub space-author-content">
-								<view class="space-author-line"><text class="space-author-name" :class="{'is-vip': item.userJson.isvip>0}">{{item.userJson.name}}</text>
+								<view class="space-author-line" @tap.stop="toUserContents(item.userJson)"><text class="space-author-name" :class="{'is-vip': item.userJson.isvip>0}">{{item.userJson.name}}</text>
 								<text class="space-campus-badge" v-if="item.userJson.campus">{{item.userJson.campus}}</text>
 								<block v-if="item.userJson.uid!=0">
 									<text class="userlv space-vip-badge" v-if="item.userJson.isvip>0">VIP</text>
@@ -24,18 +24,18 @@
 									{{formatDate(item.created)}}
 									<block v-if="item.userJson.uid!=0&&item.userJson.uid==uid">
 										<text class="text-blue margin-left-sm" @tap.stop="edit(item.id)">编辑</text>
-										<text class="text-red margin-left-sm" @tap.stop="toDelete2(item.id)">删除</text>
+										<text class="text-red margin-left-sm" @tap.stop="toDelete2(item.id,index)">删除</text>
 									</block>
 									<block v-else>
 										<text v-if="group=='administrator'||group=='editor'" class="text-blue margin-left-sm" @tap.stop="edit(item.id)">编辑</text>
-										<text v-if="group=='administrator'" class="text-red margin-left-sm" @tap.stop="toDelete(item.id)">删除</text>
+										<text v-if="group=='administrator'" class="text-red margin-left-sm" @tap.stop="toDelete(item.id,index)">删除</text>
 									</block>
 										
 									
 								
 								</view>
 							</view>
-							<text class="space-more cuIcon-moreandroid"></text>
+							<text class="space-more cuIcon-moreandroid" @tap.stop="openSpaceActions(item,index)"></text>
 						</view>
 					</view>
 					
@@ -305,7 +305,7 @@
 			},
 			toInfo(id,index){
 				var that = this;
-				
+				that.$emit('before-navigate', { id: id, index: index });
 				uni.navigateTo({
 				    url: '/pages/space/info?id='+id,
 					success: function() {
@@ -570,6 +570,53 @@
 				    url: '/pages/space/post?postType=edit&id='+id
 				});
 			},
+			openSpaceActions(item,index){
+				if(!item || !item.id) return false;
+				var owner = item.userJson && Number(item.userJson.uid || 0) === Number(this.uid || 0);
+				var staff = this.group === 'administrator' || this.group === 'editor';
+				var actions = owner || staff ? ['编辑动态', '删除动态'] : ['举报动态'];
+				uni.showActionSheet({
+					itemList: actions,
+					success: (choice) => {
+						if(owner || staff){
+							if(choice.tapIndex === 0) this.edit(item.id);
+							if(choice.tapIndex === 1) this.toDelete2(item.id,index);
+						} else if(choice.tapIndex === 0){
+							this.reportSpace(item);
+						}
+					}
+				});
+			},
+			reportSpace(item){
+				var token = localStorage.getItem('token') || '';
+				if(!token){
+					uni.showToast({ title: '请先登录', icon: 'none' });
+					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 500);
+					return false;
+				}
+				var reasons = ['广告营销', '人身攻击', '色情低俗', '违法违规', '其他'];
+				uni.showActionSheet({
+					itemList: reasons,
+					success: (choice) => this.submitReport(item.id, reasons[choice.tapIndex])
+				});
+			},
+			submitReport(id,reason){
+				uni.showLoading({ title: '提交中' });
+				this.$Net.request({
+					url: this.$API.spaceReportAdd(),
+					data: { id: id, reason: reason, token: localStorage.getItem('token') || '' },
+					header: { 'Content-Type':'application/x-www-form-urlencoded' },
+					method: 'post',
+					dataType: 'json',
+					success: function(res){
+						uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none' });
+					},
+					fail: function(){
+						uni.showToast({ title: '网络不太好哦', icon: 'none' });
+					},
+					complete: function(){ uni.hideLoading(); }
+				});
+			},
 			forward(id){
 				var that = this;
 				uni.navigateTo({
@@ -584,13 +631,19 @@
 				});
 			},
 			toUserContents(data){
-				var that = this;
-				var name = data.name;
-				var title = data.name+"的信息";
-				var id= data.uid;
-				var type="user";
+				if (!data) return false;
+				var name = data.name || '用户';
+				var title = name + "的信息";
+				var id = Number(data.uid || data.id || 0);
+				if (!id) {
+					uni.showToast({ title: "用户不存在或已注销", icon: 'none' });
+					return false;
+				}
 				uni.navigateTo({
-				    url: '/pages/contents/userinfo?title='+title+"&name="+name+"&uid="+id+"&avatar="+encodeURIComponent(data.avatar)
+					url: '/pages/contents/userinfo?title=' + encodeURIComponent(title) + '&name=' + encodeURIComponent(name) + '&uid=' + id + '&avatar=' + encodeURIComponent(data.avatar || ''),
+					fail: function() {
+						uni.showToast({ title: '无法打开用户主页', icon: 'none' });
+					}
 				});
 			},
 			toBan(uid){
@@ -605,7 +658,7 @@
 					url: '/pages/manage/banuser?uid='+uid
 				});
 			},
-			toDelete(id){
+			toDelete(id,index){
 				var that = this;
 				var token = "";
 				
@@ -642,6 +695,7 @@
 											title: res.data.msg,
 											icon: 'none'
 										})
+										if(typeof index === 'number') that.spaceList.splice(index,1);
 									}else{
 										uni.showToast({
 											title: res.data.msg,
@@ -667,7 +721,7 @@
 					}
 				});
 			},
-			toDelete2(id){
+			toDelete2(id,index){
 				var that = this;
 				var token = "";
 				
@@ -700,12 +754,8 @@
 										uni.hideLoading();
 									}, 1000);
 									if(res.data.code==1){
-										//执行积分程序
-										if (localStorage.getItem('userinfo')) {
-										  var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-										  that.username = userInfo.name;
-										
-											}
+										uni.showToast({ title: res.data.msg || '删除成功', icon: 'none' });
+										if(typeof index === 'number') that.spaceList.splice(index,1);
 									}else{
 										uni.showToast({
 											title: res.data.msg,

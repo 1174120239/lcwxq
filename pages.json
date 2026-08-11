@@ -148,6 +148,12 @@
 			}
 		},
 		{
+			"path": "pages/user/invitation",
+			"style": {
+				"softinputMode": "adjustResize"
+			}
+		},
+		{
 			"path": "pages/user/setup",
 			"style": {}
 		},
@@ -512,6 +518,12 @@
 			}
 		},
 		{
+			"path": "pages/manage/spaceReports",
+			"style": {
+				"enablePullDownRefresh": true
+			}
+		},
+		{
 			"path": "pages/ads/home"
 		},
 		{
@@ -545,6 +557,13 @@
 			"style": {
 				"navigationStyle": "custom",
 				"enablePullDownRefresh": true
+			}
+		},
+		{
+			"path": "pages/qa/post",
+			"style": {
+				"navigationStyle": "custom",
+				"enablePullDownRefresh": false
 			}
 		},
 		{

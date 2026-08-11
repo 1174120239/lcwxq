@@ -31,6 +31,12 @@ public class QaController {
         return ApiResponse.success("", service.questionInfo(params));
     }
 
+    @RequestMapping("/questionAdd")
+    public ApiResponse questionAdd(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("问题已提交，等待审核", service.questionAdd(
+                RequestValues.text(params, "token"), body(params)));
+    }
+
     @RequestMapping("/answerList")
     public ApiResponse answerList(@RequestParam Map<String, String> params) {
         QaService.Page page = service.answerList(params);

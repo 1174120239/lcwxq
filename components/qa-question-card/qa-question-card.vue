@@ -69,6 +69,7 @@
 	.qa-card-meta {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 14rpx;
 		color: #71807c;
 		font-size: 22rpx;
@@ -80,32 +81,31 @@
 	}
 
 	.qa-card-topic {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		white-space: normal;
+		word-break: break-word;
 	}
 
 	.qa-card-title {
-		display: -webkit-box;
-		overflow: hidden;
+		display: block;
+		overflow: visible;
 		margin-top: 10rpx;
 		color: #182522;
 		font-size: 31rpx;
 		font-weight: 600;
 		line-height: 1.45;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
+		white-space: pre-wrap;
+		word-break: break-word;
 	}
 
 	.qa-card-description {
-		display: -webkit-box;
-		overflow: hidden;
+		display: block;
+		overflow: visible;
 		margin-top: 8rpx;
 		color: #63706c;
 		font-size: 25rpx;
 		line-height: 1.5;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
+		white-space: pre-wrap;
+		word-break: break-word;
 	}
 
 	.qa-card-foot {

@@ -28,7 +28,7 @@
 
 		<view class="qa-answer-list">
 			<view class="qa-answer" v-for="answer in answers" :key="answer.id">
-				<view class="qa-author-row">
+				<view class="qa-author-row" @tap.stop>
 					<campus-avatar class="qa-author-avatar round" :src="answer.userJson && answer.userJson.avatar" :name="answer.userJson && answer.userJson.name" @tap="openUser(answer.userJson)"></campus-avatar>
 					<view class="qa-author-main" @tap="openUser(answer.userJson)">
 						<text class="qa-author-name">{{answer.userJson && answer.userJson.name}}</text>
@@ -38,8 +38,11 @@
 						</view>
 					</view>
 				</view>
-				<text class="qa-answer-text" user-select>{{answer.text}}</text>
-				<view class="qa-answer-actions">
+				<text class="qa-answer-text" :class="{'is-collapsed': isLongAnswer(answer) && !answer._expanded}" user-select @tap.stop="toggleAnswerExpanded(answer)">{{answer.text}}</text>
+				<view class="qa-answer-expand" v-if="isLongAnswer(answer)" @tap.stop="toggleAnswerExpanded(answer)">
+					<text>{{answer._expanded ? '收起' : '展开全文'}}</text><text :class="answer._expanded ? 'cuIcon-fold' : 'cuIcon-unfold'"></text>
+				</view>
+				<view class="qa-answer-actions" @tap.stop>
 					<view class="qa-action" :class="{'is-liked': answer.isLiked==1}" @tap="toggleLike(answer)"><text class="cuIcon-appreciate"></text><text>{{answer.likes || '赞同'}}</text></view>
 					<view class="qa-action" @tap="toggleComments(answer)"><text class="cuIcon-comment"></text><text>{{answer.commentCount || 0}} 条评论</text></view>
 					<view class="qa-action" @tap="openComment(answer)"><text class="cuIcon-write"></text><text>评论</text></view>
@@ -47,7 +50,7 @@
 					<view class="qa-action is-delete" v-if="canManageAnswer(answer)" @tap="deleteAnswer(answer)"><text>删除</text></view>
 				</view>
 
-				<view class="qa-comments" v-if="answer._commentsExpanded">
+				<view class="qa-comments" v-if="answer._commentsExpanded" @tap.stop>
 					<view class="qa-comments-loading" v-if="answer._commentsLoading"><view class="campus-loader"></view></view>
 					<view class="qa-comments-empty" v-else-if="answer._commentsLoaded && answer._comments.length===0">还没有评论</view>
 					<qa-comment-thread v-else :items="answer._comments" :night="campusNight" :current-uid="uid" :group="group" @reply="replyComment(answer, $event)" @delete="deleteComment(answer, $event)" @user="openUser"></qa-comment-thread>
@@ -216,6 +219,7 @@
 				answer._commentsLoaded = false;
 				answer._commentsLoading = false;
 				answer._commentsExpanded = false;
+				answer._expanded = false;
 				return answer;
 			},
 			changeSort(sort) {
@@ -232,6 +236,13 @@
 			openAnswer() {
 				if (!this.requireLogin()) return;
 				this.openComposer('answer', '', null, null, 0);
+			},
+			isLongAnswer(answer) {
+				return !!(answer && String(answer.text || '').length > 220);
+			},
+			toggleAnswerExpanded(answer) {
+				if (!this.isLongAnswer(answer)) return;
+				this.$set(answer, '_expanded', !answer._expanded);
 			},
 			editAnswer(answer) {
 				this.openComposer('edit', answer.text, answer, null, answer.id);
@@ -371,9 +382,18 @@
 				return answer.uid == this.uid || this.group === 'administrator' || this.group === 'editor';
 			},
 			openUser(user) {
-				if (!user || !user.uid) return;
+				if (!user || !user.uid) {
+					uni.showToast({ title: '用户不存在或已注销', icon: 'none' });
+					return false;
+				}
+				var name = user.name || '用户';
 				uni.navigateTo({
-					url: '/pages/contents/userinfo?title=' + encodeURIComponent(user.name + '的信息') + '&name=' + encodeURIComponent(user.name) + '&uid=' + user.uid + '&avatar=' + encodeURIComponent(user.avatar || '')
+					url: '/pages/contents/userinfo?title=' + encodeURIComponent(name + '的信息')
+						+ '&name=' + encodeURIComponent(name) + '&uid=' + user.uid
+						+ '&avatar=' + encodeURIComponent(user.avatar || ''),
+					fail: function(){
+						uni.showToast({ title: '无法打开用户主页', icon: 'none' });
+					}
 				})
 			},
 			displayTime(timestamp) {
@@ -411,13 +431,16 @@
 	.qa-sort { display: flex; align-items: center; gap: 8rpx; padding: 5rpx; border-radius: 12rpx; background: #e9eeec; }
 	.qa-sort text { min-width: 68rpx; padding: 8rpx 12rpx; border-radius: 8rpx; color: #6d7a76; font-size: 23rpx; text-align: center; }
 	.qa-sort .is-active { background: #fff; color: #168c80; font-weight: 600; }
-	.qa-answer { padding: 30rpx 30rpx 28rpx; border-bottom: 12rpx solid #f4f6f5; background: #fff; }
+	.qa-answer { padding: 30rpx 30rpx 28rpx; border-bottom: 12rpx solid #f4f6f5; background: #fff; transition: background-color .18s ease; }
+	.qa-answer:active { background: #f7faf8; }
 	.qa-author-row { display: flex; align-items: center; }
 	.qa-author-avatar { flex: 0 0 72rpx; width: 72rpx; height: 72rpx; margin-right: 18rpx; }
 	.qa-author-main { min-width: 0; flex: 1; }
 	.qa-author-name { display: block; color: #30423d; font-size: 27rpx; font-weight: 600; }
 	.qa-author-meta { display: flex; gap: 16rpx; margin-top: 5rpx; color: #8a9692; font-size: 22rpx; }
-	.qa-answer-text { display: block; margin-top: 24rpx; color: #1f2d29; font-size: 31rpx; line-height: 1.78; white-space: pre-wrap; word-break: break-word; }
+	.qa-answer-text { display: block; height: auto; margin-top: 24rpx; color: #1f2d29; font-size: 31rpx; line-height: 1.78; white-space: pre-wrap; word-break: break-word; }
+	.qa-answer-text.is-collapsed { display: -webkit-box; overflow: hidden; text-overflow: ellipsis; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+	.qa-answer-expand { display: flex; align-items: center; gap: 6rpx; margin-top: 12rpx; color: #168c80; font-size: 24rpx; }
 	.qa-answer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 28rpx; margin-top: 24rpx; color: #6f7c78; font-size: 24rpx; }
 	.qa-action { display: flex; align-items: center; gap: 7rpx; min-height: 48rpx; }
 	.qa-action.is-liked { color: #168c80; }
@@ -445,11 +468,13 @@
 	.qa-night .qa-question-title,.qa-night .qa-answer-text,.qa-night .qa-nav-title { color: #edf2ef; }
 	.qa-night .qa-topic { background: #2a3431; color: #a9b7b2; }
 	.qa-night .qa-answer { border-bottom-color: #151b19; }
+	.qa-night .qa-answer:active { background: #25302c; }
 	.qa-night .qa-sort { background: #29322f; }
 	.qa-night .qa-sort .is-active { background: #3a4541; color: #8ed2c4; }
 	.qa-night .qa-comments { background: #252e2b; }
 	.qa-night .qa-composer { background: #1d2523; }
 	.qa-night .qa-composer-title,.qa-night .qa-composer-input { color: #edf2ef; }
 	.qa-night .qa-composer-input { border-color: #3a4541; background: #252e2b; }
+	.qa-night .qa-answer-expand { color: #8ed2c4; }
 	@keyframes composerUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>

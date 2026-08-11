@@ -1,5 +1,5 @@
 <template>
-	<view class="campus-page campus-home" :class="{'campus-night': weatherTheme.isDark}" :style="weatherThemeStyle">
+	<view class="campus-page campus-home" :class="[AppStyle, {'campus-night': weatherTheme.isDark}]" :style="weatherThemeStyle">
 		<view class="home-ambient" :class="{'is-transitioning': themeTransitioning}" aria-hidden="true">
 			<view class="home-ambient-layer" :class="{'is-visible': activeAmbientLayer === 0}" :style="ambientLayerStyles[0]"></view>
 			<view class="home-ambient-layer" :class="{'is-visible': activeAmbientLayer === 1}" :style="ambientLayerStyles[1]"></view>
@@ -48,7 +48,7 @@
 					<view class="index-sort-box" v-if="!sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/contents/blackhouse')"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">小黑屋</view></view></waves></view>
 					<view class="index-sort-box" v-if="sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/plugins/sy_appbox/home',true)"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">应用</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toShop"><view class="index-sort-i shortcut-blue"><text class="cuIcon-goods"></text></view><view class="index-sort-text">商城</view></view></waves></view>
-					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toLink('/pages/ads/home')"><view class="index-sort-i shortcut-violet"><text class="cuIcon-text"></text></view><view class="index-sort-text">广告位</view></view></waves></view>
+					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toLink('/pages/user/invitation')"><view class="index-sort-i shortcut-violet"><text class="cuIcon-share"></text></view><view class="index-sort-text">分享</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toUsers"><view class="index-sort-i shortcut-coral"><text class="cuIcon-calendar"></text></view><view class="index-sort-text">签到</view></view></waves></view>
 				</view>
 
@@ -87,6 +87,13 @@
 				<view class="data-box discovery-card">
 					<view class="cu-bar bg-white"><view class="action data-box-title"><text class="hot-dot"></text>上升热点</view><view class="action more" @tap='toTopContents("更多热帖","commentsNum")'><text>更多热帖</text><text class="cuIcon-right"></text></view></view>
 					<view class="top"><view class="top-box" v-for="(item,index) in topList" :key="index" @tap="toInfo(item)"><text>{{index+1}}</text>{{item.title}}</view></view>
+				</view>
+				<view class="qa-discovery-entry" v-if="questionList.length>0">
+					<view class="qa-discovery-heading">
+						<view><text class="qa-discovery-mark">问答</text><text class="qa-discovery-title">校园问答</text></view>
+						<text class="qa-discovery-more">点击查看</text>
+					</view>
+					<qa-question-card :question="questionList[0]" :night="weatherTheme.isDark" @open="openQuestion"></qa-question-card>
 				</view>
 				<view class="section-heading"><text>推荐帖子</text><view class="more" @tap="toRecommend"><text>查看更多</text><text class="cuIcon-right"></text></view></view>
 				<block v-for="(item,index) in recommendList" :key="item.cid || ('recommend'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
@@ -233,13 +240,13 @@
 
 						<view class="index-sort-box">
 							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="toLink('/pages/ads/home')">
+								<view class="index-sort-main" @tap="toLink('/pages/user/invitation')">
 									<view class="index-sort-i"
 										style="border-radius: 20upx;background: linear-gradient(to bottom right, #aaaaff, #811aff);box-shadow: #aa55ff59 0px 3px 5px 0px;">
-										<text class="cuIcon-text" style="color:  #ffffff;"></text>
+										<text class="cuIcon-share" style="color:  #ffffff;"></text>
 									</view>
 									<view class="index-sort-text">
-										广告位
+										分享
 									</view>
 								</view>
 							</waves>
@@ -484,7 +491,7 @@
 <script>
 	import waves from '@/components/xxley-waves/waves.vue';
 	import metas from '@/pages/contents/metas.vue'
-	import { applyCampusThemeShell, getCampusThemeMode, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
 	// #endif
@@ -662,10 +669,11 @@
 			weatherTheme() {
 				const period = this.weatherPeriod
 				const group = this.weatherGroup
-				const visualPeriod = this.campusThemeMode === 'night' ? 'night' : (this.campusThemeMode === 'day' ? 'day' : period)
+				const shellNight = this.$store && this.$store.state.AppStyle === 'campus-night'
+				const isDark = this.campusThemeMode === 'night' || (this.campusThemeMode === 'auto' && (shellNight || period === 'night' || group === 'storm'))
+				const visualPeriod = isDark ? 'night' : (this.campusThemeMode === 'day' ? 'day' : period)
 				const timePalette = TIME_COLORS[visualPeriod]
 				const colors = WEATHER_COLORS[group].map((color, index) => mixHex(color, timePalette.colors[index], timePalette.amount))
-				const isDark = resolveCampusNight(this.campusThemeMode, period === 'night' || group === 'storm')
 				return {
 					key: group + '-' + visualPeriod + '-' + this.campusThemeMode,
 					background: `linear-gradient(145deg, ${colors[0]} 0%, ${colors[1]} 28%, ${colors[2]} 58%, ${colors[3]} 100%)`,
@@ -2993,13 +3001,13 @@
 
 	.campus-home .swiper-container {
 		display: block;
-		width: calc(100% - 16rpx);
+		width: calc(100% - 16rpx) !important;
 		height: auto !important;
-		min-height: 300rpx;
-		max-height: 430rpx;
+		min-height: 0 !important;
+		max-height: none !important;
 		aspect-ratio: 1.618 / 1;
 		margin: 0 auto 24rpx;
-		border: 2rpx solid rgba(255, 255, 255, 0.72);
+		border: 1rpx solid rgba(255, 255, 255, 0.68);
 		border-radius: 28rpx !important;
 		background: rgba(255, 255, 255, 0.34);
 		box-shadow: 0 14rpx 36rpx rgba(44, 74, 78, 0.1);
@@ -3137,6 +3145,53 @@
 	.discovery-card {
 		padding: 8rpx 10rpx 16rpx;
 		overflow: hidden;
+	}
+
+	.qa-discovery-entry {
+		margin: 0 8rpx 24rpx;
+		overflow: hidden;
+		border: 2rpx solid rgba(255, 255, 255, 0.72);
+		border-radius: 28rpx;
+		background: rgba(255, 255, 255, 0.62);
+		box-shadow: 0 12rpx 30rpx rgba(44, 74, 78, 0.08);
+	}
+
+	.qa-discovery-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 22rpx 24rpx 8rpx;
+	}
+
+	.qa-discovery-heading > view {
+		display: flex;
+		align-items: center;
+		gap: 12rpx;
+	}
+
+	.qa-discovery-mark {
+		padding: 4rpx 10rpx;
+		border-radius: 10rpx;
+		background: #328d79;
+		color: #f1fffa;
+		font-size: 20rpx;
+		font-weight: 700;
+	}
+
+	.qa-discovery-title {
+		color: #213437;
+		font-size: 30rpx;
+		font-weight: 700;
+	}
+
+	.qa-discovery-more {
+		color: #607772;
+		font-size: 22rpx;
+	}
+
+	.qa-discovery-entry .qa-card {
+		border-bottom: 0;
+		background: transparent;
 	}
 
 	.discovery-card .cu-bar {
@@ -3357,6 +3412,40 @@
 		color: var(--campus-card-text, #edf0ef) !important;
 	}
 
+	.campus-home.campus-night .discovery-card,
+	.campus-home.campus-night .qa-discovery-entry {
+		border-color: rgba(226, 232, 230, 0.12) !important;
+		background: #202728 !important;
+		box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.18) !important;
+	}
+
+	.campus-home.campus-night .discovery-card .data-box-title,
+	.campus-home.campus-night .qa-discovery-title,
+	.campus-home.campus-night .section-heading > text {
+		color: #edf3f0 !important;
+	}
+
+	.campus-home.campus-night .discovery-card .more,
+	.campus-home.campus-night .qa-discovery-more,
+	.campus-home.campus-night .section-heading .more {
+		color: #b8c8c1 !important;
+	}
+
+	.campus-home.campus-night .discovery-card .tags-box {
+		border-color: rgba(111, 205, 191, 0.35) !important;
+		background: #2a3b38 !important;
+		color: #d3e2dc !important;
+	}
+
+	.campus-home.campus-night .discovery-card .top-box {
+		border-color: rgba(226, 232, 230, 0.1) !important;
+		color: #d3dfda !important;
+	}
+
+	.campus-home.campus-night .discovery-card .top-box > text {
+		color: #62c5a7 !important;
+	}
+
 	.campus-home.campus-night .load-more {
 		border-color: rgba(226, 232, 230, 0.09);
 		background: #212628;
@@ -3434,7 +3523,6 @@
 
 	@media (max-height: 700px) {
 		.home-hero { min-height: 270rpx; padding-bottom: 28rpx; }
-		.campus-home .swiper-container { min-height: 270rpx; max-height: 370rpx; }
 		.home-stage { min-height: calc(100vh - 270rpx); min-height: calc(100dvh - 270rpx); padding-top: 20rpx; }
 	}
 

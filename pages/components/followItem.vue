@@ -252,7 +252,7 @@
 					},
 					toInfo(id){
 						var that = this;
-						
+						that.$emit('before-navigate', { id: id });
 						uni.navigateTo({
 						    url: '/pages/space/info?id='+id
 						});

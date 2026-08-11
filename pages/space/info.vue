@@ -13,11 +13,10 @@
 						评论详情
 					</block>
 				</view>
-				<!--  #ifdef H5 || APP-PLUS -->
-				<view class="action" @tap="toSearch">
-					<text class="cuIcon-search"></text>
+				<view class="action" v-if="spaceInfo.id" @tap="openSpaceActions">
+					<text class="cuIcon-more"></text>
 				</view>
-				<!--  #endif -->
+				<view class="action" v-else></view>
 			</view>
 		</view>
 		<view :style="[{padding:NavBar + 'px 10px 0px 10px'}]"></view>
@@ -25,9 +24,9 @@
 			<view class="cu-item">
 				<view class="cu-list menu-avatar" v-if="spaceInfo.userJson">
 					<view class="cu-item">
-						<campus-avatar class="cu-avatar round lg" :src="spaceInfo.userJson.avatar" :name="spaceInfo.userJson.name"></campus-avatar>
+						<campus-avatar :key="'detail-avatar-' + spaceInfo.userJson.uid + '-' + spaceInfo.userJson.avatar" class="cu-avatar round lg" :src="spaceInfo.userJson.avatar" :name="spaceInfo.userJson.name" @tap.stop="toUserContents(spaceInfo.userJson)"></campus-avatar>
 						<view class="content flex-sub">
-							<view>{{spaceInfo.userJson.name}}
+							<view @tap.stop="toUserContents(spaceInfo.userJson)">{{spaceInfo.userJson.name}}
 							<text class="space-detail-campus" v-if="spaceInfo.userJson.campus">{{spaceInfo.userJson.campus}}</text>
 							<text class="userlv" v-if="spaceInfo.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
 							<text class="userlv" :style="getLvStyle(spaceInfo.userJson.experience)">{{getLv(spaceInfo.userJson.experience)}}</text>
@@ -102,9 +101,9 @@
 				<view class="space-reply-list">
 					<view class="cu-list menu-avatar comment" v-for="(item,index) in replyList" :key="index">
 						<view class="cu-item">
-							<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap="toUserContents(item.userJson)"></campus-avatar>
+							<campus-avatar :key="'reply-avatar-' + item.id + '-' + item.userJson.uid + '-' + item.userJson.avatar" class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content">
-								<view class="text-grey">
+								<view class="text-grey" @tap.stop="toUserContents(item.userJson)">
 									{{item.userJson.name}}
 									
 									<text class="userlv" v-if="item.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
@@ -112,7 +111,7 @@
 									
 									<text class="userlv customize" v-if="item.userJson.customize&&item.userJson.customize!=''">{{item.userJson.customize}}</text>
 									</view>
-								<view class="text-content text-df break-all">
+								<view class="text-content text-df break-all" user-select @longpress.stop="copyComment(item.text)">
 									<rich-text :nodes="markHtml(item.text)"></rich-text>
 								</view>
 								<view class="comment-action-row">
@@ -177,9 +176,9 @@
 				<view class="space-reply-list">
 					<view class="cu-list menu-avatar comment" v-for="(item,index) in forwardList" :key="index">
 						<view class="cu-item">
-							<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap="toUserContents(item.userJson)"></campus-avatar>
+							<campus-avatar :key="'forward-avatar-' + item.id + '-' + item.userJson.uid + '-' + item.userJson.avatar" class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content">
-								<view class="text-grey">
+								<view class="text-grey" @tap.stop="toUserContents(item.userJson)">
 									{{item.userJson.name}}
 									
 									<text class="userlv" v-if="item.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
@@ -290,6 +289,7 @@
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
 	import { normalizeUser } from '@/utils/avatar.js'
+	import { copyText } from '@/utils/clipboard.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -320,13 +320,13 @@
 				spaceInfo:{
 					created: 0,
 					forward: 0,
-					id: 3,
+					id: 0,
 					likes: 0,
 					reply: 0,
 					text: "",
 					toid: 0,
 					type: 0,
-					uid: 1,
+					uid: 0,
 					modified:0,
 					picList:[]
 				},
@@ -451,6 +451,84 @@
 			that.getvideoimg()
 		},
 		methods: {
+			copyComment(text){
+				copyText(text, '评论已复制');
+			},
+			openSpaceActions(){
+				if(!this.spaceInfo || !this.spaceInfo.id) return false;
+				var authorUid = this.spaceInfo.userJson ? Number(this.spaceInfo.userJson.uid || 0) : 0;
+				var owner = authorUid !== 0 && authorUid === Number(this.uid || 0);
+				var staff = this.group === 'administrator' || this.group === 'editor';
+				var isMainSpace = Number(this.spaceInfo.type || 0) !== 3;
+				var actions = owner || staff ? ['编辑动态', '删除动态'] : (isMainSpace ? ['举报动态'] : []);
+				if(!actions.length) return false;
+				uni.showActionSheet({
+					itemList: actions,
+					success: (choice) => {
+						if(owner || staff){
+							if(choice.tapIndex === 0) this.edit(this.spaceInfo.id);
+							if(choice.tapIndex === 1) this.deleteCurrentSpace();
+						} else if(choice.tapIndex === 0){
+							this.reportCurrentSpace();
+						}
+					}
+				});
+			},
+			deleteCurrentSpace(){
+				var id = this.spaceInfo.id;
+				uni.showModal({
+					title: '删除动态',
+					content: '删除后将无法恢复，确认继续吗？',
+					success: (choice) => {
+						if(!choice.confirm) return;
+						uni.showLoading({ title: '删除中' });
+						this.$Net.request({
+							url: this.$API.spaceDelete(),
+							data: { id: id, token: this.token },
+							header: { 'Content-Type':'application/x-www-form-urlencoded' },
+							method: 'post',
+							dataType: 'json',
+							success: (res) => {
+								if(res.data && res.data.code == 1){
+									uni.showToast({ title: '动态已删除', icon: 'success' });
+									setTimeout(() => uni.navigateBack({ delta: 1 }), 400);
+								} else {
+									uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '删除失败', icon: 'none' });
+								}
+							},
+							fail: () => uni.showToast({ title: '网络不太好哦', icon: 'none' }),
+							complete: () => uni.hideLoading()
+						});
+					}
+				});
+			},
+			reportCurrentSpace(){
+				if(!this.token){
+					uni.showToast({ title: '请先登录', icon: 'none' });
+					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 500);
+					return false;
+				}
+				var reasons = ['广告营销', '人身攻击', '色情低俗', '违法违规', '其他'];
+				uni.showActionSheet({
+					itemList: reasons,
+					success: (choice) => this.submitCurrentReport(reasons[choice.tapIndex])
+				});
+			},
+			submitCurrentReport(reason){
+				uni.showLoading({ title: '提交中' });
+				this.$Net.request({
+					url: this.$API.spaceReportAdd(),
+					data: { id: this.spaceInfo.id, reason: reason, token: this.token },
+					header: { 'Content-Type':'application/x-www-form-urlencoded' },
+					method: 'post',
+					dataType: 'json',
+					success: (res) => uni.showToast({
+						title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none'
+					}),
+					fail: () => uni.showToast({ title: '网络不太好哦', icon: 'none' }),
+					complete: () => uni.hideLoading()
+				});
+			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
 				applyCampusThemeShell(this.campusThemeMode, this.campusThemeClock)
@@ -1268,10 +1346,10 @@
 				return userlvStyle;
 			},
 			toUserContents(data){
-				var that = this;
-				var name = data.name;
-				var title = data.name+"的信息";
-				var id= data.uid;
+				if (!data) return false;
+				var name = data.name || '用户';
+				var title = name + "的信息";
+				var id = Number(data.uid || data.id || 0);
 				if(id==0){
 					uni.showToast({
 						title: "用户不存在或已注销",
@@ -1279,9 +1357,11 @@
 					})
 					return false
 				}
-				var type="user";
 				uni.navigateTo({
-				    url: '/pages/contents/userinfo?title='+title+"&name="+name+"&uid="+id+"&avatar="+encodeURIComponent(data.avatar)
+					url: '/pages/contents/userinfo?title=' + encodeURIComponent(title) + '&name=' + encodeURIComponent(name) + '&uid=' + id + '&avatar=' + encodeURIComponent(data.avatar || ''),
+					fail: function() {
+						uni.showToast({ title: '无法打开用户主页', icon: 'none' });
+					}
 				});
 			},
 			toReplyInfo(id){
@@ -1557,14 +1637,16 @@
 	color: #819190;
 }
 
-.space-detail-page .space-info .space-detail-text,
-.space-detail-page .space-info .space-detail-text rich-text {
-	display: block;
-	height: auto;
-	max-height: none;
-	overflow: visible;
-	white-space: normal;
-	-webkit-line-clamp: unset;
+.space-detail-page .cu-card.dynamic.space-info > .cu-item > .text-content.space-detail-text,
+.space-detail-page .cu-card.dynamic.space-info > .cu-item > .text-content.space-detail-text rich-text {
+	display: block !important;
+	height: auto !important;
+	max-height: none !important;
+	overflow: visible !important;
+	white-space: normal !important;
+	-webkit-box-orient: initial !important;
+	-webkit-line-clamp: unset !important;
+	line-clamp: unset !important;
 }
 
 .space-detail-media > .bg-img > image {

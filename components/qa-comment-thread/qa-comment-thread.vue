@@ -2,13 +2,13 @@
 	<view class="qa-thread" :class="{'is-night': night}">
 		<view class="qa-thread-item" v-for="item in items" :key="item.id">
 			<view class="qa-thread-node">
-				<campus-avatar class="qa-thread-avatar round" :src="item.userJson && item.userJson.avatar" :name="item.userJson && item.userJson.name" @tap="$emit('user', item.userJson)"></campus-avatar>
+				<campus-avatar class="qa-thread-avatar round" :src="item.userJson && item.userJson.avatar" :name="item.userJson && item.userJson.name" @tap.stop="$emit('user', item.userJson)"></campus-avatar>
 				<view class="qa-thread-body">
-					<view class="qa-thread-author">
+					<view class="qa-thread-author" @tap.stop="$emit('user', item.userJson)">
 						<text>{{item.userJson && item.userJson.name}}</text>
 						<text v-if="item.userJson && item.userJson.campus" class="qa-thread-campus">{{item.userJson.campus}}</text>
 					</view>
-					<view class="qa-thread-text" user-select><text v-if="item.replyToUser && item.replyToUser.name" class="qa-thread-mention">回复 @{{item.replyToUser.name}} </text><text>{{item.text}}</text></view>
+					<view class="qa-thread-text" user-select @longpress.stop="copyComment(item.text)"><text v-if="item.replyToUser && item.replyToUser.name" class="qa-thread-mention">回复 @{{item.replyToUser.name}} </text><text>{{item.text}}</text></view>
 					<view class="qa-thread-actions">
 						<text>{{displayTime(item.created)}}</text>
 						<text class="qa-thread-action" @tap="$emit('reply', item)">回复</text>
@@ -22,6 +22,8 @@
 </template>
 
 <script>
+	import { copyText } from '@/utils/clipboard.js'
+
 	export default {
 		name: 'qaCommentThread',
 		props: {
@@ -31,6 +33,9 @@
 			group: { type: String, default: '' }
 		},
 		methods: {
+			copyComment(text) {
+				copyText(text, '评论已复制');
+			},
 			canDelete(item) {
 				return (item && item.uid == this.currentUid) || this.group === 'administrator' || this.group === 'editor';
 			},

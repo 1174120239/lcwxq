@@ -2,10 +2,10 @@
 	<view class="reply-thread" :class="{'is-night': night}">
 		<view class="reply-thread-item" v-for="item in items" :key="item.id">
 			<view class="reply-thread-node">
-				<campus-avatar class="reply-thread-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap="$emit('user', item.userJson)"></campus-avatar>
+				<campus-avatar class="reply-thread-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="$emit('user', item.userJson)"></campus-avatar>
 				<view class="reply-thread-body">
-					<view class="reply-thread-author">{{item.userJson.name}}</view>
-					<view class="reply-thread-content">
+					<view class="reply-thread-author" @tap.stop="$emit('user', item.userJson)">{{item.userJson.name}}</view>
+					<view class="reply-thread-content" user-select @longpress.stop="copyComment(item.text)">
 						<text class="reply-thread-mention" v-if="item.parentJson && item.parentJson.username">回复 @{{item.parentJson.username}} </text>
 						<rich-text :nodes="item.renderedText || item.text"></rich-text>
 					</view>
@@ -50,6 +50,8 @@
 </template>
 
 <script>
+	import { copyText } from '@/utils/clipboard.js'
+
 	export default {
 		name: 'spaceReplyThread',
 		props: {
@@ -71,6 +73,9 @@
 			}
 		},
 		methods: {
+			copyComment(text) {
+				copyText(text, '评论已复制');
+			},
 			canDelete(item) {
 				var authorUid = item && item.userJson ? item.userJson.uid : 0;
 				return (authorUid != 0 && authorUid == this.currentUid) || this.group === 'administrator';

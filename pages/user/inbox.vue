@@ -64,9 +64,9 @@
 								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
 									<view class="cu-list menu-avatar comment campus-message-row" @tap="goInbox(item)">
 										<view class="cu-item">
-											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'"></campus-avatar>
+											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'" @tap.stop="openInboxUser(item)"></campus-avatar>
 											<view class="content">
-												<view class="text-black">
+												<view class="text-black" @tap.stop="openInboxUser(item)">
 													<block v-if="item.userJson.isvip>0">
 													<text class="text-shojo2">{{item.userJson.name}}</text>
 													</block>
@@ -439,6 +439,24 @@
 					return false;
 				}
 				
+			},
+			openInboxUser(item){
+				if(!item || item.type == 'system' || item.type == 'finance') return false;
+				var user = item.userJson || {};
+				var uid = Number(user.uid || 0);
+				if(!uid){
+					uni.showToast({ title: '用户不存在或已注销', icon: 'none' });
+					return false;
+				}
+				var name = user.name || '用户';
+				uni.navigateTo({
+					url: '/pages/contents/userinfo?title=' + encodeURIComponent(name + '的信息')
+						+ '&name=' + encodeURIComponent(name) + '&uid=' + uid
+						+ '&avatar=' + encodeURIComponent(user.avatar || ''),
+					fail: function(){
+						uni.showToast({ title: '无法打开用户主页', icon: 'none' });
+					}
+				});
 			},
 			getUserLv(i){
 				var that = this;

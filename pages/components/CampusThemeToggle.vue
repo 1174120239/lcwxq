@@ -89,8 +89,8 @@
 			applyThemeMode(mode) {
 				const nextMode = setCampusThemeMode(mode)
 				this.currentMode = nextMode
-				applyCampusThemeShell(nextMode)
 				uni.$emit(CAMPUS_THEME_EVENT, nextMode)
+				applyCampusThemeShell(nextMode)
 				this.$emit('input', nextMode)
 				this.$emit('change', nextMode)
 			},

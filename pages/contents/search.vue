@@ -1124,6 +1124,29 @@
 		color: #61d1bd;
 	}
 
+	.campus-search-page.campus-night .all-box,
+	.campus-search-page.campus-night .search-space,
+	.campus-search-page.campus-night .search-space .space-feed,
+	.campus-search-page.campus-night .search-space .square-list,
+	.campus-search-page.campus-night .search-space .cu-card.dynamic.no-card,
+	.campus-search-page.campus-night .cu-list.menu-avatar,
+	.campus-search-page.campus-night .cu-list.menu-avatar.comment {
+		background: #15191b !important;
+		background-color: #15191b !important;
+	}
+
+	.campus-search-page.campus-night .search-space .space-feed .square-list > .cu-item2 {
+		background: #202728 !important;
+	}
+
+	.campus-search-page.campus-night .search-space .space-feed .square-list > .cu-item2 + .cu-item2 {
+		margin-top: 16rpx !important;
+	}
+
+	.campus-search-page.campus-night .search-space .space-feed .text-center.grid {
+		border-top-color: rgba(218, 231, 226, 0.12) !important;
+	}
+
 	.campus-search-page.campus-night .cu-card.article.no-card,
 	.campus-search-page.campus-night .cu-card.article.no-card > .cu-item,
 	.campus-search-page.campus-night .article-item-shell,

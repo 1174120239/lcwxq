@@ -3,18 +3,24 @@
 		
 		<view class="header square-header" :style="{paddingTop: StatusBar + 'px'}">
 			<view class="square-mainbar">
-				<view class="square-tool-button" @tap="toggleSquareMenu"><text class="cuIcon-sort"></text></view>
-				<text class="square-page-title">动态</text>
-				<view class="square-tool-button" @tap="toSearch"><text class="cuIcon-search"></text></view>
+				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toggleSquareMenu"><text class="cuIcon-sort"></text></view>
+				<text class="square-page-title">{{squarePageTitle}}</text>
+				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toSearch"><text class="cuIcon-search"></text></view>
 			</view>
-			<view class="square-filter-row" @tap="toggleSquareMenu">
+			<view class="square-section-tabs" v-if="squareid==0">
+				<view class="square-section-track">
+					<view class="square-section-item" :class="{'is-active':contentMode==='space'}" @tap="switchContentMode('space')">普通动态</view>
+					<view class="square-section-item" :class="{'is-active':contentMode==='qa'}" @tap="switchContentMode('qa')">提问区</view>
+				</view>
+			</view>
+			<view class="square-filter-row" v-if="contentMode==='space'" @tap="toggleSquareMenu">
 				<view class="square-filter-label">
 					<text class="cuIcon-filter"></text>
 					<text>{{squareFilterLabel}}</text>
 				</view>
 				<text class="cuIcon-unfold square-filter-arrow" :class="{'is-open':showSquareMenu}"></text>
 			</view>
-			<view class="square-filter-menu" :class="{'is-open':showSquareMenu}" @tap.stop>
+			<view class="square-filter-menu" v-if="contentMode==='space'" :class="{'is-open':showSquareMenu}" @tap.stop>
 				<view class="filter-menu-title">动态筛选</view>
 				<view class="filter-menu-options">
 					<view :class="{'is-active':follow==1&&squareid==0&&selectedTopics.length===0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
@@ -51,7 +57,7 @@
 			</view>
 		</view>
 			
-		<block v-if="squareid==0">
+		<block v-if="squareid==0&&contentMode==='space'">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
 			<scroll-view v-if="topContents.length>0" scroll-x class="square-pinned-strip" :show-scrollbar="false">
 				<view class="pinned-track">
@@ -77,7 +83,7 @@
 				<text class="cuIcon-text"></text>
 				暂时还没有关注的人哦~
 			</view>
-			<followItem :spaceList="spaceList" :followList="spaceList.isFollow"></followItem>
+			<followItem :spaceList="spaceList" :followList="spaceList.isFollow" @before-navigate="rememberSpaceReturn"></followItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
@@ -89,7 +95,7 @@
 				{{selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
 			</view>
 			
-			<spaceItem :spaceList="spaceList"></spaceItem>
+			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
@@ -100,7 +106,7 @@
 				什么都没有
 			</view>
 			
-			<spaceItem :spaceList="spaceList"></spaceItem>
+			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
@@ -111,12 +117,27 @@
 				什么都没有
 			</view>
 			
-			<spaceItem :spaceList="spaceList"></spaceItem>
+			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
 			</block>
 		</view>
+		</block>
+		<block v-if="squareid==0&&contentMode==='qa'">
+			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
+			<view class="square-qa-list" @touchmove="collapseSquareMenu">
+				<view class="square-qa-loading" v-if="questionLoading&&questionList.length===0">
+					<view class="campus-loader"></view>
+				</view>
+				<view class="no-data square-empty" v-else-if="!questionLoading&&questionList.length===0">
+					<text class="cuIcon-question"></text>
+					暂时还没有已发布的问题
+				</view>
+				<qa-question-card v-for="item in questionList" :key="'square-question-'+item.id"
+					:question="item" :night="campusNight" @open="openQuestion"></qa-question-card>
+				<view class="square-qa-more" v-if="questionList.length>0">{{questionMoreText}}</view>
+			</view>
 		</block>
 		<block v-if="squareid==1&&groupChatEnabled">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
@@ -363,7 +384,7 @@
 		</block>
 		<!-- 应用end -->
 		<!--加载遮罩-->
-		<view class="loading" v-if="isLoading==0||changeLoading==0">
+		<view class="loading" v-if="contentMode!=='qa'&&(isLoading==0||changeLoading==0)">
 			<view class="loading-main">
 				<view class="campus-loader"></view>
 			</view>
@@ -408,6 +429,9 @@
 				isLoading: 0,
 				left_tabbar: [],
 				scrollTop: 0, 
+				pageScrollTop: 0,
+				spaceReturnScrollTop: 0,
+				spaceReturnPending: false,
 				current: 0,
 				menuHeight: 0,
 				menuItemHeight: 0, 
@@ -427,6 +451,14 @@
 				spaceList: [],
 				topContents: [],
 				showSquareMenu: false,
+				contentMode: 'space',
+				questionList: [],
+				questionPage: 1,
+				questionTotal: 0,
+				questionPageSize: 12,
+				questionLoading: false,
+				questionLoadingMore: false,
+				questionMoreText: '',
 				latestUserAvatar: [],
 				curIMG:"",
 				isGetChat: null,
@@ -549,10 +581,16 @@
 				if (this.squareid == 1 && this.groupChatEnabled) return '群聊'
 				return this.squareid == 2 ? '话题' : '校园应用'
 			},
+			squarePageTitle() {
+				if (this.squareid == 0 && this.contentMode === 'qa') return '提问区'
+				return '动态'
+			},
 			squareHeaderSpacer() {
 				const systemInfo = uni.getSystemInfoSync()
 				const viewportWidth = systemInfo.windowWidth || 375
-				const toolbarHeight = Math.round(184 * viewportWidth / 750)
+				let toolbarRpx = 184
+				if (this.squareid == 0) toolbarRpx = this.contentMode === 'qa' ? 166 : 254
+				const toolbarHeight = Math.round(toolbarRpx * viewportWidth / 750)
 				return { height: (this.StatusBar + toolbarHeight) + 'px' }
 			},
 			officialTopicPreview() {
@@ -563,6 +601,10 @@
 		},
 		onPullDownRefresh() {
 			var that = this;
+				if (that.squareid == 0 && that.contentMode === 'qa') {
+					that.loadQuestionList(false, function() { uni.stopPullDownRefresh(); });
+					return;
+				}
 				if (that.follow == 2 && that.squareid == 0) {
 					that.changeLoading = 0;
 					that.getSpaceList2();
@@ -592,6 +634,10 @@
 		onReachBottom() {
 			//触底后执行的方法，比如无限加载之类的
 			var that = this;
+			if (that.squareid == 0 && that.contentMode === 'qa') {
+				that.loadQuestionList(true);
+				return;
+			}
 			if (that.follow == 2 && that.squareid == 0) {
 				that.changeLoading = 0;
 				that.getSpaceList2();
@@ -602,7 +648,7 @@
 				that.getSpaceList3();
 				
 			}
-			if (that.squareid == 0 && (that.follow == 0 || that.follow == 1)) {
+			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1)) {
 				
 				that.getSpaceList(true);
 				
@@ -611,7 +657,8 @@
 			
 			
 		},
-		onPageScroll() {
+		onPageScroll(event) {
+			this.pageScrollTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
 			this.collapseSquareMenu()
 		},
 		onHide() {
@@ -624,6 +671,8 @@
 		},
 		onShow() {
 			var that = this;
+			var restoreSpacePosition = that.spaceReturnPending;
+			that.spaceReturnPending = false;
 			if (!that.groupChatEnabled && that.squareid == 1) {
 				that.squareid = 0;
 				that.stopChatPolling();
@@ -638,7 +687,7 @@
 				if (that.$refs.publishPanel) that.$refs.publishPanel.activatePage()
 				// #endif
 			})
-			that.page = 1;
+			if (!restoreSpacePosition) that.page = 1;
 			// #ifdef APP-PLUS
 			uni.hideTabBar({
 				animation: false
@@ -659,17 +708,27 @@
 			} else {
 				that.token = "";
 			}
-			that.getTopicCenter();
+			if (!restoreSpacePosition) that.getTopicCenter();
 			if (localStorage.getItem('chatList')) {
 				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
 			}
 			that.userStatus();
 			that.unreadNum();
-			if (that.squareid == 0 && (that.follow == 0 || that.follow == 1)) {
+			if (restoreSpacePosition) {
+				var restoreTop = Number(that.spaceReturnScrollTop) || 0;
+				that.$nextTick(function() {
+					setTimeout(function() {
+						uni.pageScrollTo({ scrollTop: restoreTop, duration: 0 });
+					}, 30);
+				});
+				if (that.token != "" && that.squareid == 1) that.startChatPolling();
+				return;
+			}
+			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1)) {
 				that.getSpaceList(false);
 			}
-			if (that.squareid == 0 && that.follow == 2) {
+			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 2) {
 				that.changeLoading = 0;
 				that.getSpaceList2();
 				// #ifdef H5
@@ -682,7 +741,7 @@
 				});
 				 // #endif
 				}
-			if (that.squareid == 0 && that.follow == 3) {
+			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 3) {
 				that.changeLoading = 0;
 				that.getSpaceList3();
 				// #ifdef H5
@@ -695,6 +754,9 @@
 				});
 				 // #endif
 				
+			}
+			if (that.squareid == 0 && that.contentMode === 'qa' && that.questionList.length === 0) {
+				that.loadQuestionList(false);
 			}
 			if (that.token != "" && that.squareid == 1) that.startChatPolling();
 
@@ -726,14 +788,75 @@
 			
 		},
 		methods: {
+			rememberSpaceReturn() {
+				this.spaceReturnScrollTop = Number(this.pageScrollTop) || 0;
+				this.spaceReturnPending = true;
+			},
 			collapseSquareMenu() {
 				if (this.showSquareMenu) this.showSquareMenu = false
 			},
 			toggleSquareMenu() {
+				if (this.contentMode !== 'space') return;
 				this.showSquareMenu = !this.showSquareMenu;
 				if (this.showSquareMenu && !this.topicCenterLoading) {
 					this.getTopicCenter();
 				}
+			},
+			switchContentMode(mode) {
+				if (mode !== 'space' && mode !== 'qa') return;
+				this.showSquareMenu = false;
+				this.squareid = 0;
+				if (this.contentMode === mode) return;
+				this.contentMode = mode;
+				this.stopChatPolling();
+				uni.pageScrollTo({ scrollTop: 0, duration: 0 });
+				if (mode === 'qa' && this.questionList.length === 0) {
+					this.loadQuestionList(false);
+				} else if (mode === 'space' && this.spaceList.length === 0) {
+					this.page = 1;
+					this.getSpaceList(false);
+				}
+			},
+			loadQuestionList(append, complete) {
+				if (this.questionLoadingMore || (append && (this.questionList.length === 0 || this.questionList.length >= this.questionTotal))) {
+					if (complete) complete();
+					return;
+				}
+				const targetPage = append ? this.questionPage + 1 : 1;
+				this.questionLoadingMore = true;
+				if (!append) this.questionLoading = true;
+				this.questionMoreText = append ? '加载中...' : '';
+				this.$Net.request({
+					url: this.$API.qaQuestionList(),
+					data: { page: targetPage, limit: this.questionPageSize },
+					method: 'get',
+					dataType: 'json',
+					success: (res) => {
+						if (!res.data || res.data.code != 1) {
+							if (!append) uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '问题加载失败', icon: 'none' });
+							return;
+						}
+						const list = Array.isArray(res.data.data) ? res.data.data : [];
+						this.questionList = append ? this.questionList.concat(list) : list;
+						this.questionPage = targetPage;
+						this.questionTotal = Number(res.data.total || 0);
+						this.questionMoreText = this.questionList.length < this.questionTotal ? '继续上滑加载' : '已经到底了';
+					},
+					fail: () => {
+						if (!append) uni.showToast({ title: '问题加载失败', icon: 'none' });
+						this.questionMoreText = this.questionList.length ? '加载失败，稍后重试' : '';
+					},
+					complete: () => {
+						this.questionLoading = false;
+						this.questionLoadingMore = false;
+						if (complete) complete();
+					}
+				});
+			},
+			openQuestion(question) {
+				if (!question || !question.id) return;
+				this.rememberSpaceReturn();
+				uni.navigateTo({ url: '/pages/qa/info?id=' + question.id });
 			},
 			showAllTopics() {
 				this.showSquareMenu = false;
@@ -1299,6 +1422,7 @@
 					return false;
 				}
 				that.page = 1;
+				that.contentMode = 'space';
 				that.squareid = type;
 				that.stopChatPolling();
 				if (type == 0) {
@@ -1360,6 +1484,7 @@
 				var that = this;
 				that.page = 1;
 				that.squareid = 0;
+				that.contentMode = 'space';
 				that.selectedTopics = [];
 				that.follow = type;
 				that.stopChatPolling();
@@ -1511,6 +1636,7 @@
 					return;
 				}
 				this.squareid = 0;
+				this.contentMode = 'space';
 				this.follow = 1;
 				this.selectedTopics = selected
 					? this.selectedTopics.filter(item => String(item.mid) !== String(topic.mid))
@@ -2385,10 +2511,18 @@
 		background: #edf2f3;
 	}
 
+	.square-tool-button.is-placeholder {
+		opacity: 0;
+		pointer-events: none;
+	}
+
 	.square-section-tabs {
 		width: 100%;
 		height: 70rpx;
+		border-top: 1rpx solid #edf1f3;
+		background: rgba(255, 255, 255, 0.72);
 		white-space: nowrap;
+		box-sizing: border-box;
 	}
 
 	.square-section-track {
@@ -2409,7 +2543,7 @@
 		min-width: 106rpx;
 		height: 50rpx;
 		padding: 0 20rpx;
-		border-radius: 25rpx;
+		border-radius: 8rpx;
 		font-size: 25rpx;
 		font-weight: 500;
 		color: #87949e;
@@ -2437,6 +2571,32 @@
 		border-top: 1rpx solid #edf1f3;
 		background: rgba(255, 255, 255, 0.58);
 		box-sizing: border-box;
+	}
+
+	.square-qa-list {
+		width: calc(100% - 24rpx);
+		max-width: 760px;
+		margin: 12rpx auto 0;
+		border: 1rpx solid #e2e8e6;
+		border-radius: 8rpx;
+		background: #ffffff;
+		overflow: hidden;
+		box-sizing: border-box;
+	}
+
+	.square-qa-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 260rpx;
+	}
+
+	.square-qa-more {
+		padding: 28rpx 20rpx;
+		border-top: 1rpx solid #edf0ef;
+		font-size: 23rpx;
+		color: #909a96;
+		text-align: center;
 	}
 
 	.square-filter-arrow {
@@ -3668,6 +3828,30 @@
 	.campus-square.campus-night .square-filter-label,
 	.campus-square.campus-night .square-tool-button {
 		color: #edf0ef;
+	}
+
+	.campus-square.campus-night .square-section-tabs {
+		border-color: rgba(226, 232, 230, 0.09);
+		background: #1b2223;
+	}
+
+	.campus-square.campus-night .square-section-item {
+		color: #94a19d;
+	}
+
+	.campus-square.campus-night .square-section-item.is-active {
+		background: #2d5146;
+		color: #e8f2ee;
+	}
+
+	.campus-square.campus-night .square-qa-list {
+		border-color: #303b38;
+		background: #1d2523;
+	}
+
+	.campus-square.campus-night .square-qa-more {
+		border-color: #303b38;
+		color: #899993;
 	}
 
 	.campus-square.campus-night .square-tool-button,

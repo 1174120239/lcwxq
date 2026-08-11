@@ -22,9 +22,10 @@ export function normalizeUser(user, fallbackName) {
 	var normalized = user && typeof user === 'object'
 		? Object.assign({}, user)
 		: {};
-	var name = typeof normalized.name === 'string' ? normalized.name.trim() : '';
+	var screenName = typeof normalized.screenName === 'string' ? normalized.screenName.trim() : '';
+	var accountName = typeof normalized.name === 'string' ? normalized.name.trim() : '';
 
-	normalized.name = name || fallbackName || '已注销用户';
+	normalized.name = screenName || accountName || fallbackName || '已注销用户';
 	normalized.avatar = normalizeAvatarUrl(normalized.avatar);
 	normalized.isvip = Number(normalized.isvip) > 0 ? 1 : 0;
 	normalized.uid = normalized.uid == null ? 0 : normalized.uid;
@@ -35,6 +36,9 @@ export function normalizeUser(user, fallbackName) {
 export function avatarInitial(name) {
 	var text = typeof name === 'string' ? name.trim() : '';
 	if (!text) {
+		return '';
+	}
+	if (/^\d+$/.test(text)) {
 		return '';
 	}
 

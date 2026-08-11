@@ -10,7 +10,7 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP="$CONF.rollback-qa-$STAMP"
 HEADER=replacement-campus-qa
 ROUTES=(
-    questionList questionInfo answerList answerAdd answerEdit answerDelete
+    questionList questionInfo questionAdd answerList answerAdd answerEdit answerDelete
     answerLike commentList commentAdd commentDelete questionManage questionSave
     questionStatus
 )
@@ -33,10 +33,20 @@ header_count=$(grep -Fc "add_header X-Starfree-Backend $HEADER always;" "$CONF" 
 
 if [[ "$route_count" == "${#ROUTES[@]}" && "$header_count" == "${#ROUTES[@]}" ]]; then
     BACKUP=already-promoted
-elif [[ "$route_count" != 0 || "$header_count" != 0 ]]; then
+    ROUTES_TO_ADD=()
+elif [[ "$route_count" == 0 && "$header_count" == 0 ]]; then
+    ROUTES_TO_ADD=("${ROUTES[@]}")
+elif [[ "$route_count" == $((${#ROUTES[@]} - 1)) && "$header_count" == "$route_count"
+        && $(grep -Fc "location = /SFreeQa/questionAdd {" "$CONF" || true) == 0 ]]; then
+    # Older releases promoted the original routes. Add public question
+    # submission without duplicating or replacing those locations.
+    ROUTES_TO_ADD=(questionAdd)
+else
     echo "Partial campus Q&A route promotion detected" >&2
     exit 3
-else
+fi
+
+if [[ "${#ROUTES_TO_ADD[@]}" -gt 0 ]]; then
     cp -p "$CONF" "$BACKUP"
     rollback() {
         echo "Campus Q&A route promotion failed; restoring $BACKUP" >&2
@@ -45,12 +55,14 @@ else
         nginx -s reload
     }
 
-    cat >>"$CONF" <<'NGINX'
+    if [[ "$route_count" == 0 ]]; then
+        cat >>"$CONF" <<'NGINX'
 
 # Campus Q&A is provided by the replacement backend. Keep these locations
 # exact so unknown plugin endpoints continue to use the legacy catch-all.
 NGINX
-    for route in "${ROUTES[@]}"; do
+    fi
+    for route in "${ROUTES_TO_ADD[@]}"; do
         cat >>"$CONF" <<NGINX
 location = /SFreeQa/$route {
     proxy_pass http://127.0.0.1:18082;

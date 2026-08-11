@@ -19,9 +19,11 @@ import java.util.Map;
 @RequestMapping("/SFreeSpace")
 public class SpaceController {
     private final SpaceService spaces;
+    private final SpaceReportService reports;
 
-    public SpaceController(SpaceService spaces) {
+    public SpaceController(SpaceService spaces, SpaceReportService reports) {
         this.spaces = spaces;
+        this.reports = reports;
     }
 
     /**
@@ -211,6 +213,25 @@ public class SpaceController {
                 RequestValues.integer(params, "limit", 10),
                 RequestValues.text(params, "token"));
         return ApiResponse.paged(page.getData(), page.getData().size(), page.getTotal());
+    }
+
+    /** ANY /SFreeSpace/reportAdd: logged-in users report one visible dynamic once. */
+    @RequestMapping("/reportAdd")
+    public ApiResponse reportAdd(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("举报已提交", reports.add(params));
+    }
+
+    /** ANY /SFreeSpace/reportList: administrator/editor pending-report review queue. */
+    @RequestMapping("/reportList")
+    public ApiResponse reportList(@RequestParam Map<String, String> params) {
+        SpaceReportService.Page page = reports.list(params);
+        return ApiResponse.paged(page.getData(), page.getData().size(), page.getTotal());
+    }
+
+    /** ANY /SFreeSpace/reportReview: staff dismiss a report or delete the reported dynamic. */
+    @RequestMapping("/reportReview")
+    public ApiResponse reportReview(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("举报已处理", reports.review(params));
     }
 
     private String clientIp(HttpServletRequest request) {

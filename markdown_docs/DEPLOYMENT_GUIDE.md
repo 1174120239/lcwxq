@@ -244,6 +244,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 005 | 005_ng_music_anonymous.sql | 匿名动态映射与配置表（ng_music 插件功能原生实现） |
 | 006 | 006_qqbot_dynamic_ai.sql | QQBot 绑定、群同步、配置和幂等日志表 |
 | 007 | 007_campus_qa.sql | 校园问答的问题、回答、点赞和评论表 |
+| 008 | 008_space_reports.sql | 动态举报、审核状态和审核审计表 |
 
 规则：
 
@@ -269,6 +270,11 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 `starfree_qa_comments` 四张独立 InnoDB 表，不修改现有用户、帖子或动态表。执行前查询这四张表是否已存在；
 若存在任意一张则先定向备份全部已存在的 Q&A 表，再执行幂等建表语句。执行后核对四张表、主键和索引，
 再部署依赖这些表的 JAR。回滚 JAR 时保留 Q&A 表，避免丢失上线后产生的问答数据。
+
+008 只新增 `starfree_space_reports` 一张独立 InnoDB 表，不修改动态主表。执行前查询该表是否已存在；
+如已存在则先定向备份并核对字段、唯一键 `uk_space_reporter` 和三个查询索引。执行后先验证表结构，
+再部署举报服务 JAR，最后通过 `promote-space-report-routes.sh` 切换三个精确接口。回滚 JAR 或 Nginx
+时保留举报表及其审核记录。
 
 001 可使用：
 
@@ -328,7 +334,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 13 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 当前边界
 

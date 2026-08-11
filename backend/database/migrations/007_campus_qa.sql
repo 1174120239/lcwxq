@@ -1,5 +1,5 @@
 -- Campus Q&A is intentionally separate from article and dynamic data.
--- Questions are staff-managed; ordinary users can answer and discuss answers.
+-- Ordinary users can submit pending questions; staff review and manage publication.
 
 CREATE TABLE IF NOT EXISTS `starfree_qa_questions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `starfree_qa_questions` (
   PRIMARY KEY (`id`),
   KEY `idx_qa_question_public` (`status`, `recommended`, `sort_order`, `modified`),
   KEY `idx_qa_question_creator` (`created_by`, `created`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Staff-managed campus questions';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Campus questions with staff review';
 
 CREATE TABLE IF NOT EXISTS `starfree_qa_answers` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,

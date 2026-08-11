@@ -314,6 +314,238 @@
 		background-color: #15191b !important;
 	}
 
+	/* Legacy pages use several different root classes. The shell class is the
+	 * final theme source, so keep their shared surfaces in the same night palette. */
+	html.campus-system-night,
+	body.campus-system-night,
+	html.campus-system-night page,
+	html.campus-system-night uni-page-body {
+		--campus-night-bg: #15191b;
+		--campus-night-surface: #202527;
+		--campus-night-input: #293032;
+		--campus-night-border: rgba(226, 234, 231, 0.1);
+		--campus-night-text: #edf3f0;
+		--campus-night-muted: #a9b5b0;
+		background-color: var(--campus-night-bg) !important;
+		color: var(--campus-night-text);
+	}
+
+	html.campus-system-night .user,
+	html.campus-system-night .userpost,
+	html.campus-system-night .post,
+	html.campus-system-night .usermarks,
+	html.campus-system-night .buyvippage,
+	html.campus-system-night .campus-page,
+	html.campus-system-night .campus-subpage,
+	html.campus-system-night .qa-page {
+		background-color: var(--campus-night-bg) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	html.campus-system-night .header,
+	html.campus-system-night .header2,
+	html.campus-system-night .cu-bar,
+	html.campus-system-night .cu-bar.bg-white,
+	html.campus-system-night .bg-white,
+	html.campus-system-night .bg-white-solid,
+	html.campus-system-night .data-box,
+	html.campus-system-night .all-box:not(.home-feed),
+	html.campus-system-night .cu-card.no-card > .cu-item,
+	html.campus-system-night .cu-list.menu,
+	html.campus-system-night .cu-list.menu-avatar,
+	html.campus-system-night .cu-list.menu > .cu-item,
+	html.campus-system-night .cu-list.menu-avatar > .cu-item,
+	html.campus-system-night .u-cell,
+	html.campus-system-night .u-cell-item,
+	html.campus-system-night .u-mode-center-box,
+	html.campus-system-night .u-popup__content,
+	html.campus-system-night .tn-popup,
+	html.campus-system-night .tn-popup__content,
+	html.campus-system-night .tn-popup__wrapper,
+	html.campus-system-night .cu-modal .cu-dialog {
+		border-color: var(--campus-night-border) !important;
+		background-color: var(--campus-night-surface) !important;
+		color: var(--campus-night-text) !important;
+		box-shadow: none !important;
+		transition: background-color 220ms ease, border-color 220ms ease, color 160ms ease;
+	}
+
+	html.campus-system-night [style*="background: white"],
+	html.campus-system-night [style*="background-color: white"],
+	html.campus-system-night [style*="background:#fff"],
+	html.campus-system-night [style*="background: #fff"],
+	html.campus-system-night [style*="background-color:#fff"],
+	html.campus-system-night [style*="background-color: #fff"] {
+		background-color: var(--campus-night-surface) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	html.campus-system-night .cu-form-group,
+	html.campus-system-night .search-form,
+	html.campus-system-night .info-input-box,
+	html.campus-system-night .reply-composer,
+	html.campus-system-night .qa-composer,
+	html.campus-system-night .edit-tool,
+	html.campus-system-night .space-owo {
+		border-color: var(--campus-night-border) !important;
+		background-color: var(--campus-night-input) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	html.campus-system-night input,
+	html.campus-system-night textarea,
+	html.campus-system-night .uni-input-input {
+		background-color: transparent !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	html.campus-system-night .uni-input-placeholder,
+	html.campus-system-night .placeholder {
+		color: #899692 !important;
+	}
+
+	html.campus-system-night .header .content,
+	html.campus-system-night .header .action,
+	html.campus-system-night .header2 .content,
+	html.campus-system-night .header2 .action,
+	html.campus-system-night .text-black,
+	html.campus-system-night .color-black,
+	html.campus-system-night .text-content,
+	html.campus-system-night .data-box-title,
+	html.campus-system-night .item-title,
+	html.campus-system-night .title,
+	html.campus-system-night .content {
+		color: var(--campus-night-text) !important;
+	}
+
+	html.campus-system-night .text-gray,
+	html.campus-system-night .text-grey,
+	html.campus-system-night .more text,
+	html.campus-system-night .no-data,
+	html.campus-system-night .load-more,
+	html.campus-system-night .data-time,
+	html.campus-system-night .uni-list-item__extra,
+	html.campus-system-night .u-line-1,
+	html.campus-system-night .u-line-2 {
+		color: var(--campus-night-muted) !important;
+	}
+
+	html.campus-system-night .loading,
+	html.campus-system-night .loading-main,
+	html.campus-system-night .dataLoad,
+	html.campus-system-night .load-more,
+	html.campus-system-night .no-data {
+		background-color: var(--campus-night-bg) !important;
+	}
+
+	html.campus-system-night .info-footer,
+	html.campus-system-night .space-footer,
+	html.campus-system-night .qa-write-bar {
+		border-color: var(--campus-night-border) !important;
+		background-color: #1b2123 !important;
+		color: var(--campus-night-text) !important;
+		box-shadow: 0 -8rpx 24rpx rgba(0, 0, 0, 0.16) !important;
+	}
+
+	html.campus-system-night .reply-composer-mask,
+	html.campus-system-night .qa-composer-mask {
+		background-color: rgba(6, 9, 9, 0.54) !important;
+	}
+
+	/* APP-PLUS pages receive the reactive class even before a WebView shell is available. */
+	.campus-night {
+		--campus-night-bg: #15191b;
+		--campus-night-surface: #202527;
+		--campus-night-input: #293032;
+		--campus-night-border: rgba(226, 234, 231, 0.1);
+		--campus-night-text: #edf3f0;
+		--campus-night-muted: #a9b5b0;
+	}
+
+	.campus-night.user,
+	.campus-night.userpost,
+	.campus-night.post,
+	.campus-night.usermarks,
+	.campus-night.buyvippage {
+		background-color: var(--campus-night-bg) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	.campus-night .header,
+	.campus-night .header2,
+	.campus-night .cu-bar,
+	.campus-night .cu-bar.bg-white,
+	.campus-night .bg-white,
+	.campus-night .bg-white-solid,
+	.campus-night .data-box,
+	.campus-night .all-box:not(.home-feed),
+	.campus-night .cu-card.no-card > .cu-item,
+	.campus-night .cu-list.menu,
+	.campus-night .cu-list.menu-avatar,
+	.campus-night .cu-list.menu > .cu-item,
+	.campus-night .cu-list.menu-avatar > .cu-item,
+	.campus-night .u-cell,
+	.campus-night .u-cell-item,
+	.campus-night .u-popup__content,
+	.campus-night .tn-popup,
+	.campus-night .tn-popup__content,
+	.campus-night .tn-popup__wrapper,
+	.campus-night .cu-modal .cu-dialog {
+		border-color: var(--campus-night-border) !important;
+		background-color: var(--campus-night-surface) !important;
+		color: var(--campus-night-text) !important;
+		box-shadow: none !important;
+	}
+
+	.campus-night [style*="background: white"],
+	.campus-night [style*="background-color: white"],
+	.campus-night [style*="background:#fff"],
+	.campus-night [style*="background: #fff"],
+	.campus-night [style*="background-color:#fff"],
+	.campus-night [style*="background-color: #fff"] {
+		background-color: var(--campus-night-surface) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	.campus-night .cu-form-group,
+	.campus-night .search-form,
+	.campus-night .info-input-box,
+	.campus-night .reply-composer,
+	.campus-night .qa-composer,
+	.campus-night .edit-tool,
+	.campus-night .space-owo {
+		border-color: var(--campus-night-border) !important;
+		background-color: var(--campus-night-input) !important;
+		color: var(--campus-night-text) !important;
+	}
+
+	.campus-night .text-black,
+	.campus-night .color-black,
+	.campus-night .text-content,
+	.campus-night .data-box-title,
+	.campus-night .item-title,
+	.campus-night .title,
+	.campus-night .content {
+		color: var(--campus-night-text) !important;
+	}
+
+	.campus-night .text-gray,
+	.campus-night .text-grey,
+	.campus-night .more text,
+	.campus-night .no-data,
+	.campus-night .load-more,
+	.campus-night .data-time {
+		color: var(--campus-night-muted) !important;
+	}
+
+	.campus-night .loading,
+	.campus-night .loading-main,
+	.campus-night .dataLoad,
+	.campus-night .load-more,
+	.campus-night .no-data {
+		background-color: var(--campus-night-bg) !important;
+	}
+
 	.campus-night .loading {
 		background-color: #15191b !important;
 	}

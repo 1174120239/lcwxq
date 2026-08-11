@@ -5,7 +5,7 @@
 			<text class="reply-history-pending" v-if="item.status==0">待审核</text>
 			<text class="cuIcon-right" v-if="item.originalState === 'visible'"></text>
 		</view>
-		<text class="reply-history-text">{{item.text}}</text>
+		<text class="reply-history-text" user-select @longpress.stop="copyComment">{{item.text}}</text>
 		<view class="reply-history-original" v-if="item.originalState === 'visible' && item.original">
 			<text class="reply-history-author">@{{originalAuthor}}</text>
 			<text class="reply-history-summary">{{item.original.text || '图片动态'}}</text>
@@ -16,6 +16,8 @@
 </template>
 
 <script>
+	import { copyText } from '@/utils/clipboard.js'
+
 	export default {
 		props: { item: { type: Object, required: true } },
 		computed: {
@@ -25,6 +27,9 @@
 			}
 		},
 		methods: {
+			copyComment() {
+				copyText(this.item.text, '评论已复制')
+			},
 			openOriginal() {
 				if (this.item.originalState !== 'visible' || !this.item.original) return
 				uni.navigateTo({ url: '/pages/space/info?id=' + encodeURIComponent(String(this.item.original.id)) })

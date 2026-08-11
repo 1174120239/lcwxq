@@ -1,14 +1,14 @@
 <template>
 	<view class="campus-avatar" @tap="$emit('tap', $event)">
-		<text v-if="!showImage" class="campus-avatar__fallback" :class="fallbackIconClass">
+		<text v-if="!showImage" :key="'fallback-' + avatarRenderKey" class="campus-avatar__fallback" :class="fallbackIconClass">
 			{{ fallbackText }}
 		</text>
 		<image
 			v-if="showImage"
+			:key="'image-' + avatarRenderKey"
 			class="campus-avatar__image"
 			:src="avatarUrl"
 			mode="aspectFill"
-			lazy-load
 			@error="handleImageError"
 		></image>
 	</view>
@@ -41,6 +41,9 @@
 		computed: {
 			avatarUrl() {
 				return normalizeAvatarUrl(this.src);
+			},
+			avatarRenderKey() {
+				return [this.avatarUrl, this.name, this.loadFailed ? 'failed' : 'ready'].join('|');
 			},
 			showImage() {
 				return this.avatarUrl !== '' && !this.loadFailed;
