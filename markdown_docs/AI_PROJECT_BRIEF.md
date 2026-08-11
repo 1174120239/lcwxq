@@ -19,7 +19,7 @@
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 291 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 293 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -104,6 +104,10 @@ manifest.json 使用的应用图标位于 static/branding/icons，不再依赖�
 | SPRING_MAIL_CONNECTION_TIMEOUT、SPRING_MAIL_READ_TIMEOUT、SPRING_MAIL_WRITE_TIMEOUT | SMTP 连接、读取和写入超时毫秒数，默认 10/15/15 秒 |
 | VERIFICATION_EMAIL_ENABLED | 是否允许新后端发送邮箱验证码，默认 true |
 | VERIFICATION_EMAIL_MAX_CONCURRENT | 验证码 SMTP 同时发送上限，默认 2，防止请求堆积和供应商限频 |
+
+生产 JAR 会在运行环境未显式提供 SMTP 值时，仅从 `/opt/application.properties`
+兼容读取 `spring.mail.host/port/username/password/from`；不会导入该文件中的端口、数据库、
+Redis 或其他旧端设置。环境变量和命令行参数始终优先。
 
 本地启动：
 
@@ -344,7 +348,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 291
+Tests run: 293
 Failures: 0
 Errors: 0
 Skipped: 0

@@ -355,7 +355,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 部分新接口会主动委托旧端处理不支持的付费、草稿、商品关联或未知类型请求。不能只看 URL 判断最终写入者。
 
-邮箱验证码上线前必须确认新后端运行环境同时具备：`LEGACY_REDIS_ENABLED=true`、与旧端一致的 Redis 前缀、`SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD/FROM`，以及 `VERIFICATION_EMAIL_ENABLED=true`。生产 `start.sh` 会从 `/opt/application.properties` 读取旧端 SMTP 配置，但不会输出凭据；QQ 邮箱的 password 必须填写 SMTP 授权码，不是 QQ 登录密码。`NOTIFICATION_EMAIL_ENABLED` 默认保持 true，动态评论邮件提醒继续使用同一 SMTP，且失败不会影响评论落库。先在本机 `18082` 使用测试邮箱验证成功和失败清理，再运行 `backend/deploy/production/promote-email-verification-routes.sh`；脚本只切 `RegSendCode` 和 `SendCode`，不修改短信、登录或其他账号接口。
+邮箱验证码上线前必须确认新后端运行环境同时具备：`LEGACY_REDIS_ENABLED=true`、与旧端一致的 Redis 前缀、SMTP 配置，以及 `VERIFICATION_EMAIL_ENABLED=true`。生产 JAR 在没有显式 `SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD/FROM` 时，会仅从 `/opt/application.properties` 兼容读取同名 `spring.mail.*` 五项，不导入端口、数据库、Redis 或其他旧端设置；生产 `start.sh` 也会执行相同的白名单读取，且都不会输出凭据。QQ 邮箱的 password 必须填写 SMTP 授权码，不是 QQ 登录密码。`NOTIFICATION_EMAIL_ENABLED` 默认保持 true，动态评论邮件提醒继续使用同一 SMTP，且失败不会影响评论落库。先在本机 `18082` 使用测试邮箱验证成功和失败清理，再运行 `backend/deploy/production/promote-email-verification-routes.sh`；脚本只切 `RegSendCode` 和 `SendCode`，不修改短信、登录或其他账号接口。
 
 ### 9.3 路由识别
 
