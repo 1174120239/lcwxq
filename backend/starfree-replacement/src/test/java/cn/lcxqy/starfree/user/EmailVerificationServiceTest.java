@@ -2,6 +2,7 @@ package cn.lcxqy.starfree.user;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.mockito.ArgumentCaptor;
 
 import java.security.SecureRandom;
@@ -20,6 +21,20 @@ class EmailVerificationServiceTest {
     private VerificationEmailSender sender;
     private SecureRandom random;
     private EmailVerificationService service;
+
+    @Test
+    void springSelectsTheProductionConstructor() {
+        try (AnnotationConfigApplicationContext context =
+                     new AnnotationConfigApplicationContext()) {
+            context.registerBean(EmailVerificationRepository.class, () -> repository);
+            context.registerBean(LegacyRegistrationRedis.class, () -> redis);
+            context.registerBean(VerificationEmailSender.class, () -> sender);
+            context.register(EmailVerificationService.class);
+            context.refresh();
+
+            assertThat(context.getBean(EmailVerificationService.class)).isNotNull();
+        }
+    }
 
     @BeforeEach
     void setUp() {

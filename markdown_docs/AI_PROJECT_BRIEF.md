@@ -19,7 +19,7 @@
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 293 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 294 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -348,7 +348,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 293
+Tests run: 294
 Failures: 0
 Errors: 0
 Skipped: 0
