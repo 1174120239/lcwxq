@@ -54,7 +54,7 @@ class BackendError(Exception):
     "lcxqy_dynamic_ai",
     "lcxqy",
     "聊一下论坛动态 QQ 助手：NapCat 个人 QQ 账号接入、DeepSeek 聊天、动态工具、群同步和 QQ 空间每日图集。",
-    "0.3.7",
+    "0.3.8",
 )
 class LcxqyDynamicAiPlugin(Star):
     _STATE_VERSION = 1
@@ -62,6 +62,7 @@ class LcxqyDynamicAiPlugin(Star):
     _HISTORY_LIMIT = 12
     _REMOTE_CONFIG_TTL_SECONDS = 15
     _SPACE_LINK_PATTERN = re.compile(r"/pages/space/info\?id=(\d+)")
+    _FORUM_INVITATION_URL = "https://prev.lcxqy.cn/#/pages/user/invitation?invite=LY4898VS95"
     _CHAT_SYSTEM_PROMPT = (
         "你是云云，聊一下校园论坛的 QQ 动态助手，也是自然聊天伙伴。"
         "人设是带一点猫娘气质的年轻女孩：亲切、机灵、略微傲娇，但不刻意卖萌。"
@@ -72,6 +73,8 @@ class LcxqyDynamicAiPlugin(Star):
         "不要写长篇说明，不重复复述用户问题，不主动罗列全部功能，也不要凭空描写用户的表情、动作或心理。"
         "只有用户明确要求详细解释时，才可以适当展开。"
         "当用户问你是谁时，直接说明：我是云云，聊一下论坛的动态助手，可以陪你聊天，也能帮你处理论坛动态和账号操作。"
+        "当用户询问论坛怎么下载、如何安装、下载链接、论坛链接或邀请链接时，必须给出这个准确链接："
+        "https://prev.lcxqy.cn/#/pages/user/invitation?invite=LY4898VS95。不要改写、缩短或编造其他地址。"
         "动态是论坛唯一核心内容，不使用帖子、文章等概念；用户说发帖时也理解为发动态。"
         "你可以识别发动态、修改资料、查询积分和签到状态、签到、绑定论坛账号等操作，"
         "但只负责识别意图，绝不能声称尚未执行的操作已经完成。"
@@ -358,6 +361,13 @@ class LcxqyDynamicAiPlugin(Star):
             return "我是云云，聊一下论坛的动态助手。\n聊天、发动态、签到这些都可以找我喵。"
         if any(phrase in compact for phrase in ("你能做什么", "你会什么", "有什么功能")):
             return "我能陪你聊天，也能帮你发动态、改资料、查积分和签到。\n需要论坛账号时，我会带你完成绑定。"
+        download_phrases = (
+            "论坛怎么下载", "怎么下载论坛", "论坛在哪下载", "论坛在哪里下载", "论坛如何下载",
+            "怎么下载app", "app下载", "软件下载", "客户端下载", "安装包", "下载链接", "安装链接",
+            "论坛链接", "邀请链接", "怎么安装", "如何安装", "在哪里下载", "在哪下载",
+        )
+        if any(phrase in compact for phrase in download_phrases):
+            return "聊一下论坛下载链接：\n" + self._FORUM_INVITATION_URL + "\n打开后按页面提示安装即可。"
         return None
 
     def _group_is_addressed(self, event: AstrMessageEvent, text: str) -> bool:
