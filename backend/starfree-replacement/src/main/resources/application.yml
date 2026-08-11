@@ -4,6 +4,10 @@ server:
     include-message: always
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 72MB
   datasource:
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:lcxqy_dev}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:lcxqy_dev}

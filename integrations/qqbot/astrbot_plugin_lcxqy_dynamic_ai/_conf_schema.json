@@ -5,7 +5,7 @@
     "default": "http://127.0.0.1:18082"
   },
   "bot_secret": {
-    "description": "SFreeBot 接口密钥。生产建议与后端环境变量 LCXQY_QQBOT_SECRET 一致。",
+    "description": "SFreeBot 接口密钥，与论坛后台 QQ Bot设置中的 Bot Secret 完全一致。",
     "type": "string",
     "default": ""
   },
@@ -15,17 +15,12 @@
     "default": "qq"
   },
   "chat_enabled": {
-    "description": "是否让插件把普通聊天转发到后端 DeepSeek 代理",
+    "description": "是否启用 DeepSeek 对话和自然语言论坛操作识别",
     "type": "bool",
     "default": true
   },
-  "chat_in_groups": {
-    "description": "是否在群聊里回复普通聊天。关闭时群里只响应命令和确认词。",
-    "type": "bool",
-    "default": false
-  },
   "sync_enabled": {
-    "description": "是否启用群动态同步轮询",
+    "description": "是否启用群动态同步和 QQ 空间每日同步轮询",
     "type": "bool",
     "default": true
   },

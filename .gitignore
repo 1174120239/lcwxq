@@ -14,6 +14,8 @@ Desktop.ini
 # uni-app build output and dependencies
 unpackage/
 node_modules/
+__pycache__/
+*.py[cod]
 
 # Java build output
 **/target/

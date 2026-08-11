@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -24,6 +26,9 @@ import java.security.SecureRandom;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -37,6 +42,15 @@ public class BotService {
     private static final Logger LOG = LoggerFactory.getLogger(BotService.class);
     private static final int BIND_TOKEN_TTL_SECONDS = 900;
     private static final int MAX_DYNAMIC_TEXT = 1500;
+    private static final ZoneId QZONE_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter QZONE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final String DEFAULT_CHAT_SYSTEM_PROMPT =
+            "你是云云，聊一下校园论坛的 QQ 动态助手。说话亲切、机灵、略微傲娇，"
+                    + "可以偶尔自然说一次‘喵’，但不要刻意卖萌或写大段动作描写。"
+                    + "默认回复一到三句短句，总长度通常不超过 120 个汉字。"
+                    + "先直接回答问题，不用反问代替回答，也不要凭空描写用户的表情或动作。"
+                    + "校园公共场景不输出露骨、色情或性暗示内容。"
+                    + "动态是唯一核心内容；不要引导用户发帖子或文章。";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -44,16 +58,19 @@ public class BotService {
     private final LegacyTokenService tokens;
     private final SpaceService spaces;
     private final SigninService signin;
+    private final BotImageUploadService imageUploads;
     private final SecureRandom random = new SecureRandom();
 
     public BotService(JdbcTemplate jdbc, ObjectMapper mapper, PhpassPasswordVerifier passwords,
-                      LegacyTokenService tokens, SpaceService spaces, SigninService signin) {
+                      LegacyTokenService tokens, SpaceService spaces, SigninService signin,
+                      BotImageUploadService imageUploads) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.passwords = passwords;
         this.tokens = tokens;
         this.spaces = spaces;
         this.signin = signin;
+        this.imageUploads = imageUploads;
     }
 
     public Map<String, Object> config(Map<String, String> request) {
@@ -62,19 +79,25 @@ public class BotService {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("enabled", bool(config, "enabled", false));
         response.put("dynamicOnly", true);
+        response.put("commentSpace", true);
+        response.put("chatInGroups", bool(config, "chat_in_groups", true));
         response.put("deepseekModel", value(config, "deepseek_model", "deepseek-chat"));
         response.put("backendChat", true);
+        response.put("imageUploadReady", imageUploads.available());
         response.put("syncIntervalSeconds", integer(config, "sync_interval_seconds", 45, 10, 3600));
         response.put("syncMaxImages", integer(config, "sync_max_images", 3, 0, 9));
         response.put("syncSummaryLength", integer(config, "sync_summary_length", 120, 20, 500));
 
         Map<String, Object> tools = new LinkedHashMap<>();
-        tools.put("addSpace", bool(config, "tool_add_space", true));
+        boolean addSpaceEnabled = bool(config, "tool_add_space", true);
+        tools.put("addSpace", addSpaceEnabled);
+        tools.put("commentSpace", addSpaceEnabled);
         tools.put("updateProfile", bool(config, "tool_update_profile", true));
         tools.put("status", bool(config, "tool_status", true));
         tools.put("signin", bool(config, "tool_signin", true));
         response.put("tools", tools);
         response.put("groups", syncGroups());
+        response.put("qzone", qzoneSettings(config));
         return response;
     }
 
@@ -178,25 +201,44 @@ public class BotService {
     }
 
     public Map<String, Object> addSpace(Map<String, String> request, String ip) {
+        return addSpace(request, Collections.<MultipartFile>emptyList(), ip);
+    }
+
+    public Map<String, Object> addSpace(Map<String, String> request, List<MultipartFile> images,
+                                        String ip) {
         requireTool(request, "tool_add_space", "发动态功能已关闭");
         Binding binding = requireBinding(request);
         String requestId = requiredText(request, "requestId", "缺少 requestId");
-        return runOperation(requestId, "addSpace", binding, () -> {
+        String requestedType = RequestValues.text(request, "type");
+        if (!requestedType.isEmpty() && !"0".equals(requestedType) && !"3".equals(requestedType)) {
+            throw new IllegalArgumentException("不支持的动态类型");
+        }
+        boolean comment = "3".equals(requestedType);
+        int targetId = comment ? RequestValues.integer(request, "toid", 0) : 0;
+        if (comment && targetId <= 0) {
+            throw new IllegalArgumentException("缺少评论目标");
+        }
+        return runOperation(requestId, comment ? "commentSpace" : "addSpace", binding, () -> {
             Map<String, String> dynamic = new LinkedHashMap<>();
-            dynamic.put("type", "0");
-            dynamic.put("toid", "0");
-            dynamic.put("onlyMe", RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0");
+            dynamic.put("type", comment ? "3" : "0");
+            dynamic.put("toid", comment ? String.valueOf(targetId) : "0");
+            dynamic.put("onlyMe", comment ? "0"
+                    : (RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0"));
             dynamic.put("text", boundedText(request.get("text"), MAX_DYNAMIC_TEXT, true));
-            dynamic.put("pic", RequestValues.text(request, "pic"));
-            dynamic.put("topicIds", RequestValues.text(request, "topicIds"));
+            List<String> uploaded = comment ? Collections.<String>emptyList() : imageUploads.upload(binding.uid, images);
+            dynamic.put("pic", comment ? "" : (uploaded.isEmpty()
+                    ? RequestValues.text(request, "pic") : String.join(",", uploaded)));
+            dynamic.put("topicIds", comment ? "" : RequestValues.text(request, "topicIds"));
             boolean pending = spaces.addForBotUid(binding.uid, dynamic, ip);
             Long latestId = latestSpaceId(binding.uid);
             touchBinding(binding);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("pending", pending);
             result.put("spaceId", latestId == null ? 0 : latestId);
-            result.put("h5Url", h5Url(latestId == null ? 0 : latestId));
-            result.put("msg", pending ? "动态已提交审核" : "动态已发布");
+            result.put("h5Url", h5Url(comment ? targetId : (latestId == null ? 0 : latestId)));
+            result.put("msg", comment
+                    ? (pending ? "评论已提交审核" : "评论已发布")
+                    : (pending ? "动态已提交审核" : "动态已发布"));
             return result;
         });
     }
@@ -269,8 +311,14 @@ public class BotService {
         requireBotSecret(request);
         String platform = platform(request);
         String groupId = requiredText(request, "groupId", "缺少群号");
+        if (!groupId.matches("\\d{5,20}")) {
+            throw new IllegalArgumentException("QQ群号格式不正确");
+        }
         String groupName = safe(request.get("groupName"), 128);
         String unifiedMsgOrigin = safe(request.get("unifiedMsgOrigin"), 255);
+        if (unifiedMsgOrigin.trim().isEmpty()) {
+            unifiedMsgOrigin = "";
+        }
         Timestamp now = Timestamp.from(Instant.now());
         jdbc.update("INSERT INTO lcxqy_bot_group_sync "
                         + "(platform,group_id,group_name,unified_msg_origin,enabled,created_at,updated_at) "
@@ -280,6 +328,7 @@ public class BotService {
                 platform, groupId, groupName, unifiedMsgOrigin, now, now);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("groupId", groupId);
+        response.put("unifiedMsgOrigin", unifiedMsgOrigin);
         response.put("enabled", true);
         return response;
     }
@@ -317,6 +366,85 @@ public class BotService {
         return response;
     }
 
+    public Map<String, Object> qzoneBatch(Map<String, String> request) {
+        requireBotSecret(request);
+        Map<String, String> config = configValues();
+        Map<String, Object> settings = qzoneSettings(config);
+        boolean enabled = Boolean.TRUE.equals(settings.get("enabled"));
+        long cursor = longValue(value(config, "qzone_cursor_space_id", "0"));
+        int limit = integer(config, "qzone_batch_limit", 6, 1, 9);
+        int summaryLength = integer(config, "qzone_summary_length", 80, 20, 200);
+        boolean includeImages = bool(config, "qzone_include_source_images", true);
+
+        List<Map<String, Object>> data = new ArrayList<>();
+        if (enabled) {
+            List<Map<String, Object>> rows;
+            // Every normal and manual run consumes the same cursor. The immediate
+            // button bypasses only the daily schedule, never the de-duplication
+            // boundary; replaying the latest batch would publish old dynamics again.
+            if (cursor > 0) {
+                rows = jdbc.queryForList(dynamicSelect()
+                                + "WHERE s.id>? AND s.status=1 AND s.onlyMe=0 AND s.type<>3 "
+                                + "ORDER BY s.id ASC LIMIT ?",
+                        cursor, limit);
+            } else {
+                rows = jdbc.queryForList(dynamicSelect()
+                                + "WHERE s.status=1 AND s.onlyMe=0 AND s.type<>3 "
+                                + "ORDER BY s.id DESC LIMIT ?",
+                        limit);
+                Collections.reverse(rows);
+            }
+            for (Map<String, Object> row : rows) {
+                data.add(dynamicPayload(row, includeImages ? 1 : 0, summaryLength));
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.putAll(settings);
+        response.put("cursorSpaceId", cursor);
+        response.put("spaces", data);
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> qzoneDelivery(Map<String, String> request) {
+        requireBotSecret(request);
+        String status = RequestValues.text(request, "status");
+        if (!"success".equals(status) && !"error".equals(status)) {
+            throw new IllegalArgumentException("QQ 空间投递状态不正确");
+        }
+        String error = safe(request.get("error"), 1000);
+        Timestamp now = Timestamp.from(Instant.now());
+        boolean success = "success".equals(status);
+        long maxSpaceId = longValue(RequestValues.text(request, "maxSpaceId"));
+        if (success) {
+            if (maxSpaceId <= 0) {
+                throw new IllegalArgumentException("缺少 QQ 空间批次动态 ID");
+            }
+            long currentCursor = longValue(value(configValues(), "qzone_cursor_space_id", "0"));
+            if (maxSpaceId < currentCursor) {
+                throw new IllegalArgumentException("QQ 空间批次游标不能倒退");
+            }
+            String runDate = LocalDate.now(QZONE_ZONE).toString();
+            saveConfigValue("qzone_cursor_space_id", String.valueOf(maxSpaceId), now);
+            saveConfigValue("qzone_last_run_date", runDate, now);
+            saveConfigValue("qzone_last_tid", safe(request.get("tid"), 128), now);
+            saveConfigValue("qzone_last_success_at", now.toString(), now);
+            saveConfigValue("qzone_last_error", "", now);
+            String publishNowToken = safe(request.get("publishNowToken"), 128);
+            String pendingToken = value(configValues(), "qzone_publish_now_token", "");
+            if (!publishNowToken.isEmpty() && publishNowToken.equals(pendingToken)) {
+                saveConfigValue("qzone_publish_now_handled_token", publishNowToken, now);
+            }
+        } else {
+            saveConfigValue("qzone_last_error", error.isEmpty() ? "QQ 空间发布失败" : error, now);
+        }
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("recorded", true);
+        response.put("cursorAdvanced", success);
+        return response;
+    }
+
     public Map<String, Object> chat(Map<String, String> request) {
         requireBotSecret(request);
         Map<String, String> config = configValues();
@@ -333,6 +461,7 @@ public class BotService {
         payload.put("model", model);
         payload.put("messages", messages);
         payload.put("temperature", 0.6);
+        payload.put("max_tokens", 500);
         Map<String, Object> result = callDeepSeek(value(config, "deepseek_api_base",
                 "https://api.deepseek.com"), apiKey, payload);
         Map<String, Object> response = new LinkedHashMap<>();
@@ -404,7 +533,7 @@ public class BotService {
         List<Object> messages = new ArrayList<>();
         Map<String, Object> system = new LinkedHashMap<>();
         system.put("role", "system");
-        system.put("content", "你是聊一下校园论坛的 QQ 助手。动态是唯一核心内容系统；不要引导用户发帖子或文章。");
+        system.put("content", DEFAULT_CHAT_SYSTEM_PROMPT);
         messages.add(system);
         Map<String, Object> user = new LinkedHashMap<>();
         user.put("role", "user");
@@ -438,6 +567,16 @@ public class BotService {
         item.put("author", author);
         item.put("topics", topics(id));
         return item;
+    }
+
+    private String dynamicSelect() {
+        return "SELECT s.id,s.uid,s.created,s.modified,s.text,s.pic,s.type,s.views,s.likes,"
+                + "u.name AS user_name,u.screenName AS user_screenName,u.avatar AS user_avatar,"
+                + "u.mail AS user_mail,campus.name AS user_campus,grade.name AS user_grade "
+                + "FROM starfree_space s "
+                + "LEFT JOIN starfree_users u ON u.uid=s.uid "
+                + "LEFT JOIN starfree_identity_options campus ON campus.id=u.campus_option_id "
+                + "LEFT JOIN starfree_identity_options grade ON grade.id=u.grade_option_id ";
     }
 
     private List<Map<String, Object>> topics(long spaceId) {
@@ -661,6 +800,77 @@ public class BotService {
                         + "FROM lcxqy_bot_group_sync WHERE enabled=1 ORDER BY id");
     }
 
+    private Map<String, Object> qzoneSettings(Map<String, String> config) {
+        String publishTime = normalizedTime(value(config, "qzone_publish_time", "20:30"));
+        LocalDate today = LocalDate.now(QZONE_ZONE);
+        LocalTime now = LocalTime.now(QZONE_ZONE);
+        String lastRunDate = value(config, "qzone_last_run_date", "");
+        String publishMode = value(config, "qzone_publish_mode", "scheduled");
+        if (!"realtime".equals(publishMode)) {
+            publishMode = "scheduled";
+        }
+        String publishNowToken = value(config, "qzone_publish_now_token", "");
+        String handledPublishNowToken = value(config, "qzone_publish_now_handled_token", "");
+        boolean publishNowPending = !publishNowToken.isEmpty()
+                && !publishNowToken.equals(handledPublishNowToken);
+        boolean realtime = "realtime".equals(publishMode);
+        boolean scheduledDue = !now.isBefore(LocalTime.parse(publishTime, QZONE_TIME_FORMAT));
+        boolean alreadyPublishedToday = !realtime && !publishNowPending
+                && today.toString().equals(lastRunDate);
+        boolean enabled = bool(config, "enabled", false)
+                && bool(config, "qzone_enabled", false);
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("enabled", enabled);
+        settings.put("publishMode", publishMode);
+        settings.put("publishTime", publishTime);
+        settings.put("timeZone", QZONE_ZONE.getId());
+        settings.put("due", realtime || scheduledDue || publishNowPending);
+        settings.put("alreadyPublishedToday", alreadyPublishedToday);
+        settings.put("publishNowPending", publishNowPending);
+        settings.put("publishNowToken", publishNowPending ? publishNowToken : "");
+        settings.put("batchLimit", integer(config, "qzone_batch_limit", 6, 1, 9));
+        settings.put("summaryLength", integer(config, "qzone_summary_length", 80, 20, 200));
+        settings.put("includeSourceImages", bool(config, "qzone_include_source_images", true));
+        settings.put("showCampus", bool(config, "qzone_show_campus", true));
+        settings.put("showTopics", bool(config, "qzone_show_topics", true));
+        settings.put("ugcRight", integer(config, "qzone_ugc_right", 1, 1, 128));
+        settings.put("title", value(config, "qzone_title", "聊一今日动态"));
+        settings.put("subtitle", value(config, "qzone_subtitle", "校园里今天发生了什么"));
+        settings.put("footer", value(config, "qzone_footer", "更多动态，来聊一看看"));
+        settings.put("postText", value(config, "qzone_post_text",
+                "今天的校园动态整理好了。\nhttps://prev.lcxqy.cn/"));
+        settings.put("backgroundColor", color(config, "qzone_background_color", "#F4F7F5"));
+        settings.put("accentColor", color(config, "qzone_accent_color", "#1E7258"));
+        settings.put("textColor", color(config, "qzone_text_color", "#18211E"));
+        settings.put("cardColor", color(config, "qzone_card_color", "#FFFFFF"));
+        settings.put("backgroundImageUrl", value(config, "qzone_background_image_url", ""));
+        settings.put("lastRunDate", lastRunDate);
+        settings.put("lastTid", value(config, "qzone_last_tid", ""));
+        settings.put("lastSuccessAt", value(config, "qzone_last_success_at", ""));
+        settings.put("lastError", value(config, "qzone_last_error", ""));
+        return settings;
+    }
+
+    private String normalizedTime(String value) {
+        try {
+            return LocalTime.parse(value, QZONE_TIME_FORMAT).format(QZONE_TIME_FORMAT);
+        } catch (RuntimeException ignored) {
+            return "20:30";
+        }
+    }
+
+    private String color(Map<String, String> config, String key, String fallback) {
+        String candidate = value(config, key, fallback).trim();
+        return candidate.matches("#[0-9a-fA-F]{6}") ? candidate.toUpperCase() : fallback;
+    }
+
+    private void saveConfigValue(String key, String value, Timestamp now) {
+        jdbc.update("INSERT INTO lcxqy_bot_config(config_key,config_value,updated_at) "
+                        + "VALUES (?,?,?) ON DUPLICATE KEY UPDATE "
+                        + "config_value=VALUES(config_value),updated_at=VALUES(updated_at)",
+                key, value == null ? "" : value, now);
+    }
+
     private GroupSyncSetting groupSetting(String platform, String groupId) {
         if (groupId == null || groupId.trim().isEmpty()) {
             return GroupSyncSetting.empty();
@@ -703,16 +913,23 @@ public class BotService {
         if (provided.isEmpty()) {
             provided = RequestValues.text(request, "secret");
         }
-        String expected = System.getenv("LCXQY_QQBOT_SECRET");
-        if (expected == null || expected.trim().isEmpty()) {
-            expected = value(configValues(), "bot_secret", "");
-        }
+        String expected = selectBotSecret(
+                value(configValues(), "bot_secret", ""),
+                System.getenv("LCXQY_QQBOT_SECRET"));
         if (expected.trim().isEmpty()) {
             throw new IllegalArgumentException("Bot secret 未配置");
         }
         if (!constantEquals(provided, expected)) {
             throw new IllegalArgumentException("Bot secret 不正确");
         }
+    }
+
+    static String selectBotSecret(String configuredSecret, String environmentSecret) {
+        String configured = configuredSecret == null ? "" : configuredSecret;
+        if (!configured.trim().isEmpty()) {
+            return configured;
+        }
+        return environmentSecret == null ? "" : environmentSecret;
     }
 
     private Map<String, Object> requireActiveChallenge(String bindToken) {
@@ -827,6 +1044,9 @@ public class BotService {
     }
 
     private long number(Object value) {
+        if (value instanceof Boolean) {
+            return (Boolean) value ? 1L : 0L;
+        }
         if (value instanceof Number) {
             return ((Number) value).longValue();
         }

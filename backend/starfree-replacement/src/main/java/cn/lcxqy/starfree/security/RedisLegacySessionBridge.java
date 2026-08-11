@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class RedisLegacySessionBridge implements LegacySessionBridge {
+    private static final long DETACHED_SESSION_TTL_SECONDS = 300;
     private final RedisTemplate<Object, Object> redis;
     private final boolean enabled;
     private final String prefix;
@@ -66,6 +67,30 @@ public class RedisLegacySessionBridge implements LegacySessionBridge {
         redis.delete(sessionKey);
         hashes.putAll(sessionKey, values);
         redis.expire(sessionKey, sessionTtl, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Store only the token session hash. This is used for server-side legacy
+     * API calls and must never replace a user's existing login token.
+     */
+    @Override
+    public void storeDetached(String token, Map<String, Object> session) {
+        if (!enabled) {
+            return;
+        }
+        String normalizedToken = required(token, "token");
+        Map<Object, Object> values = serializableValues(session);
+        values.put("token", normalizedToken);
+        String sessionKey = sessionKey(normalizedToken);
+        HashOperations<Object, Object, Object> hashes = redis.opsForHash();
+        redis.delete(sessionKey);
+        hashes.putAll(sessionKey, values);
+        redis.expire(sessionKey, Math.min(sessionTtl, DETACHED_SESSION_TTL_SECONDS), TimeUnit.SECONDS);
+    }
+
+    @Override
+    public boolean available() {
+        return enabled;
     }
 
     /** 从 session hash 的 uid 字段读取用户 id；兼容 Number 和数字字符串。 */

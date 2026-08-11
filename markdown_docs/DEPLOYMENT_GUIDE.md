@@ -328,7 +328,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 12 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 13 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 13 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 当前边界
 
