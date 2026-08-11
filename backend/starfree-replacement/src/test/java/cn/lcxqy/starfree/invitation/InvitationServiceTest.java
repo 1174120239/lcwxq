@@ -27,7 +27,7 @@ class InvitationServiceTest {
     void publicConfigReturnsInviterAndDownloadSettings() {
         when(jdbc.queryForList(contains("FROM lcxqy_invitation_config")))
                 .thenReturn(Collections.singletonList(row(
-                        "enabled", 1,
+                        "enabled", Boolean.TRUE,
                         "reward_points", 10,
                         "reward_experience", 20,
                         "android_download_url", "https://download.example/app.apk",

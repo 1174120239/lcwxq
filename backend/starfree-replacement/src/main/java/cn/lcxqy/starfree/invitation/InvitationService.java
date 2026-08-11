@@ -98,7 +98,7 @@ public class InvitationService {
 
     private Map<String, Object> configResponse(Map<String, Object> row) {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("enabled", number(row.get("enabled")) == 1L);
+        result.put("enabled", booleanValue(row.get("enabled")));
         result.put("rewardPoints", number(row.get("reward_points")));
         result.put("rewardExperience", number(row.get("reward_experience")));
         result.put("androidDownloadUrl", text(row.get("android_download_url")));
@@ -162,6 +162,18 @@ public class InvitationService {
         } catch (NumberFormatException ignored) {
             return 0L;
         }
+    }
+
+    private boolean booleanValue(Object value) {
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue() != 0L;
+        }
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return "1".equals(text) || "true".equalsIgnoreCase(text)
+                || "yes".equalsIgnoreCase(text) || "on".equalsIgnoreCase(text);
     }
 
     private String text(Object value) {

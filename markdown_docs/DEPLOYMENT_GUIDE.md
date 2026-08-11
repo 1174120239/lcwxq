@@ -397,6 +397,8 @@ HTTP 200 不代表业务成功，还要检查响应 JSON 的 code 和 msg。
 
 ### 11.1 JAR
 
+优先使用 `/usr/local/sbin/lcxqy-rollback`。该入口恢复 JAR 并重启服务后会最多等待 60 秒，同时检查 systemd active 状态和 HTTP 健康接口；不要用一次立即执行的 `curl` 判断回滚失败。
+
 ~~~bash
 cp -p /opt/starfree-replacement/starfree-replacement.jar.rollback-<TIMESTAMP> /opt/starfree-replacement/starfree-replacement.jar
 systemctl restart starfree-replacement.service

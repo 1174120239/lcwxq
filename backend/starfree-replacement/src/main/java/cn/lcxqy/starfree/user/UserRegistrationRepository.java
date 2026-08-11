@@ -50,7 +50,7 @@ class UserRegistrationRepository {
             throw new SQLException("Invitation reward configuration is missing");
         }
         return new InvitationRewardConfig(
-                numberValue(row.get("enabled")) == 1,
+                booleanValue(row.get("enabled")),
                 boundedReward(row.get("reward_points")),
                 boundedReward(row.get("reward_experience")));
     }
@@ -206,6 +206,18 @@ class UserRegistrationRepository {
         } catch (NumberFormatException ignored) {
             return 0L;
         }
+    }
+
+    private boolean booleanValue(Object value) {
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue() != 0L;
+        }
+        String text = value == null ? "" : String.valueOf(value).trim();
+        return "1".equals(text) || "true".equalsIgnoreCase(text)
+                || "yes".equalsIgnoreCase(text) || "on".equalsIgnoreCase(text);
     }
 
     private int boundedReward(Object value) throws SQLException {

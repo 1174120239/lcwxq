@@ -118,6 +118,7 @@ sudo /usr/local/sbin/lcxqy-rollback --component replacement-backend --backup /sr
 ```
 
 回滚只允许作用于指定组件。回滚后必须重新检查 systemd 状态和对应健康地址；Nginx 路由切换产生的备份仍使用 `backend/deploy/production/` 中的原有回滚脚本处理。
+Java 服务回滚入口会在重启后最多等待 60 秒，同时检查 systemd active 状态和 HTTP 健康接口，避免把正常启动过程误报为回滚失败。
 
 ## 每次任务的结束汇报
 
