@@ -101,7 +101,7 @@ install -m 0600 backend/legacy-api/config/application.example.properties /opt/ap
 vi /opt/application.properties
 ~~~
 
-至少填写 `spring.datasource.username`、`spring.datasource.password`、`spring.redis.password`（无密码时保持为空）、邮件账号密码和 `webinfo.key`。replacement 启动脚本会把该上传密钥传入 `WEBINFO_KEY`，新后端在环境变量未设置时也会只读复用此文件，供 QQ 动态图片调用旧端 `upload/full`。数据库名默认 `lcxqy`，旧 API 和新后端的表前缀、Redis 前缀必须与现有生产配置一致；支付上线前还要确认 `gateway_url` 是当前环境实际使用的网关，不能直接照抄模板。
+至少填写 `spring.datasource.username`、`spring.datasource.password`、`spring.redis.password`（无密码时保持为空）、邮件账号密码和 `webinfo.key`。数据库名默认 `lcxqy`，旧 API 和新后端的表前缀、Redis 前缀必须与现有生产配置一致；支付上线前还要确认 `gateway_url` 是当前环境实际使用的网关，不能直接照抄模板。
 
 不要把填写后的文件复制回 Git 工作区，也不要把真实值写进 shell 历史。仓库只跟踪 `application.example.properties`，服务器上的 `/opt/application.properties` 是独立运行时文件，不属于仓库。
 

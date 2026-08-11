@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class RedisLegacySessionBridgeTest {
@@ -42,12 +43,34 @@ class RedisLegacySessionBridgeTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    void storesDetachedSessionWithoutReplacingAccountToken() {
+        RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
+        ValueOperations<Object, Object> strings = mock(ValueOperations.class);
+        HashOperations<Object, Object, Object> hashes = mock(HashOperations.class);
+        when(redis.opsForHash()).thenReturn(hashes);
+
+        Map<String, Object> session = new HashMap<>();
+        session.put("uid", 7);
+        session.put("name", "alice");
+        new RedisLegacySessionBridge(redis, true, "starfree", 86400)
+                .storeDetached("upload-token", session);
+
+        verify(redis).delete("starfree_userInfoupload-token");
+        verify(hashes).putAll(org.mockito.ArgumentMatchers.eq("starfree_userInfoupload-token"), anyMap());
+        verify(redis).expire("starfree_userInfoupload-token", 300, TimeUnit.SECONDS);
+        verifyNoInteractions(strings);
+        assertThat(new RedisLegacySessionBridge(redis, true, "starfree", 86400).available()).isTrue();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     void disabledBridgeDoesNotContactRedis() {
         RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
         new RedisLegacySessionBridge(redis, false, "starfree", 86400)
                 .store("alice", "token", new HashMap<String, Object>());
 
         org.mockito.Mockito.verifyNoInteractions(redis);
+        assertThat(new RedisLegacySessionBridge(redis, false, "starfree", 86400).available()).isFalse();
     }
     @SuppressWarnings("unchecked")
     @Test

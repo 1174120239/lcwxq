@@ -1,7 +1,13 @@
 package cn.lcxqy.starfree.bot;
 
+import cn.lcxqy.starfree.security.LegacySessionBridge;
+import cn.lcxqy.starfree.security.LegacyTokenService;
+import cn.lcxqy.starfree.security.SessionTokenGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
@@ -15,55 +21,80 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 @Service
 public class BotImageUploadService {
+    private static final Logger LOG = LoggerFactory.getLogger(BotImageUploadService.class);
     private static final int MAX_IMAGES = 9;
     private static final long MAX_IMAGE_BYTES = 8L * 1024L * 1024L;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
     private final String legacyBaseUrl;
-    private final String webKey;
+    private final LegacyTokenService tokens;
+    private final LegacySessionBridge sessions;
+    private final SessionTokenGenerator tokenGenerator;
 
+    @Autowired
     public BotImageUploadService(RestTemplate restTemplate, ObjectMapper mapper,
                                  @Value("${legacy.api.base-url}") String legacyBaseUrl,
-                                 @Value("${webinfo.key:}") String webKey) {
+                                 LegacyTokenService tokens,
+                                 LegacySessionBridge sessions,
+                                 SessionTokenGenerator tokenGenerator) {
         this.restTemplate = restTemplate;
         this.mapper = mapper;
         this.legacyBaseUrl = legacyBaseUrl.replaceAll("/$", "");
-        this.webKey = resolveWebKey(webKey, legacyPropertiesPath());
+        this.tokens = tokens;
+        this.sessions = sessions == null ? LegacySessionBridge.NOOP : sessions;
+        this.tokenGenerator = tokenGenerator;
     }
 
-    public List<String> upload(List<MultipartFile> images) {
+    public List<String> upload(long uid, List<MultipartFile> images) {
         if (images == null || images.isEmpty()) {
             return Collections.emptyList();
         }
         if (images.size() > MAX_IMAGES) {
             throw new IllegalArgumentException("动态图片最多 9 张");
         }
-        if (webKey.isEmpty()) {
-            throw new IllegalStateException("论坛图片上传服务未配置");
+        if (!available()) {
+            throw new IllegalStateException("论坛图片上传会话未启用");
         }
-        List<String> urls = new ArrayList<>();
-        for (int index = 0; index < images.size(); index++) {
-            urls.add(uploadOne(images.get(index), index + 1));
+        Map<String, Object> user = tokens.userById(uid);
+        if (user == null) {
+            throw new IllegalArgumentException("绑定的论坛账号不存在");
         }
-        return urls;
+        String uploadToken = tokenGenerator.generate("qqbot-" + uid);
+        Map<String, Object> session = new LinkedHashMap<>(user);
+        session.put("uid", uid);
+        session.put("token", uploadToken);
+        sessions.storeDetached(uploadToken, session);
+        try {
+            List<String> urls = new ArrayList<>();
+            for (int index = 0; index < images.size(); index++) {
+                urls.add(uploadOne(images.get(index), index + 1, uploadToken));
+            }
+            return urls;
+        } finally {
+            try {
+                sessions.remove(uploadToken);
+            } catch (RuntimeException cleanupFailure) {
+                LOG.warn("Could not remove temporary QQBot upload session; TTL will expire it",
+                        cleanupFailure);
+            }
+        }
     }
 
-    private String uploadOne(MultipartFile image, int index) {
+    public boolean available() {
+        return sessions.available();
+    }
+
+    private String uploadOne(MultipartFile image, int index, String uploadToken) {
         if (image == null || image.isEmpty()) {
             throw new IllegalArgumentException("第 " + index + " 张图片为空");
         }
@@ -90,7 +121,7 @@ public class BotImageUploadService {
         HttpHeaders fileHeaders = new HttpHeaders();
         fileHeaders.setContentType(MediaType.parseMediaType(contentType));
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
-        form.add("webkey", webKey);
+        form.add("token", uploadToken);
         form.add("file", new HttpEntity<ByteArrayResource>(resource, fileHeaders));
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -142,23 +173,4 @@ public class BotImageUploadService {
                 ? fallback : String.valueOf(value).trim();
     }
 
-    static String resolveWebKey(String configured, Path legacyProperties) {
-        String value = configured == null ? "" : configured.trim();
-        if (!value.isEmpty() || legacyProperties == null || !Files.isRegularFile(legacyProperties)) {
-            return value;
-        }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(legacyProperties, StandardCharsets.UTF_8)) {
-            properties.load(reader);
-            return properties.getProperty("webinfo.key", "").trim();
-        } catch (IOException ignored) {
-            return "";
-        }
-    }
-
-    private static Path legacyPropertiesPath() {
-        String configured = System.getenv("LEGACY_PROPERTIES_PATH");
-        return Paths.get(configured == null || configured.trim().isEmpty()
-                ? "/opt/application.properties" : configured.trim());
-    }
 }

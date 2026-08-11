@@ -86,9 +86,9 @@ Secret 建议使用 16 位以上随机字符串，不要使用 QQ 密码或 Deep
 
 `addSpace` 默认只写 `starfree_space.type=0` 普通动态，`toid=0`。引用评论场景额外允许 `type=3`，此时 `toid` 必须是正整数，`onlyMe` 强制为 0，图片和话题被忽略。两种场景都复用 `SpaceService` 既有校验；评论还会执行目标存在、公开、未锁定、20 秒重复评论和评论通知检查。
 
-带图动态最多 9 张、单张最多 8 MB，只接受 `image/*`。插件保留 QQ 图片段的 `url/file/path`，优先读取本地路径；临时 URL 不可用时通过 NapCat OneBot `get_image(file=...)` 取得本地文件。新后端使用服务器自身的 `webinfo.key` 调用旧端 `upload/full`，优先读取 Spring 配置或 `WEBINFO_KEY`，未显式传入时只读复用 `/opt/application.properties`；把返回的论坛永久 URL 写入 `starfree_space.pic`，不会把服务器密钥返回插件，也不会把 QQ 临时 CDN 地址作为最终图片地址。任何图片读取或上传失败都会阻止发布并保留草稿。
+带图动态最多 9 张、单张最多 8 MB，只接受 `image/*`。插件保留 QQ 图片段的 `url/file/path`，优先读取本地路径；临时 URL 不可用时通过 NapCat OneBot `get_image(file=...)` 取得本地文件。旧端 `upload/full` 要求用户 token，不能使用 `webinfo.key`。新后端会按已绑定的论坛 UID 创建最多 5 分钟有效的独立 Redis 上传会话，上传结束后立即删除；不会修改 `starfree_users.authCode` 或账号现有 token，因此不会让用户其他设备退出。返回的论坛永久 URL 会写入 `starfree_space.pic`，QQ 临时 CDN 地址不会成为最终图片地址。任何图片读取或上传失败都会阻止发布并保留草稿。
 
-新后端在 `config` 返回顶层 `commentSpace=true`。插件提交评论前必须先确认该标记；旧后端没有标记时只提示后端尚未升级，绝不能继续调用 `addSpace`，以免旧实现把 `type=3` 强制改成普通动态。
+新后端在 `config` 返回顶层 `commentSpace=true` 和 `imageUploadReady`。插件提交评论前必须先确认 `commentSpace`；运维可用 `imageUploadReady=true` 无写入确认共享旧 Redis 上传会话已启用。旧后端没有评论标记时只提示后端尚未升级，绝不能继续调用 `addSpace`，以免旧实现把 `type=3` 强制改成普通动态。
 
 ## 5. 绑定流程
 
@@ -225,7 +225,7 @@ AstrBot 插件配置：
 
 ~~~powershell
 python -m unittest integrations.qqbot.tests.test_lcxqy_dynamic_ai -v
-mvn -f backend/starfree-replacement/pom.xml -Dtest=BotServiceTest,BotImageUploadServiceTest test
+mvn -f backend/starfree-replacement/pom.xml -Dtest=BotServiceTest,BotImageUploadServiceTest,RedisLegacySessionBridgeTest test
 php -l admin/starfree-admin/source/admin/qqBot.php
 php -l admin/starfree-admin/source/admin/qqBotPost.php
 ~~~

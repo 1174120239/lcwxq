@@ -47,12 +47,14 @@ class BotServiceTest {
     void configAuthenticatesWithSecretSavedByAdmin() {
         Fixture fixture = new Fixture();
         fixture.config("enabled", "1", "bot_secret", "admin-secret");
+        when(fixture.imageUploads.available()).thenReturn(true);
 
         Map<String, Object> response = fixture.service.config(botRequest("admin-secret", "10001"));
 
         assertThat(response).containsEntry("enabled", true)
                 .containsEntry("dynamicOnly", true)
                 .containsEntry("commentSpace", true)
+                .containsEntry("imageUploadReady", true)
                 .containsEntry("chatInGroups", true);
         assertThat(((Map<?, ?>) response.get("tools")).get("commentSpace")).isEqualTo(true);
     }
@@ -158,7 +160,7 @@ class BotServiceTest {
         when(fixture.spaces.addForBotUid(eq(77L), any(), eq("127.0.0.1"))).thenReturn(false);
         MultipartFile first = mock(MultipartFile.class);
         MultipartFile second = mock(MultipartFile.class);
-        when(fixture.imageUploads.upload(Arrays.asList(first, second))).thenReturn(Arrays.asList(
+        when(fixture.imageUploads.upload(eq(77L), eq(Arrays.asList(first, second)))).thenReturn(Arrays.asList(
                 "https://frp.lcxqy.cn/upload/first.jpg",
                 "https://frp.lcxqy.cn/upload/second.jpg"));
 

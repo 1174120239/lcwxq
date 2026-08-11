@@ -15,6 +15,15 @@ public interface LegacySessionBridge {
         }
 
         @Override
+        public void storeDetached(String token, Map<String, Object> session) {
+        }
+
+        @Override
+        public boolean available() {
+            return false;
+        }
+
+        @Override
         public Long userId(String token) {
             return null;
         }
@@ -30,6 +39,12 @@ public interface LegacySessionBridge {
 
     /** 写账号到 token 映射和 token session，并统一设置旧配置的 TTL。 */
     void store(String account, String token, Map<String, Object> session);
+
+    /** Store a short-lived session without changing any account-to-token link. */
+    void storeDetached(String token, Map<String, Object> session);
+
+    /** Whether the shared legacy session store is enabled. */
+    boolean available();
 
     /** 仅从旧 Redis session 解析 uid；找不到或桥接关闭返回 null。 */
     Long userId(String token);

@@ -490,6 +490,8 @@ curl -sS -X POST 'https://api.lcxqy.cn/upload/full' \
 
 不要将其替换为 base64 JSON。上传后先检查旧端实际响应字段，再把 URL 写入帖子、评论或动态。
 
+QQBot 不使用 `webinfo.key` 冒充上传 token。replacement 会为已绑定的论坛 UID 在共享旧 Redis 中创建最多 5 分钟有效的独立上传会话，调用结束后立即删除；该会话不写 `starfree_users.authCode`，也不改动账号到现有 token 的映射，因此不会让用户其他设备退出登录。`SFreeBot/config` 的 `imageUploadReady=true` 表示这项共享会话能力已启用。
+
 ### 7.2 聊天
 
 | 路径 | 已知用途 | 已确认参数 | 状态 |

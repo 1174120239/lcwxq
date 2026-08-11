@@ -83,6 +83,7 @@ public class BotService {
         response.put("chatInGroups", bool(config, "chat_in_groups", true));
         response.put("deepseekModel", value(config, "deepseek_model", "deepseek-chat"));
         response.put("backendChat", true);
+        response.put("imageUploadReady", imageUploads.available());
         response.put("syncIntervalSeconds", integer(config, "sync_interval_seconds", 45, 10, 3600));
         response.put("syncMaxImages", integer(config, "sync_max_images", 3, 0, 9));
         response.put("syncSummaryLength", integer(config, "sync_summary_length", 120, 20, 500));
@@ -224,7 +225,7 @@ public class BotService {
             dynamic.put("onlyMe", comment ? "0"
                     : (RequestValues.text(request, "onlyMe").equals("1") ? "1" : "0"));
             dynamic.put("text", boundedText(request.get("text"), MAX_DYNAMIC_TEXT, true));
-            List<String> uploaded = comment ? Collections.<String>emptyList() : imageUploads.upload(images);
+            List<String> uploaded = comment ? Collections.<String>emptyList() : imageUploads.upload(binding.uid, images);
             dynamic.put("pic", comment ? "" : (uploaded.isEmpty()
                     ? RequestValues.text(request, "pic") : String.join(",", uploaded)));
             dynamic.put("topicIds", comment ? "" : RequestValues.text(request, "topicIds"));

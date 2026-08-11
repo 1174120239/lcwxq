@@ -45,7 +45,6 @@ export REDIS_PASSWORD="${REDIS_PASSWORD-$(read_property spring.redis.password)}"
 export LEGACY_REDIS_ENABLED="${LEGACY_REDIS_ENABLED:-true}"
 export LEGACY_REDIS_PREFIX="${LEGACY_REDIS_PREFIX:-$(read_property web.prefix)}"
 export LEGACY_REDIS_SESSION_TTL="${LEGACY_REDIS_SESSION_TTL:-$(read_property webinfo.usertime)}"
-export WEBINFO_KEY="${WEBINFO_KEY:-$(read_property webinfo.key)}"
 
 # UniPush is opt-in. When enabled on the server, the operator adds these keys to
 # /opt/application.properties (unipush.enabled=true, unipush.app-id, unipush.app-key,
