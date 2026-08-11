@@ -148,6 +148,12 @@
 			}
 		},
 		{
+			"path": "pages/user/invitation",
+			"style": {
+				"softinputMode": "adjustResize"
+			}
+		},
+		{
 			"path": "pages/user/setup",
 			"style": {}
 		},

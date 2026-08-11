@@ -42,6 +42,19 @@ class UserRegistrationRepository {
         return new RegistrationConfig(row);
     }
 
+    InvitationRewardConfig invitationRewardConfig(Connection connection) throws SQLException {
+        Map<String, Object> row = one(connection,
+                "SELECT enabled,reward_points,reward_experience "
+                        + "FROM lcxqy_invitation_config WHERE id=1 LIMIT 1");
+        if (row == null) {
+            throw new SQLException("Invitation reward configuration is missing");
+        }
+        return new InvitationRewardConfig(
+                numberValue(row.get("enabled")) == 1,
+                boundedReward(row.get("reward_points")),
+                boundedReward(row.get("reward_experience")));
+    }
+
     boolean nameExists(Connection connection, String name) throws SQLException {
         return number(connection,
                 "SELECT COUNT(*) FROM starfree_users WHERE name=?", name) > 0;
@@ -65,9 +78,20 @@ class UserRegistrationRepository {
                         + "WHERE code=? AND status=0 ORDER BY id LIMIT 2", code);
     }
 
+    Map<String, Object> reusableInvitation(Connection connection, String code)
+            throws SQLException {
+        return one(connection,
+                "SELECT c.uid,c.invite_code FROM lcxqy_invitation_codes c "
+                        + "JOIN starfree_users u ON u.uid=c.uid "
+                        + "WHERE c.invite_code=? LIMIT 1",
+                code);
+    }
+
     Map<String, Object> user(Connection connection, long uid) throws SQLException {
         return one(connection,
-                "SELECT uid,COALESCE(assets,0) AS assets FROM starfree_users WHERE uid=? LIMIT 1",
+                "SELECT uid,COALESCE(assets,0) AS assets,COALESCE(points,0) AS points,"
+                        + "COALESCE(experience,0) AS experience "
+                        + "FROM starfree_users WHERE uid=? LIMIT 1",
                 uid);
     }
 
@@ -95,6 +119,28 @@ class UserRegistrationRepository {
 
     int setAssets(Connection connection, long uid, long assets) throws SQLException {
         return update(connection, "UPDATE starfree_users SET assets=? WHERE uid=?", assets, uid);
+    }
+
+    int setInvitationRewards(Connection connection, long uid, long points, long experience)
+            throws SQLException {
+        return update(connection,
+                "UPDATE starfree_users SET points=?,experience=? WHERE uid=?",
+                points, experience, uid);
+    }
+
+    int insertInvitationRecord(Connection connection, long inviterUid, long inviteeUid,
+                               String inviteCode, int rewardPoints, int rewardExperience)
+            throws SQLException {
+        return update(connection,
+                "INSERT INTO lcxqy_invitation_records "
+                        + "(inviter_uid,invitee_uid,invite_code,reward_points,reward_experience,created_at) "
+                        + "VALUES(?,?,?,?,?,NOW())",
+                inviterUid, inviteeUid, inviteCode, rewardPoints, rewardExperience);
+    }
+
+    int deleteInvitationRecord(Connection connection, long inviteeUid) throws SQLException {
+        return update(connection,
+                "DELETE FROM lcxqy_invitation_records WHERE invitee_uid=?", inviteeUid);
     }
 
     long insertRebatePaylog(Connection connection, long uid, int amount,
@@ -149,6 +195,25 @@ class UserRegistrationRepository {
                 return result.next() ? result.getLong(1) : 0L;
             }
         }
+    }
+
+    private long numberValue(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return value == null ? 0L : Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    private int boundedReward(Object value) throws SQLException {
+        long amount = numberValue(value);
+        if (amount < 0 || amount > 1_000_000L) {
+            throw new SQLException("Invitation reward configuration is out of range");
+        }
+        return (int) amount;
     }
 
     private Map<String, Object> one(Connection connection, String sql, Object... args)
@@ -217,6 +282,30 @@ class UserRegistrationRepository {
 
         long getGradeId() {
             return gradeId;
+        }
+    }
+
+    static final class InvitationRewardConfig {
+        private final boolean enabled;
+        private final int points;
+        private final int experience;
+
+        InvitationRewardConfig(boolean enabled, int points, int experience) {
+            this.enabled = enabled;
+            this.points = points;
+            this.experience = experience;
+        }
+
+        boolean isEnabled() {
+            return enabled;
+        }
+
+        int getPoints() {
+            return points;
+        }
+
+        int getExperience() {
+            return experience;
         }
     }
 }

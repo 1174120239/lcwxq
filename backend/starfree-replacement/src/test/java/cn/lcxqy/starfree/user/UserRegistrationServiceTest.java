@@ -99,6 +99,59 @@ class UserRegistrationServiceTest {
     }
 
     @Test
+    void reusableInvitationRewardsPointsAndExperienceWithoutConsumingCode() throws Exception {
+        RegistrationConfig config = config(false, false, 0, 0);
+        arrangeConfig(config);
+        arrangeStarted();
+        when(repository.invitationRewardConfig(connection))
+                .thenReturn(new UserRegistrationRepository.InvitationRewardConfig(true, 12, 30));
+        when(repository.reusableInvitation(connection, "LYCODE1234"))
+                .thenReturn(row("uid", 7L, "invite_code", "LYCODE1234"));
+        when(repository.user(connection, 7L)).thenReturn(row(
+                "uid", 7L, "assets", 20L, "points", 8L, "experience", 40L));
+        when(repository.insertUser(eq(connection), any())).thenReturn(11L);
+        when(repository.insertInvitationRecord(
+                connection, 7L, 11L, "LYCODE1234", 12, 30)).thenReturn(1);
+        when(repository.setInvitationRewards(connection, 7L, 20L, 70L)).thenReturn(1);
+
+        Map<String, Object> result = service.register(
+                request("", "lycode1234"), "203.0.113.7");
+
+        assertThat(result).containsEntry("uid", 11L)
+                .containsEntry("invitationUser", 7L)
+                .containsEntry("rewardPoints", 12)
+                .containsEntry("rewardExperience", 30)
+                .containsEntry("rebate", 0);
+        verify(repository).setInvitationRewards(connection, 7L, 20L, 70L);
+        verify(repository, never()).consumeInvitation(any(), anyLong());
+        verify(repository, never()).setAssets(any(), anyLong(), anyLong());
+    }
+
+    @Test
+    void reusableInvitationCanRecordSuccessWhenBothRewardsAreZero() throws Exception {
+        RegistrationConfig config = config(false, false, 0, 0);
+        arrangeConfig(config);
+        arrangeStarted();
+        when(repository.invitationRewardConfig(connection))
+                .thenReturn(new UserRegistrationRepository.InvitationRewardConfig(true, 0, 0));
+        when(repository.reusableInvitation(connection, "LYCODE1234"))
+                .thenReturn(row("uid", 7L, "invite_code", "LYCODE1234"));
+        when(repository.user(connection, 7L)).thenReturn(row(
+                "uid", 7L, "assets", 20L, "points", 8L, "experience", 40L));
+        when(repository.insertUser(eq(connection), any())).thenReturn(11L);
+        when(repository.insertInvitationRecord(
+                connection, 7L, 11L, "LYCODE1234", 0, 0)).thenReturn(1);
+
+        Map<String, Object> result = service.register(
+                request("", "LYCODE1234"), "203.0.113.7");
+
+        assertThat(result).containsEntry("rewardPoints", 0)
+                .containsEntry("rewardExperience", 0);
+        verify(repository, never()).setInvitationRewards(any(), anyLong(), anyLong(), anyLong());
+        verify(journal).commit(eq(connection), eq(OPERATION_KEY), any());
+    }
+
+    @Test
     void committedRegistrationReplayDoesNotCreateOrRewardAgain() throws Exception {
         RegistrationConfig config = config(true, true, 1, 10);
         arrangeConfig(config);
@@ -250,6 +303,8 @@ class UserRegistrationServiceTest {
     private void arrangeConfig(RegistrationConfig config) throws SQLException {
         when(repository.config()).thenReturn(config);
         when(repository.config(connection)).thenReturn(config);
+        lenient().when(repository.invitationRewardConfig(connection))
+                .thenReturn(new UserRegistrationRepository.InvitationRewardConfig(false, 0, 0));
         lenient().when(repository.enabledIdentityOption(connection, 2L, "campus")).thenReturn(true);
         lenient().when(repository.enabledIdentityOption(connection, 3L, "grade")).thenReturn(true);
     }

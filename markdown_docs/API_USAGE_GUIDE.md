@@ -141,7 +141,7 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 公网新 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
 | `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
 | `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
-| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；邀请码返利进入 assets；成功后不自动登录。 |
+| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；旧一次性邀请码按原逻辑返 assets，用户分享邀请码奖励邀请人 points/experience；成功后不自动登录。 |
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；成功后撤销关联会话。 |
@@ -195,6 +195,15 @@ form_post("SFreeUsers/userRegister", {
 | `SFreeUsers/madeInvitation` | GET/POST / administrator | `num=1..100` | 代码新/公网旧 | 服务端生成高随机邀请码。 |
 | `SFreeUsers/invitationList` | GET/POST / administrator | `searchParams.status,page,limit` | 代码新/公网旧 | limit 最大 50。 |
 | `SFreeUsers/invitationExcel` | GET/POST / administrator | `limit<=10000` | 代码新/公网旧 | 返回 UTF-8 制表符文本 `.xls`，不是 JSON。 |
+
+### 3.4 轻量邀请分享
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeInvitation/config` | GET/POST / 无 | 可选 `inviteCode` | 公网新 | 返回 `enabled/rewardPoints/rewardExperience/androidDownloadUrl/iosDownloadUrl`；传有效邀请码时附邀请人公开资料。 |
+| `SFreeInvitation/me` | GET/POST / token | `token` | 公网新 | 返回当前用户唯一邀请码、成功邀请数、积分/经验累计值和最近记录；服务端从 token 得到 UID。 |
+
+轻量邀请只奖励邀请人的积分和经验，不产生提现或多级返佣。注册时的 `params.inviteCode` 可以是用户邀请码；奖励记录按被邀请人 UID 幂等。
 
 ## 4. 内容、评论和分类
 

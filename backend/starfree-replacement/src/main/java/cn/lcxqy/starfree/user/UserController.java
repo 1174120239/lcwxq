@@ -144,9 +144,10 @@ public class UserController {
      *
      * <p>{@code params} JSON 至少包含 {@code name/password}，并按当前配置接收
      * {@code mail/phone/code/inviteCode}。IP 从可信代理头提取，用于防刷与用户记录。
-     * 客户端传入的钱包、积分、经验、VIP、角色和时间字段不会被采用。邀请码返利写入
-     * {@code assets} 而不是 points；MyISAM 用户/流水写入由 InnoDB 操作 journal 和反向补偿
-     * 保护。该接口只返回插入行数，不自动登录；验证码发送本身仍在旧后端。
+     * 客户端传入的钱包、积分、经验、VIP、角色和时间字段不会被采用。旧的一次性邀请码继续
+     * 按原配置写 assets；用户分享邀请码按独立配置给邀请人增加 points 和 experience，并保存
+     * 唯一奖励记录。MyISAM 用户/流水写入由 InnoDB 操作 journal 和反向补偿保护。该接口只
+     * 返回插入行数，不自动登录；验证码发送本身仍在旧后端。
      */
     @RequestMapping(value = "/userRegister", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse register(

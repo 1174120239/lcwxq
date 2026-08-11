@@ -103,10 +103,17 @@ public class UserRegistrationService {
         long invitationId = 0L;
         long inviterUid = 0L;
         long oldInviterAssets = 0L;
+        long oldInviterPoints = 0L;
+        long oldInviterExperience = 0L;
         long userId = 0L;
         long paylogId = 0L;
         boolean invitationConsumed = false;
         boolean inviterChanged = false;
+        boolean invitationRecordCreated = false;
+        boolean invitationRewardChanged = false;
+        boolean reusableInvitation = false;
+        int rewardPoints = 0;
+        int rewardExperience = 0;
         boolean projectionsComplete = false;
         try {
             if (!repository.enabledIdentityOption(connection, request.campusId, "campus")) {
@@ -123,7 +130,18 @@ public class UserRegistrationService {
             }
             verifyCode(request, config);
 
-            if (config.isInvitationRequired()) {
+            UserRegistrationRepository.InvitationRewardConfig invitationRewards =
+                    repository.invitationRewardConfig(connection);
+            String reusableCode = request.inviteCode.toUpperCase(Locale.ROOT);
+            Map<String, Object> reusable = request.inviteCode.isEmpty()
+                    || !invitationRewards.isEnabled()
+                    ? null : repository.reusableInvitation(connection, reusableCode);
+            if (reusable != null) {
+                inviterUid = number(reusable.get("uid"));
+                reusableInvitation = true;
+                rewardPoints = invitationRewards.getPoints();
+                rewardExperience = invitationRewards.getExperience();
+            } else if (config.isInvitationRequired()) {
                 List<Map<String, Object>> invitations =
                         repository.availableInvitations(connection, request.inviteCode);
                 if (invitations.isEmpty()) {
@@ -136,16 +154,26 @@ public class UserRegistrationService {
                 Map<String, Object> invitation = invitations.get(0);
                 invitationId = number(invitation.get("id"));
                 inviterUid = number(invitation.get("uid"));
-                Map<String, Object> inviter = inviterUid <= 0
-                        ? null : repository.user(connection, inviterUid);
-                if (invitationId <= 0 || inviter == null) {
+                if (invitationId <= 0 || inviterUid <= 0) {
                     throw new IllegalArgumentException("\u9519\u8bef\u7684\u9080\u8bf7\u7801");
                 }
-                oldInviterAssets = number(inviter.get("assets"));
                 if (repository.consumeInvitation(connection, invitationId) != 1) {
                     throw new IllegalArgumentException("\u9080\u8bf7\u7801\u5df2\u88ab\u4f7f\u7528");
                 }
                 invitationConsumed = true;
+            } else if (!request.inviteCode.isEmpty() && invitationRewards.isEnabled()) {
+                throw new IllegalArgumentException("\u9519\u8bef\u7684\u9080\u8bf7\u7801");
+            }
+
+            Map<String, Object> inviter = inviterUid <= 0
+                    ? null : repository.user(connection, inviterUid);
+            if (inviterUid > 0 && inviter == null) {
+                throw new IllegalArgumentException("\u9519\u8bef\u7684\u9080\u8bf7\u7801");
+            }
+            if (inviter != null) {
+                oldInviterAssets = number(inviter.get("assets"));
+                oldInviterPoints = number(inviter.get("points"));
+                oldInviterExperience = number(inviter.get("experience"));
             }
 
             long now = Instant.now(clock).getEpochSecond();
@@ -156,7 +184,26 @@ public class UserRegistrationService {
                             request.gradeId, now);
             userId = repository.insertUser(connection, user);
 
-            int rebate = inviterUid > 0 ? config.getRebateAmount() : 0;
+            if (reusableInvitation) {
+                if (repository.insertInvitationRecord(
+                        connection, inviterUid, userId, reusableCode,
+                        rewardPoints, rewardExperience) != 1) {
+                    throw new SQLException("Invitation reward record insert failed");
+                }
+                invitationRecordCreated = true;
+                if (rewardPoints > 0 || rewardExperience > 0) {
+                    long nextPoints = addReward(oldInviterPoints, rewardPoints, "points");
+                    long nextExperience = addReward(
+                            oldInviterExperience, rewardExperience, "experience");
+                    if (repository.setInvitationRewards(
+                            connection, inviterUid, nextPoints, nextExperience) != 1) {
+                        throw new SQLException("Invitation points and experience update failed");
+                    }
+                    invitationRewardChanged = true;
+                }
+            }
+
+            int rebate = inviterUid > 0 && !reusableInvitation ? config.getRebateAmount() : 0;
             if (rebate > 0) {
                 long nextAssets = addAsset(oldInviterAssets, rebate);
                 if (repository.setAssets(connection, inviterUid, nextAssets) != 1) {
@@ -171,7 +218,9 @@ public class UserRegistrationService {
                     "rows", 1,
                     "uid", userId,
                     "invitationUser", inviterUid,
-                    "rebate", rebate);
+                    "rebate", rebate,
+                    "rewardPoints", rewardPoints,
+                    "rewardExperience", rewardExperience);
             projectionsComplete = true;
             journal.commit(connection, operationKey, result);
             return result;
@@ -182,7 +231,9 @@ public class UserRegistrationService {
                 throw markNeedsReview(connection, operationKey, error);
             }
             compensate(connection, operationKey, error, invitationId, inviterUid,
-                    oldInviterAssets, userId, paylogId, invitationConsumed, inviterChanged);
+                    oldInviterAssets, oldInviterPoints, oldInviterExperience,
+                    userId, paylogId, invitationConsumed, inviterChanged,
+                    invitationRecordCreated, invitationRewardChanged);
             rethrow(error);
             return Collections.emptyMap();
         }
@@ -190,13 +241,20 @@ public class UserRegistrationService {
 
     private void compensate(Connection connection, String operationKey, Exception original,
                             long invitationId, long inviterUid, long oldInviterAssets,
+                            long oldInviterPoints, long oldInviterExperience,
                             long userId, long paylogId, boolean invitationConsumed,
-                            boolean inviterChanged) throws SQLException {
+                            boolean inviterChanged, boolean invitationRecordCreated,
+                            boolean invitationRewardChanged) throws SQLException {
         Exception compensation = null;
         compensation = compensate(compensation, paylogId > 0,
                 () -> repository.deletePaylog(connection, paylogId));
         compensation = compensate(compensation, inviterChanged,
                 () -> repository.setAssets(connection, inviterUid, oldInviterAssets));
+        compensation = compensate(compensation, invitationRewardChanged,
+                () -> repository.setInvitationRewards(
+                        connection, inviterUid, oldInviterPoints, oldInviterExperience));
+        compensation = compensate(compensation, invitationRecordCreated,
+                () -> repository.deleteInvitationRecord(connection, userId));
         compensation = compensate(compensation, userId > 0,
                 () -> repository.deleteUser(connection, userId));
         compensation = compensate(compensation, invitationConsumed,
@@ -321,6 +379,18 @@ public class UserRegistrationService {
             long next = Math.addExact(current, (long) amount);
             if (next > Integer.MAX_VALUE) {
                 throw new ArithmeticException("Legacy asset column overflow");
+            }
+            return next;
+        } catch (ArithmeticException error) {
+            throw new IllegalArgumentException("\u9080\u8bf7\u5956\u52b1\u8d85\u51fa\u53ef\u7528\u8303\u56f4", error);
+        }
+    }
+
+    private long addReward(long current, int amount, String field) {
+        try {
+            long next = Math.addExact(current, (long) amount);
+            if (next > Integer.MAX_VALUE) {
+                throw new ArithmeticException("Legacy " + field + " column overflow");
             }
             return next;
         } catch (ArithmeticException error) {

@@ -240,6 +240,13 @@ module.exports = {
 	invitationExcel:function(){
 		return API_URL + 'SFreeUsers/invitationExcel';
 	},
+	//轻量邀请分享
+	invitationConfig:function(){
+		return API_URL + 'SFreeInvitation/config';
+	},
+	invitationMe:function(){
+		return API_URL + 'SFreeInvitation/me';
+	},
 	setClientId:function(){
 		return API_URL + 'SFreeUsers/setClientId';
 	},
