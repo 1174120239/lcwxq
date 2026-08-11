@@ -141,7 +141,7 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 公网新 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
 | `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
 | `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
-| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；邀请码返利进入 assets；成功后不自动登录。 |
+| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；旧一次性邀请码按原逻辑返 assets，用户分享邀请码奖励邀请人 points/experience；成功后不自动登录。 |
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；成功后撤销关联会话。 |
@@ -151,9 +151,9 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
 | `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | `uid` 优先；资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
-| `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | 旧端参数待抓包确认 | 旧端 | 邮箱注册验证码发送；新后端只兼容消费验证码。 |
+| `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
-| `SFreeUsers/SendCode` | GET/POST / 登录态/策略 | 旧端参数待抓包确认 | 旧端 | 历史通用验证码发送。 |
+| `SFreeUsers/SendCode` | GET/POST / 无 | `params.name` | 代码新/公网旧 | 找回密码验证码；name 可为用户名或邮箱，实际发送到账号已绑定邮箱，但兼容写入 `starfree_sendCode<用户名>`。有效期 30 分钟、同账号 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/apiLogin` | GET/POST / 第三方凭据 | 旧端参数待抓包确认 | 旧端 | 不要信任客户端直接传来的 openId；重建时必须校验提供方 code/token。 |
 | `SFreeUsers/apiBind` | GET/POST / token+第三方凭据 | 旧端参数待抓包确认 | 旧端 | 社会化绑定，重建时校验 audience、过期和回调状态。 |
 | `SFreeUsers/userBindStatus` | GET/POST / token | 旧端参数待抓包确认 | 旧端 | 查询第三方绑定状态。 |
@@ -170,6 +170,8 @@ form_post("SFreeUsers/userRegister", {
     }, ensure_ascii=False)
 })
 ```
+
+邮箱验证码发送成功只返回 `code=1,msg=邮件发送成功`，不会返回验证码。SMTP 未配置、QQ 拒绝登录、连接失败和投递失败会返回不同的业务消息；发送失败会删除刚写入的验证码，SMTP 失败保留收件人冷却，只有本地模板或运行错误才释放冷却。认证失败后默认全局退避 300 秒，退避期间不连接 SMTP；真实 SMTP 尝试默认至少间隔 1000 毫秒。邮件正文优先使用后台 `starfree_emailtemplate.verifyTemplate`，兼容 `{{userName}}` 和 `{{code}}` 占位符；模板为空时使用内置模板。
 
 ### 3.3 站内信、关注与用户管理
 
@@ -195,6 +197,15 @@ form_post("SFreeUsers/userRegister", {
 | `SFreeUsers/madeInvitation` | GET/POST / administrator | `num=1..100` | 代码新/公网旧 | 服务端生成高随机邀请码。 |
 | `SFreeUsers/invitationList` | GET/POST / administrator | `searchParams.status,page,limit` | 代码新/公网旧 | limit 最大 50。 |
 | `SFreeUsers/invitationExcel` | GET/POST / administrator | `limit<=10000` | 代码新/公网旧 | 返回 UTF-8 制表符文本 `.xls`，不是 JSON。 |
+
+### 3.4 轻量邀请分享
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeInvitation/config` | GET/POST / 无 | 可选 `inviteCode` | 公网新 | 返回 `enabled/rewardPoints/rewardExperience/androidDownloadUrl/iosDownloadUrl`；传有效邀请码时附邀请人公开资料。 |
+| `SFreeInvitation/me` | GET/POST / token | `token` | 公网新 | 返回当前用户唯一邀请码、成功邀请数、积分/经验累计值和最近记录；服务端从 token 得到 UID。 |
+
+轻量邀请只奖励邀请人的积分和经验，不产生提现或多级返佣。注册时的 `params.inviteCode` 可以是用户邀请码；奖励记录按被邀请人 UID 幂等。
 
 ## 4. 内容、评论和分类
 
@@ -300,7 +311,7 @@ article = form_post("SFreeContents/contentsAdd", {
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
-动态举报表由 `backend/database/migrations/008_space_reports.sql` 创建。未执行迁移前不能启用上述三个举报路由；发布默认不执行该迁移。
+动态举报表由 `backend/database/migrations/009_space_reports.sql` 创建。未执行迁移前不能启用上述三个举报路由；发布默认不执行该迁移。
 
 ### 校园问答
 

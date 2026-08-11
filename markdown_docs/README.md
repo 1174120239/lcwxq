@@ -11,6 +11,7 @@
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | 运维、后端发布人员 | 构建、迁移、JAR 部署、Nginx 切流、验收和回滚 |
 | [CODEX_WORKFLOW.md](CODEX_WORKFLOW.md) | 使用 Codex 的开发和发布人员 | 会话边界、提示词、本地一键发布和 GitHub Actions |
 | [QQBOT_INTEGRATION_GUIDE.md](QQBOT_INTEGRATION_GUIDE.md) | AstrBot 插件开发者 | 账号绑定、发帖、审核后同步、数据库表、部署和测试 |
+| [INVITATION_SYSTEM.md](INVITATION_SYSTEM.md) | 前端、后端和后台维护者 | 轻量邀请、积分经验奖励、分享页和软件下载配置 |
 
 ## 文档维护规则
 

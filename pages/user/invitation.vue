@@ -201,30 +201,31 @@
 <style>
 	.invitation-page { min-height: 100vh; background: #f3f6f4; color: #243033; }
 	.invitation-page.campus-night { background: #151b1d; color: #f2f6f4; }
-	.invitation-header { height: 96rpx; display:flex; align-items:center; justify-content:space-between; padding-left:28rpx; padding-right:28rpx; background:rgba(255,255,255,.88); border-bottom:1px solid rgba(36,48,51,.08); position:relative; z-index:2; }
-	.campus-night .invitation-header { background:rgba(25,32,34,.92); border-color:rgba(255,255,255,.08); }
-	.invitation-back,.invitation-header-space { width:64rpx; }
-	.invitation-back { height:64rpx; display:flex; align-items:center; justify-content:center; font-size:40rpx; }
-	.invitation-title { font-size:34rpx; font-weight:700; }
-	.invitation-shell { max-width:920rpx; margin:0 auto; padding:28rpx 28rpx 90rpx; }
-	.invitation-hero { overflow:hidden; padding:54rpx 40rpx 42rpx; border-radius:28rpx; color:#fff; background:#2d5755; box-shadow:0 20rpx 45rpx rgba(23,51,52,.18); }
+	.invitation-header { height: 96rpx; display:flex; align-items:center; justify-content:space-between; padding-left: 28rpx; padding-right: 28rpx; background: rgba(255,255,255,.88); border-bottom: 1px solid rgba(36,48,51,.08); position:relative; z-index:2; }
+	.campus-night .invitation-header { background: rgba(25,32,34,.92); border-color: rgba(255,255,255,.08); }
+	.invitation-back { width: 64rpx; height:64rpx; display:flex; align-items:center; justify-content:center; font-size: 40rpx; }
+	.invitation-title { font-size: 34rpx; font-weight: 700; letter-spacing: 1rpx; }
+	.invitation-header-space { width:64rpx; }
+	.invitation-shell { max-width: 920rpx; margin: 0 auto; padding: 28rpx 28rpx 90rpx; }
+	.invitation-hero { position:relative; overflow:hidden; padding: 54rpx 40rpx 42rpx; border-radius: 28rpx; color:#fff; background:#2d5755; box-shadow: 0 20rpx 45rpx rgba(23,51,52,.18); }
 	.campus-night .invitation-hero { background:#203f40; }
-	.invitation-hero-kicker { font-size:23rpx; opacity:.78; letter-spacing:3rpx; }
-	.invitation-hero-title { margin-top:18rpx; font-size:48rpx; line-height:1.24; font-weight:800; }
-	.invitation-hero-copy { margin-top:22rpx; font-size:27rpx; line-height:1.65; color:rgba(255,255,255,.82); }
-	.inviter-line,.reward-pills,.card-heading view,.action-row,.download-platform,.download-actions,.download-tip { display:flex; align-items:center; }
-	.inviter-line { gap:16rpx; }
-	.inviter-avatar { width:64rpx; height:64rpx; border-radius:50%; background:#edf5f0 center/cover; display:flex; align-items:center; justify-content:center; color:#2e6561; }
+	.invitation-hero-glow { display:none; }
+	.invitation-hero-kicker { position:relative; font-size: 23rpx; opacity:.78; letter-spacing: 3rpx; }
+	.invitation-hero-title { position:relative; margin-top: 18rpx; font-size: 48rpx; line-height:1.24; font-weight: 800; }
+	.invitation-hero-copy { position:relative; margin-top: 22rpx; font-size: 27rpx; line-height:1.65; color: rgba(255,255,255,.82); }
+	.inviter-line { display:flex; align-items:center; gap: 16rpx; }
+	.inviter-avatar { width: 64rpx; height:64rpx; border-radius:50%; background:#edf5f0 center/cover; display:flex; align-items:center; justify-content:center; color:#2e6561; }
 	.inviter-name { color:#ffe39a; font-weight:700; }
-	.reward-pills { flex-wrap:wrap; gap:14rpx; margin-top:30rpx; }
-	.reward-pills view { display:flex; align-items:center; gap:10rpx; padding:12rpx 18rpx; border-radius:99rpx; background:rgba(255,255,255,.13); font-size:23rpx; }
-	.invitation-card { margin-top:24rpx; padding:30rpx; border-radius:22rpx; background:#fff; border:1px solid rgba(36,48,51,.08); box-shadow:0 12rpx 30rpx rgba(35,60,60,.06); }
+	.reward-pills { position:relative; display:flex; flex-wrap:wrap; gap:14rpx; margin-top:30rpx; }
+	.reward-pills view { display:flex; align-items:center; gap:10rpx; padding: 12rpx 18rpx; border-radius: 99rpx; background: rgba(255,255,255,.13); font-size: 23rpx; }
+	.invitation-card { margin-top: 24rpx; padding: 30rpx; border-radius: 22rpx; background:#fff; border: 1px solid rgba(36,48,51,.08); box-shadow: 0 12rpx 30rpx rgba(35,60,60,.06); }
 	.campus-night .invitation-card { background:#20282a; border-color:rgba(255,255,255,.08); box-shadow:none; }
 	.card-heading { display:flex; justify-content:space-between; align-items:center; gap:20rpx; font-size:30rpx; font-weight:700; }
-	.card-heading view { gap:12rpx; }
+	.card-heading view { display:flex; align-items:center; gap:12rpx; }
 	.card-heading view text:first-child { color:#d29f31; }
 	.card-caption { font-size:22rpx; color:#7c8987; font-weight:400; }
-	.code-box { display:flex; align-items:center; gap:16rpx; margin-top:28rpx; padding:22rpx 24rpx; border-radius:14rpx; background:#eef5f1; color:#244c4b; }
+	.campus-night .card-caption { color:#a5b0ad; }
+	.code-box { display:flex; align-items:center; gap:16rpx; margin-top:28rpx; padding: 22rpx 24rpx; border-radius:14rpx; background:#eef5f1; color:#244c4b; }
 	.campus-night .code-box { background:#293638; color:#dbeee6; }
 	.code-label { font-size:23rpx; color:#72827d; }
 	.code-value { flex:1; font-size:38rpx; font-weight:800; letter-spacing:4rpx; }
@@ -232,24 +233,31 @@
 	.summary-grid view { display:flex; flex-direction:column; align-items:center; gap:8rpx; border-right:1px solid rgba(36,48,51,.1); }
 	.summary-grid view:last-child { border-right:0; }
 	.summary-grid text:first-child { font-size:38rpx; font-weight:800; color:#2f746b; }
+	.campus-night .summary-grid text:first-child { color:#f0c65d; }
 	.summary-grid text:last-child { font-size:22rpx; color:#788681; }
-	.action-row { gap:14rpx; margin-top:30rpx; }
+	.action-row { display:flex; gap:14rpx; margin-top:30rpx; }
 	.primary-action,.secondary-action { flex:1; min-height:78rpx; border-radius:14rpx; display:flex; align-items:center; justify-content:center; gap:10rpx; font-size:26rpx; font-weight:700; }
 	.primary-action { color:#fff; background:#2f746b; }
 	.secondary-action { color:#2f746b; border:1px solid #2f746b; }
+	.campus-night .secondary-action { color:#afd5c3; border-color:#7ab29d; }
 	.full-action { margin-top:28rpx; }
 	.join-copy { margin-top:24rpx; color:#72807c; font-size:25rpx; line-height:1.7; }
+	.campus-night .join-copy { color:#b3bfba; }
 	.download-item { display:flex; align-items:center; justify-content:space-between; gap:18rpx; padding:22rpx 0; border-bottom:1px solid rgba(36,48,51,.08); }
-	.download-platform { gap:15rpx; min-width:0; }
+	.campus-night .download-item { border-color:rgba(255,255,255,.08); }
+	.download-item:last-of-type { border-bottom:0; }
+	.download-platform { display:flex; align-items:center; gap:15rpx; min-width:0; }
 	.download-platform > view { display:flex; flex-direction:column; gap:6rpx; min-width:0; font-size:26rpx; font-weight:700; }
 	.platform-icon { width:54rpx; height:54rpx; border-radius:15rpx; display:flex; align-items:center; justify-content:center; background:#2f746b; color:#fff; font-size:30rpx; font-weight:800; }
 	.platform-icon.ios { background:#333c42; }
 	.platform-icon.web { background:#b9822d; }
 	.download-url { max-width:310rpx; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#84928e; font-size:20rpx; font-weight:400; }
-	.download-actions { gap:12rpx; flex-shrink:0; }
+	.download-actions { display:flex; gap:12rpx; flex-shrink:0; }
 	.download-actions view { padding:12rpx 16rpx; border-radius:10rpx; color:#2f746b; border:1px solid #2f746b; font-size:22rpx; }
 	.download-actions view:first-child { color:#fff; background:#2f746b; }
-	.download-tip { gap:10rpx; margin-top:18rpx; color:#9b6d2c; font-size:22rpx; line-height:1.5; }
+	.campus-night .download-actions view { color:#afd5c3; border-color:#7ab29d; }
+	.campus-night .download-actions view:first-child { color:#17201f; background:#9ed2b9; }
+	.download-tip { display:flex; align-items:center; gap:10rpx; margin-top:18rpx; color:#9b6d2c; font-size:22rpx; line-height:1.5; }
 	.invitation-empty { padding:90rpx 20rpx; text-align:center; color:#7b8986; font-size:25rpx; }
-	@media screen and (max-width:380px) { .invitation-shell { padding-left:20rpx; padding-right:20rpx; } .invitation-hero { padding-left:28rpx; padding-right:28rpx; } .invitation-hero-title { font-size:42rpx; } .download-item { align-items:flex-start; flex-direction:column; } .download-actions { width:100%; } .download-actions view { flex:1; text-align:center; } }
+	@media screen and (max-width: 380px) { .invitation-shell { padding-left:20rpx; padding-right:20rpx; } .invitation-hero { padding-left:28rpx; padding-right:28rpx; } .invitation-hero-title { font-size:42rpx; } .download-item { align-items:flex-start; flex-direction:column; } .download-actions { width:100%; } .download-actions view { flex:1; text-align:center; } }
 </style>

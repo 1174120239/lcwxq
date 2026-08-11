@@ -15,10 +15,11 @@
 - 生产环境保留旧闭源 Java API；仓库中的 `backend/legacy-api/dist/StarFreeApi.jar` 是从生产服务器核验的可部署副本，新后端通过 Nginx 精确路由逐步接管接口。
 - PHP admin 管理后台继续使用，不重建。
 - 除匿名动态（原 ng_music 插件功能，2026-08-08 按用户要求原生实现）外，插件功能不在重建范围，动态 type=6 明确拒绝。
-- 充值、验证码发送、文件上传、聊天和部分第三方登录仍使用旧后端。
+- 充值、短信验证码、文件上传、聊天和部分第三方登录仍使用旧后端；邮箱验证码发送已在新后端重建，待精确路由切流。
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
+- 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 199 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 296 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -98,6 +99,17 @@ manifest.json 使用的应用图标位于 static/branding/icons，不再依赖�
 | LEGACY_API_BASE_URL | 本地旧 API 或生产旧端地址 |
 | LEGACY_REDIS_ENABLED | 是否读取旧 Redis 登录态 |
 | LEGACY_REDIS_PREFIX | 旧 Redis key 前缀 |
+| SPRING_MAIL_HOST、SPRING_MAIL_PORT | 邮箱验证码和通知邮件的 SMTP 地址与端口 |
+| SPRING_MAIL_USERNAME、SPRING_MAIL_PASSWORD、SPRING_MAIL_FROM | SMTP 账号、授权码和发件地址，只能配置在运行环境 |
+| SPRING_MAIL_CONNECTION_TIMEOUT、SPRING_MAIL_READ_TIMEOUT、SPRING_MAIL_WRITE_TIMEOUT | SMTP 连接、读取和写入超时毫秒数，默认 10/15/15 秒 |
+| VERIFICATION_EMAIL_ENABLED | 是否允许新后端发送邮箱验证码，默认 true |
+| VERIFICATION_EMAIL_MAX_CONCURRENT | 验证码 SMTP 同时发送上限，默认 2，防止请求堆积和供应商限频 |
+| VERIFICATION_EMAIL_AUTHENTICATION_BACKOFF_SECONDS | SMTP 认证失败后的全局退避秒数，默认 300，退避期间不再连接供应商 |
+| VERIFICATION_EMAIL_MINIMUM_ATTEMPT_INTERVAL_MILLIS | 两次真实 SMTP 尝试的最小间隔毫秒数，默认 1000 |
+
+生产 JAR 会在运行环境未显式提供 SMTP 值时，仅从 `/opt/application.properties`
+兼容读取 `spring.mail.host/port/username/password/from`；不会导入该文件中的端口、数据库、
+Redis 或其他旧端设置。环境变量和命令行参数始终优先。
 
 本地启动：
 
@@ -123,13 +135,14 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 文件 | 作用 |
 |---|---|
 | 001_economy_operation_journal.sql | 经济操作幂等日志 |
+| 008_simple_invitation.sql | 轻量邀请配置、用户邀请码和奖励记录 |
 | 002_space_views.sql | 动态浏览量 |
 | 003_space_topics.sql | 动态话题、关注和关联 |
 | 004_campus_identity.sql | 校区/入学年份选项及用户稳定引用 id |
 | 005_ng_music_anonymous.sql | 匿名动态专用账号、真实发布者映射与后台配置 |
 | 006_qqbot_dynamic_ai.sql | NapCat 个人 QQ 动态助手配置、绑定、群同步、幂等和投递日志 |
 | 007_campus_qa.sql | 校园问答问题、回答、回答点赞、评论和回复 |
-| 008_space_reports.sql | 动态举报、处理状态和 staff 审核审计 |
+| 009_space_reports.sql | 动态举报、处理状态和 staff 审核审计 |
 
 ## 5. 请求和响应约定
 
@@ -240,7 +253,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 模块 | 当前能力 |
 |---|---|
 | system | health、liveness |
-| security/user | 登录、退出、注册、找回、资料、token 轮换、用户管理、校区和入学年份维护 |
+| security/user | 登录、退出、注册、邮箱验证码发送、找回、资料、token 轮换、用户管理、校区和入学年份维护 |
 | content | 列表、详情、普通新增/更新、删除、审核、推荐/置顶/轮播 |
 | comment | 列表、新增、删除、审核 |
 | meta | 分类/标签增删改查、推荐、关系清理 |
@@ -262,7 +275,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 ### 8.3 仍依赖旧端
 
-- 邮件/短信验证码发送。
+- 短信验证码发送；邮箱验证码已在新后端实现，公网是否生效取决于精确路由。
 - QQ、微信、微博等社会化登录/绑定。
 - upload/full。
 - 私聊、群聊和聊天管理。
@@ -345,13 +358,13 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 当前 Maven 结果：
 
 ~~~text
-Tests run: 274
+Tests run: 305
 Failures: 0
 Errors: 0
 Skipped: 0
 ~~~
 
-测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托、匿名动态权限与隐私边界、普通用户问题待审核提交、动态举报去重与 staff 处理和经济操作。
+测试覆盖控制器兼容、权限、审核、幂等、Redis 登录态、MyISAM 补偿、动态可见性、内容委托、匿名动态权限与隐私边界、普通用户问题待审核提交、动态举报去重与 staff 处理、经济操作、轻量邀请奖励，以及邮箱验证码协议、限流、SMTP 异常分类、认证退避和失败清理。
 
 ### 11.2 本地集成脚本
 
@@ -422,7 +435,7 @@ HBuilderX 编译后至少检查：
 
 - MyISAM 多表写入仍存在进程中断窗口。
 - 动态删除保留部分旧端语义，历史回复、转发或点赞日志可能形成孤儿记录。
-- upload/full、聊天、验证码和官方支付仍依赖闭源后端。
+- upload/full、聊天、短信验证码和官方支付仍依赖闭源后端。
 - 商城跨表写入上线前仍需要真实 MySQL 的可清理集成测试。
 - 旧端缓存 key 和序列化格式改变会影响新旧互通。
 - 插件类型和未知历史数据不能凭猜测重建。

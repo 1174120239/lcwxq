@@ -251,6 +251,13 @@ $adminpw = "123456";
                                 <span class="menu-arrow"></span>
                             </a>
                         </li>
+                        <li class="side-nav-item right_10">
+                            <a href="<?php echo $ADMIN_PATH;?>/invitation.php" class="side-nav-link">
+                                <i class="dripicons-share"></i>
+                                <span>邀请分享</span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 <li class="side-nav-item">

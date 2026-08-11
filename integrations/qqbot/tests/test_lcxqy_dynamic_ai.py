@@ -779,6 +779,7 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         self.assertIn("不输出露骨", prompt)
         self.assertIn("先直接回答用户的问题", prompt)
         self.assertIn("当用户问你是谁时", prompt)
+        self.assertIn("https://prev.lcxqy.cn/#/pages/user/invitation?invite=LY4898VS95", prompt)
 
     def test_chat_reply_is_limited_to_three_short_sections(self):
         plan = self.plugin._parse_plan(json.dumps({
@@ -810,6 +811,19 @@ class LcxqyDynamicAiPluginTest(unittest.TestCase):
         result = self.collect(DummyEvent("你好"))
 
         self.assertEqual(["在呢。\n我是云云，有事直接说喵。"], result)
+
+    def test_forum_download_question_uses_fixed_invitation_link(self):
+        async def unexpected_api(*_args, **_kwargs):
+            raise AssertionError("download reply should not call DeepSeek")
+
+        self.plugin._api = unexpected_api
+        result = self.collect(DummyEvent("这个论坛怎么下载？"))
+
+        self.assertEqual([
+            "聊一下论坛下载链接：\n"
+            "https://prev.lcxqy.cn/#/pages/user/invitation?invite=LY4898VS95\n"
+            "打开后按页面提示安装即可。"
+        ], result)
 
     def test_initial_sync_delivers_only_latest_space_with_active_platform_origin(self):
         captured = []

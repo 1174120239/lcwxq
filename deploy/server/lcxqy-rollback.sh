@@ -3,6 +3,36 @@ set -euo pipefail
 
 COMPONENT=
 BACKUP=
+
+health_check() {
+    case "$1" in
+        replacement-backend) curl -fsS --max-time 15 http://127.0.0.1:18082/health >/dev/null ;;
+        legacy-api) curl -fsS --max-time 15 http://127.0.0.1:8081/ >/dev/null ;;
+        *) return 2 ;;
+    esac
+}
+
+service_check() {
+    case "$1" in
+        replacement-backend) systemctl is-active --quiet starfree-replacement.service ;;
+        legacy-api) systemctl is-active --quiet starfree-legacy.service ;;
+        *) return 2 ;;
+    esac
+}
+
+wait_for_component() {
+    local component="$1"
+    local timeout_seconds="${2:-60}"
+    local deadline=$((SECONDS + timeout_seconds))
+    while (( SECONDS < deadline )); do
+        if service_check "$component" && health_check "$component"; then
+            return 0
+        fi
+        sleep 2
+    done
+    service_check "$component" && health_check "$component"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --component) COMPONENT=${2:-}; shift 2 ;;
@@ -21,13 +51,13 @@ case "$COMPONENT" in
         [[ -f "$BACKUP/starfree-replacement.jar" ]] || exit 3
         install -m 0644 "$BACKUP/starfree-replacement.jar" /opt/starfree-replacement/starfree-replacement.jar
         systemctl restart starfree-replacement.service
-        curl -fsS --max-time 15 http://127.0.0.1:18082/health >/dev/null
+        wait_for_component replacement-backend 60
         ;;
     legacy-api)
         [[ -f "$BACKUP/StarFreeApi.jar" ]] || exit 3
         install -m 0644 "$BACKUP/StarFreeApi.jar" /opt/StarFreeApi.jar
         systemctl restart starfree-legacy.service
-        curl -fsS --max-time 15 http://127.0.0.1:8081/ >/dev/null
+        wait_for_component legacy-api 60
         ;;
     admin)
         [[ -f "$BACKUP/admin.tar.gz" ]] || exit 3

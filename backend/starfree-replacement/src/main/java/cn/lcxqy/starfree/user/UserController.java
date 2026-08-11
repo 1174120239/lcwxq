@@ -20,8 +20,8 @@ import java.util.Map;
  * 用户账号、登录态、个人资料、通知和关注关系接口。
  *
  * <p>这里描述的是替代后端直接接到请求时的行为；生产公网是否进入这些方法，还要看
- * Nginx 精确 location。验证码发送、手机登录、第三方登录和后台用户管理未在本类重建，
- * 仍由 {@code LegacyProxyController} 或生产旧 API 处理。
+ * Nginx 精确 location。邮箱验证码由同包的独立控制器处理；短信验证码、手机登录、
+ * 第三方登录和后台用户管理仍由 {@code LegacyProxyController} 或生产旧 API 处理。
  */
 @RestController
 @RequestMapping("/SFreeUsers")
@@ -144,9 +144,10 @@ public class UserController {
      *
      * <p>{@code params} JSON 至少包含 {@code name/password}，并按当前配置接收
      * {@code mail/phone/code/inviteCode}。IP 从可信代理头提取，用于防刷与用户记录。
-     * 客户端传入的钱包、积分、经验、VIP、角色和时间字段不会被采用。邀请码返利写入
-     * {@code assets} 而不是 points；MyISAM 用户/流水写入由 InnoDB 操作 journal 和反向补偿
-     * 保护。该接口只返回插入行数，不自动登录；验证码发送本身仍在旧后端。
+     * 客户端传入的钱包、积分、经验、VIP、角色和时间字段不会被采用。旧的一次性邀请码继续
+     * 按原配置写 assets；用户分享邀请码按独立配置给邀请人增加 points 和 experience，并保存
+     * 唯一奖励记录。MyISAM 用户/流水写入由 InnoDB 操作 journal 和反向补偿保护。该接口只
+     * 返回插入行数，不自动登录；邮箱验证码由独立发送接口写入共享 Redis。
      */
     @RequestMapping(value = "/userRegister", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse register(
