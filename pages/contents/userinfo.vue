@@ -82,6 +82,9 @@
 			</view>
 			<view class="profile-campus" v-if="campus">{{campus}}</view>
 			<view class="profile-grade" v-if="grade">{{grade}}</view>
+			<view class="profile-private-fields" v-if="gender || birthday">
+				<text v-if="gender">{{gender}}</text><text v-if="birthday">生日 {{birthday}}</text>
+			</view>
 			<view class="user-data-label profile-introduce" style="margin-top: 10upx;word-wrap: break-word">
 				<block v-if="introduce!=''&&introduce">
 					{{subText(introduce,60)}}
@@ -168,7 +171,7 @@
 					<text class="cuIcon-text"></text>
 					暂时没有动态
 				</view>
-				<spaceItem :spaceList="spaceList"></spaceItem>
+				<spaceItem :spaceList="spaceList" :night="AppStyle === 'campus-night'"></spaceItem>
 				<view class="load-more" @tap="loadMore" v-if="spaceList.length>0">
 					<text>{{moreText}}</text>
 				</view>
@@ -305,6 +308,8 @@
 				introduce:"",
 				campus:"",
 				grade:"",
+				gender:"",
+				birthday:"",
 				fanNum:0,
 				contentsNum:0,
 				commentsNum:0,
@@ -524,7 +529,8 @@
 					url: that.$API.getUserInfo(),
 					data:{
 						"key":that.uid,
-						"uid":that.uid
+						"uid":that.uid,
+						"token":localStorage.getItem('token') || ''
 					},
 					header:{
 						'Content-Type':'application/x-www-form-urlencoded'
@@ -543,6 +549,8 @@
 							that.introduce = res.data.data.introduce;
 							that.campus = res.data.data.campus || '';
 							that.grade = res.data.data.grade || '';
+							that.gender = res.data.data.gender || '';
+							that.birthday = res.data.data.birthday || '';
 							if(res.data.data.screenName){
 								that.myname = res.data.data.screenName;
 							}else{
@@ -1325,6 +1333,9 @@
 .profile-introduce { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
 .profile-campus { margin-top: 8upx; font-size: 24upx; color: #7b8b89; }
 .profile-grade { margin-top: 2upx; font-size: 22upx; color: #899794; }
+.profile-private-fields { display: flex; flex-wrap: wrap; gap: 10upx; margin-top: 8upx; }
+.profile-private-fields text { padding: 4upx 12upx; border-radius: 8upx; background: #edf4f2; color: #60706c; font-size: 22upx; }
+.campus-profile-page.campus-night .profile-private-fields text { background: #293132; color: #c3ceca; }
 .profile-bottom-spacer { width: 100%; height: 100upx; background: #f6f6f6; }
 .campus-profile-page { min-height: 100vh; background: #f4f7f6; }
 .campus-profile-page.campus-night,

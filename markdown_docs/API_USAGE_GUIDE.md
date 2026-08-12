@@ -145,7 +145,7 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；成功后撤销关联会话。 |
-| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。简介最多 255 字并保留换行，显式传空字符串可清空；不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
+| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。新增 `gender/birthday/showGender/showBirthday`，性别与生日分别控制公开；生日范围为 1900-01-01 至今天。简介最多 255 字并保留换行，显式传空字符串可清空；不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
@@ -179,7 +179,7 @@ form_post("SFreeUsers/userRegister", {
 |---|---|---|---|---|
 | `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；动态点赞不产生站内信。 |
 | `SFreeUsers/unreadNum` | GET/POST / token | `token` | 公网新 | 不包括旧聊天未读数。 |
-| `SFreeUsers/setRead` | GET/POST / token | `type` | 公网新 | `all/comment/finance/system/fan`；`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
+| `SFreeUsers/setRead` | GET/POST / token | `type` 或 `id` | 公网新 | 传正数 `id` 时只标记 token 所属用户的该条未读消息；否则支持 `all/comment/finance/system/fan`；`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
 | `SFreeUsers/follow` | GET/POST / token | `touid,type` | 旧端 | `type=1` 关注、`0` 取消；首次关注写粉丝通知。 |
 | `SFreeUsers/isFollow` | GET/POST / token | `touid` | 旧端 | 已关注为 `code=1`，未关注为 `code=0`，不是 `data` 布尔值。 |
@@ -291,7 +291,7 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds` | 公网新 | type 仅 0..5；type=0 无图片时正文去除首尾空白后至少 4 字，有图片时正文可为空或不足 4 字；type=3 是评论/回复，正文至少 1 字且 `toid` 指向被回复的动态或评论，同一用户 20 秒内对同一目标提交相同正文按重复请求处理而不重复落库；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
+| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds,poll` | 公网新 | type=0 可带 JSON `poll`：标题最多 80 字、简介最多 240 字、2–6 个不重复选项，可设置单选或限项多选；投票可作为无正文动态的主体。无图片且无投票时正文至少 4 字；type=3 相同回复 20 秒内去重；`topicIds` 最多 3 个。人工或 AI 审核开启时先待审，仅 AI 明确通过才自动公开。 |
 | `SFreeSpace/editSpace` | GET/POST / 作者或 staff | `id,text` 和可选字段，含 `topicIds` | 公网新 | 类型不可变；staff 编辑保留作者，不重复发经验；传 `topicIds=0` 表示清空该动态的话题。 |
 | `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象新增 `topics` 数组；成功读取会增加浏览量。 |
 | `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。 |
@@ -306,12 +306,16 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 | `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 代码新/公网旧 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
-| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | 管理端举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回，返回举报人、动态摘要和动态是否已删除。 |
-| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note` | 代码新/公网旧 | `action=delete` 通过举报并删除原动态，同时关闭该动态的全部待处理举报；`action=dismiss` 只驳回当前举报。记录审核人、结果、说明和时间。 |
+| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | `status=0` 把用户举报和 AI 风险/异常项按时间统一分页，以 `source=report/ai` 区分。其他状态仍查询举报记录。 |
+| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 举报项支持 `delete/dismiss`；AI 项传 `source=ai` 并支持 `approve/delete`，处理后向作者发送原因通知。 |
+| `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 代码新/公网旧 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
-动态举报表由 `backend/database/migrations/009_space_reports.sql` 创建。未执行迁移前不能启用上述三个举报路由；发布默认不执行该迁移。
+动态举报表由 `009_space_reports.sql` 创建；资料扩展、投票、AI 审核及分析事件表由 `010_dynamic_core_extensions.sql` 创建。发布默认不执行迁移；未运行 010 时旧资料和普通动态读取会降级兼容，但新资料写入、投票和 AI 配置不可用。
+
+AI 审核只在 PHP 后台维护，默认 DeepSeek、默认关闭，并固定连接 DeepSeek 官方 Chat Completions 接口，不接受自定义服务地址。API Key 不回显；内置安全提示词不可被补充提示词覆盖。含图片/视频的动态直接进入人工审核，因为当前模型调用未传视觉附件。超时、Key 错误、响应格式异常或审核记录写入异常也一律保持待审。
+原有全局动态人工审核或匿名动态人工审核开启时，它们的严格规则优先，AI 不会自动放行。
 
 ### 校园问答
 

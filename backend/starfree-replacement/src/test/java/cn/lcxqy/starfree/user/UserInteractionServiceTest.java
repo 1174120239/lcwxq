@@ -80,6 +80,18 @@ class UserInteractionServiceTest {
     }
 
     @Test
+    void singleReadIsScopedToInboxOwnerAndUnreadRow() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(7L);
+        when(jdbc.update(anyString(), eq(41L), eq(7L))).thenReturn(1);
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token"); request.put("id", "41");
+        assertThat(new UserInteractionService(jdbc, tokens).markRead(request)).isEqualTo(1);
+        verify(jdbc).update(contains("id = ? AND touid = ? AND isread = 0"), eq(41L), eq(7L));
+    }
+
+    @Test
     void commentTypeFilterIncludesDynamicCommentNotifications() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);

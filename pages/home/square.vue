@@ -95,7 +95,7 @@
 				{{selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
 			</view>
 			
-			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
+			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
@@ -106,7 +106,7 @@
 				什么都没有
 			</view>
 			
-			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
+			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>
@@ -117,7 +117,7 @@
 				什么都没有
 			</view>
 			
-			<spaceItem :spaceList="spaceList" @before-navigate="rememberSpaceReturn"></spaceItem>
+			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
 			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
 				<text>{{moreText}}</text>
 			</view>

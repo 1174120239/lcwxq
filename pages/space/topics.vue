@@ -57,7 +57,7 @@
 		<view class="direct-filter-entry" v-if="directTopicView && selectedTopics.length" @tap="directTopicView=false">
 			<text class="cuIcon-filter"></text><text>添加其他话题进行组合筛选</text><text class="cuIcon-right"></text>
 		</view>
-		<spaceItem v-if="spaceList.length" :spaceList="spaceList"></spaceItem>
+		<spaceItem v-if="spaceList.length" :spaceList="spaceList" :night="campusNight"></spaceItem>
 		<view class="topic-empty result-empty" v-else-if="selectedTopics.length && !loadingSpaces">
 			{{selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : '该话题下暂无动态'}}
 		</view>

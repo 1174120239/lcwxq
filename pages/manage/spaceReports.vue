@@ -22,7 +22,7 @@
 						<text class="report-user">{{item.reporterJson && item.reporterJson.name}}</text>
 						<text class="report-time">{{formatDate(item.created)}}</text>
 					</view>
-					<text class="report-reason">{{item.reason}}</text>
+					<text class="report-reason" :class="{'is-ai':item.source==='ai'}">{{item.source==='ai' ? 'AI · ' : ''}}{{item.reason}}</text>
 				</view>
 				<text class="report-detail" v-if="item.detail">{{item.detail}}</text>
 
@@ -37,8 +37,9 @@
 				<view class="reported-space is-deleted" v-else>原动态已删除</view>
 
 				<view class="report-actions">
-					<button class="cu-btn line-gray sm" @tap="dismiss(item)"><text class="cuIcon-close margin-right-xs"></text>驳回举报</button>
-					<button class="cu-btn bg-red sm" @tap="deleteSpace(item)"><text class="cuIcon-delete margin-right-xs"></text>删除动态</button>
+					<button v-if="item.source==='ai'" class="cu-btn line-green sm" @tap="approve(item)"><text class="cuIcon-check margin-right-xs"></text>通过发布</button>
+					<button v-else class="cu-btn line-gray sm" @tap="dismiss(item)"><text class="cuIcon-close margin-right-xs"></text>驳回举报</button>
+					<button class="cu-btn bg-red sm" @tap="deleteSpace(item)"><text class="cuIcon-delete margin-right-xs"></text>{{item.source==='ai' ? '拒绝并删除' : '删除动态'}}</button>
 				</view>
 			</view>
 		</view>
@@ -128,6 +129,7 @@
 			dismiss(item){
 				this.confirmReview(item, 'dismiss', '驳回举报', '确认该举报不成立并结束审核吗？');
 			},
+			approve(item){ this.confirmReview(item, 'approve', '通过审核', '确认内容符合规范并公开发布吗？'); },
 			deleteSpace(item){
 				var content = item.spaceState === 'visible'
 					? '将删除原动态，并把同一动态的待处理举报全部标记为已处理。'
@@ -148,7 +150,7 @@
 				uni.showLoading({ title: '处理中' });
 				this.$Net.request({
 					url: this.$API.spaceReportReview(),
-					data: { token: this.token, id: item.id, action: action },
+					data: { token: this.token, id: item.id, action: action, source: item.source || 'report' },
 					header: { 'Content-Type':'application/x-www-form-urlencoded' },
 					method: 'post',
 					dataType: 'json',
@@ -192,6 +194,7 @@
 	.report-user { font-size: 27rpx; font-weight: 600; }
 	.report-time { margin-top: 4rpx; color: #89948f; font-size: 21rpx; }
 	.report-reason { padding: 7rpx 14rpx; border-radius: 8rpx; background: #f7eaea; color: #a65d5d; font-size: 22rpx; }
+	.report-reason.is-ai { background:#e8f2ef; color:#257361; }
 	.report-detail { display: block; margin-top: 18rpx; color: #596762; font-size: 25rpx; line-height: 1.6; white-space: pre-wrap; }
 	.reported-space { margin-top: 20rpx; padding: 20rpx; border: 1rpx solid #e0e6e3; border-radius: 8rpx; background: #f7f9f8; }
 	.reported-space-author { display: flex; align-items: center; gap: 12rpx; color: #53635e; font-size: 24rpx; font-weight: 600; }

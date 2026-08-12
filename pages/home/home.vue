@@ -468,6 +468,25 @@
 		</view>
 
 		<!--  #ifdef APP-PLUS -->
+		<view class="app-update-modal" v-if="Update===1">
+			<view class="app-update-mask" @tap="closeUpdate"></view>
+			<view class="app-update-dialog" :class="{'is-force': qzgx===1}">
+				<view class="app-update-icon"><text class="cuIcon-refresharrow"></text></view>
+				<view class="app-update-type" :class="{'is-force': qzgx===1}">{{qzgx===1 ? '强制更新' : '普通更新'}}</view>
+				<view class="app-update-title">发现新版本 {{versionTitle}}</view>
+				<scroll-view scroll-y class="app-update-content">
+					<rich-text :nodes="versionIntro || '新版本已经准备好，建议更新后使用。'"></rich-text>
+				</scroll-view>
+				<view class="app-update-force-note" v-if="qzgx===1">当前版本必须更新后才能继续使用</view>
+				<view class="app-update-actions" :class="{'single-action': qzgx===1}">
+					<button v-if="qzgx!==1" class="app-update-later" @tap="closeUpdate">稍后再说</button>
+					<button class="app-update-now" @tap="openUpdateUrl">{{qzgx===1 ? '立即更新' : '现在更新'}}</button>
+				</view>
+			</view>
+		</view>
+		<!--  #endif -->
+
+		<!--  #ifdef APP-PLUS -->
 		<view class="Startupmap" v-if="!isStart">
 			<view class="Startupmap-close" @tap="toStart">
 				<text>跳过</text>
@@ -507,6 +526,7 @@
 	import {
 		localStorage
 	} from '../../js_sdk/mp-storage/mp-storage/index.js'
+	var AppUpdate = require('../../utils/appUpdate')
 
 	const WEATHER_COLORS = {
 		// 融入聊城一中校徽的青绿、金色和少量暖红，整体比原版更鲜亮。
@@ -607,6 +627,8 @@
 				versionUrl: "",
 				versionTitle: "",
 				versionIntro: "",
+				latestVersionCode: 0,
+				dismissedUpdateCode: 0,
 				startImg: {
 					localUrl: ""
 				},
@@ -782,6 +804,7 @@
 			uni.hideTabBar({
 				animation: false
 			})
+			that.isUpdate(false);
 			//如果启动图还没有缓存过，第一次进来就不显示启动图了
 			if (!localStorage.getItem('appStart')) {
 				that.isStart = true;
@@ -835,10 +858,8 @@
 		},
 		onLoad() {
 			var that = this;
-			// #ifdef APP-PLUS || MP
+			// #ifdef APP-PLUS
 			that.NavBar = this.CustomBar;
-
-			that.isUpdate(false);
 			// #endif
 			var owo = that.owo.data;
 			var owoList = [];
@@ -2219,10 +2240,8 @@
 				var that = this;
 			
 				plus.runtime.getProperty(plus.runtime.appid, function(inf) {
-			
 					that.wgtVer = inf.version;
 					that.versionCode = inf.versionCode;
-					var version = inf.versionCode;
 					that.$Net.request({
 						url: that.$API.GetUpdateUrl(),
 						header: {
@@ -2230,31 +2249,24 @@
 						},
 						method: 'get',
 						success: function(res) {
-							var versionCode = res.data.versionCode;
-							that.versionUrl = res.data.versionUrl;
-							that.versionTitle = res.data.version;
-							that.versionIntro = res.data.versionIntro;
-							that.qzgx = res.data.qzgx;
-							if (Status) {
-								// uni.showToast({
-								// 	title:"检测完成",
-								// 	icon:'none',
-								// 	duration: 1000,
-								// 	position:'bottom',
-								// });
-			
-							}
-							if (versionCode > version) {
-								console.log("有更新");
+							var update = AppUpdate.normalizeUpdate(res.data, inf.versionCode);
+							that.versionUrl = update.url;
+							that.versionTitle = update.version;
+							that.versionIntro = update.intro;
+							that.latestVersionCode = update.versionCode;
+							that.qzgx = update.force ? 1 : 0;
+							if (update.needUpdate) {
+								if (!update.force && !Status && that.dismissedUpdateCode === update.versionCode) {
+									that.Update = 0;
+									return;
+								}
 								uni.hideTabBar({
 									animation: true
 								})
 								that.Update = 1;
-								if (Status) {
-									if (res.data.versionUrl != "") {
-										plus.runtime.openURL(res.data.versionUrl);
-									}
-								}
+							} else {
+								that.Update = 0;
+								if (Status) uni.showToast({ title: '已是最新版本', icon: 'none' });
 							}
 			
 						},
@@ -2307,10 +2319,27 @@
 			},
 			closeUpdate() {
 				var that = this;
+				if (that.qzgx === 1) return;
+				that.dismissedUpdateCode = that.latestVersionCode;
 				that.Update = 0;
 				// uni.showTabBar({
 				// 	animation: true
 				// });
+			},
+			openUpdateUrl() {
+				var that = this;
+				if (!that.versionUrl) {
+					uni.showToast({ title: '下载地址暂不可用，请联系管理员', icon: 'none' });
+					return;
+				}
+				plus.runtime.openURL(that.versionUrl, function() {
+					uni.setClipboardData({
+						data: that.versionUrl,
+						success: function() {
+							uni.showToast({ title: '无法打开下载页，链接已复制', icon: 'none' });
+						}
+					})
+				});
 			},
 			toRand() {
 				var that = this;
@@ -2527,6 +2556,153 @@
 </script>
 
 <style scoped>
+	.app-update-modal {
+		position: fixed;
+		z-index: 10000020;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 40rpx;
+		box-sizing: border-box;
+	}
+
+	.app-update-mask {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		background: rgba(10, 17, 18, 0.62);
+	}
+
+	.app-update-dialog {
+		position: relative;
+		width: 100%;
+		max-width: 620rpx;
+		max-height: 82vh;
+		padding: 40rpx 36rpx 32rpx;
+		border: 1rpx solid #dfe9e6;
+		border-radius: 16rpx;
+		background: #ffffff;
+		box-shadow: 0 24rpx 72rpx rgba(12, 33, 31, 0.22);
+		box-sizing: border-box;
+		color: #20312f;
+	}
+
+	.app-update-dialog.is-force {
+		border-top: 6rpx solid #d85f38;
+	}
+
+	.app-update-icon {
+		display: flex;
+		width: 72rpx;
+		height: 72rpx;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 22rpx;
+		border-radius: 50%;
+		background: #e6f5f1;
+		color: #168b7c;
+		font-size: 38rpx;
+	}
+
+	.app-update-type {
+		display: inline-flex;
+		align-items: center;
+		min-height: 42rpx;
+		padding: 0 16rpx;
+		border-radius: 8rpx;
+		background: #eaf5f2;
+		color: #177c70;
+		font-size: 22rpx;
+		font-weight: 600;
+	}
+
+	.app-update-type.is-force {
+		background: #fff0e9;
+		color: #b44927;
+	}
+
+	.app-update-title {
+		margin-top: 18rpx;
+		font-size: 34rpx;
+		font-weight: 700;
+		line-height: 1.35;
+	}
+
+	.app-update-content {
+		max-height: 260rpx;
+		margin-top: 22rpx;
+		color: #5c6b67;
+		font-size: 26rpx;
+		line-height: 1.7;
+	}
+
+	.app-update-force-note {
+		margin-top: 24rpx;
+		padding: 18rpx 20rpx;
+		border-radius: 8rpx;
+		background: #fff3ed;
+		color: #9f4528;
+		font-size: 24rpx;
+		line-height: 1.45;
+	}
+
+	.app-update-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 16rpx;
+		margin-top: 30rpx;
+	}
+
+	.app-update-actions.single-action {
+		grid-template-columns: 1fr;
+	}
+
+	.app-update-actions button {
+		width: 100%;
+		height: 80rpx;
+		margin: 0;
+		border-radius: 8rpx;
+		font-size: 27rpx;
+		font-weight: 600;
+		line-height: 80rpx;
+	}
+
+	.app-update-actions button::after {
+		border: 0;
+	}
+
+	.app-update-later {
+		background: #eef3f1;
+		color: #53625e;
+	}
+
+	.app-update-now {
+		background: #168f82;
+		color: #ffffff;
+	}
+
+	.campus-night .app-update-dialog {
+		border-color: rgba(226, 234, 231, 0.12);
+		background: #202729;
+		color: #edf3f0;
+		box-shadow: 0 24rpx 72rpx rgba(0, 0, 0, 0.42);
+	}
+
+	.campus-night .app-update-content {
+		color: #b4c0bc;
+	}
+
+	.campus-night .app-update-later {
+		background: #30383a;
+		color: #d7e0dd;
+	}
+
 	.qa-home-section {
 		margin: 22rpx 0 8rpx;
 	}

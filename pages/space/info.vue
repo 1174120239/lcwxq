@@ -88,6 +88,7 @@
 					<!--  #endif -->
 					
 				</block>
+				<space-poll v-if="spaceInfo.poll" :poll="spaceInfo.poll" :night="campusNight" @change="$set(spaceInfo,'poll',$event)"></space-poll>
 
 			</view>
 		</view>
@@ -290,6 +291,7 @@
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
 	import { normalizeUser } from '@/utils/avatar.js'
 	import { copyText } from '@/utils/clipboard.js'
+	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -300,6 +302,7 @@
 	var owo = [];
 	// #endif
 	export default {
+		components:{SpacePoll},
 		data() {
 			return {
 				StatusBar: this.StatusBar,

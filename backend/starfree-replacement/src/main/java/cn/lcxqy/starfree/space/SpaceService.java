@@ -70,6 +70,8 @@ public class SpaceService {
     private final SpaceTopicService topics;
     private final UniPushService push;
     private final EmailNotificationService email;
+    private SpacePollService polls;
+    private AiModerationService aiModeration;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
@@ -87,6 +89,16 @@ public class SpaceService {
         this.topics = new SpaceTopicService(jdbc);
         this.push = push;
         this.email = email;
+    }
+
+    @Autowired
+    void setPolls(SpacePollService polls) {
+        this.polls = polls;
+    }
+
+    @Autowired
+    void setAiModeration(AiModerationService aiModeration) {
+        this.aiModeration = aiModeration;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -113,9 +125,15 @@ public class SpaceService {
         if (type == 4 && (pic == null || pic.isEmpty())) {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
-        boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
+        SpacePollService.PollDraft pollDraft = polls == null ? null
+                : polls.draft(RequestValues.text(request, "poll"));
+        boolean mediaAllowsEmptyText = type == 0 && ((pic != null && !pic.isEmpty())
+                || pollDraft != null);
         String text = validateText(request.get("text"), mediaAllowsEmptyText, type == 3 ? 1 : 4);
         List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
+        if (pollDraft != null && type != 0) {
+            throw new IllegalArgumentException("投票只能添加到普通动态");
+        }
         SpaceConfig config = config();
 
         Map<String, Object> user = viewer.user;
@@ -155,22 +173,53 @@ public class SpaceService {
         if (type == 3 && recentDuplicateReply(viewer.uid, toid, text, now)) {
             return false;
         }
-        int status = config.spaceAudit == 1 ? 0 : 1;
+        boolean aiEnabled = type != 3 && config.spaceAudit != 1
+                && aiModeration != null && aiModeration.enabled();
+        int status = (config.spaceAudit == 1 || aiEnabled) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
         boolean published = false;
+        long spaceId = 0;
         try {
-            int inserted = jdbc.update(
-                    "INSERT INTO starfree_space "
-                            + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
-                            + "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    viewer.uid, now, now, text.replace("||rn||", "\r\n"),
-                    pic, type, 0, toid, status, onlyMe);
+            String sql = "INSERT INTO starfree_space "
+                    + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            final String contentText = text.replace("||rn||", "\r\n");
+            final String contentPic = pic;
+            final int contentType = type;
+            final int contentToId = toid;
+            final int contentStatus = status;
+            final int contentOnlyMe = onlyMe;
+            int inserted = jdbc.update(connection -> {
+                PreparedStatement statement = connection.prepareStatement(
+                        sql, Statement.RETURN_GENERATED_KEYS);
+                int i = 1;
+                statement.setLong(i++, viewer.uid);
+                statement.setLong(i++, now);
+                statement.setLong(i++, now);
+                statement.setString(i++, contentText);
+                statement.setString(i++, contentPic);
+                statement.setInt(i++, contentType);
+                statement.setInt(i++, 0);
+                statement.setInt(i++, contentToId);
+                statement.setInt(i++, contentStatus);
+                statement.setInt(i++, contentOnlyMe);
+                return statement;
+            }, keyHolder);
             if (inserted != 1) {
                 throw new IllegalStateException("Space insert did not affect exactly one row");
             }
             published = true;
+            Number generatedId = keyHolder.getKey();
+            if (generatedId != null && generatedId.longValue() > 0) {
+                spaceId = generatedId.longValue();
+            } else {
+                // The MyISAM row already exists. Returning a failure here would invite a retry and
+                // duplicate the dynamic; secondary relations stay absent/pending for repair.
+                LOG.error("Space insert for uid {} succeeded but did not return an id", viewer.uid);
+            }
         } finally {
             if (!published) {
                 // starfree_space is MyISAM: only release the Redis quota when no row was written.
@@ -180,19 +229,47 @@ public class SpaceService {
 
         if (!topicIds.isEmpty()) {
             try {
-                Long spaceId = jdbc.queryForObject(
-                        "SELECT id FROM starfree_space WHERE uid=? AND created=? AND modified=? "
-                                + "AND type=? ORDER BY id DESC LIMIT 1",
-                        Long.class, viewer.uid, now, now, type);
-                if (spaceId == null || spaceId <= 0) {
-                    throw new IllegalStateException("Published Space id could not be read");
-                }
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
                 topics.replace(spaceId, topicIds);
             } catch (RuntimeException error) {
                 // The MyISAM Space row already exists. Do not make the client retry and create a
                 // duplicate; log the missing secondary relation for operational repair instead.
-                LOG.error("Space was published but its topic relations could not be saved for uid {}",
+                LOG.error("Space {} was published but its topic relations could not be saved for uid {}",
+                        spaceId,
                         viewer.uid, error);
+            }
+        }
+
+        if (pollDraft != null) {
+            try {
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
+                polls.create(spaceId, pollDraft);
+            } catch (RuntimeException error) {
+                LOG.error("Could not create poll for new space {}; attempting compensation", spaceId,
+                        error);
+                try {
+                    polls.removeForSpace(spaceId);
+                    removeTopicsBestEffort(spaceId);
+                    if (jdbc.update("DELETE FROM starfree_space WHERE id=?", spaceId) == 1) {
+                        reservation.cancel();
+                        throw new IllegalStateException("投票创建失败，请重试", error);
+                    }
+                } catch (IllegalStateException compensated) {
+                    throw compensated;
+                } catch (RuntimeException compensationError) {
+                    LOG.error("Could not compensate failed poll for space {}; returning success to "
+                            + "avoid a duplicate dynamic", spaceId, compensationError);
+                }
+            }
+        }
+
+        if (aiEnabled) {
+            if (spaceId > 0) {
+                AiModerationService.Decision decision = aiModeration.review(spaceId, viewer.uid, text, pic);
+                status = decision.isSafe() ? 1 : 0;
+            } else {
+                status = 0;
+                sendSystemNotice(0, viewer.uid, "你的动态正在人工审核：审核记录暂时无法建立");
             }
         }
 
@@ -218,7 +295,7 @@ public class SpaceService {
             }
         }
         if (type == 3 && status == 1 && replyTarget != null) {
-            notifySpaceComment(viewer.uid, replyTarget, now, text);
+            notifySpaceComment(viewer.uid, replyTarget, spaceId, text);
         }
         return status == 0;
     }
@@ -280,7 +357,9 @@ public class SpaceService {
         }
 
         long now = Instant.now().getEpochSecond();
-        int status = (config.spaceAudit == 1 || reviewRequired) ? 0 : 1;
+        boolean aiEnabled = config.spaceAudit != 1 && !reviewRequired
+                && aiModeration != null && aiModeration.enabled();
+        int status = (config.spaceAudit == 1 || reviewRequired || aiEnabled) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
@@ -336,6 +415,11 @@ public class SpaceService {
         } catch (RuntimeException error) {
             LOG.error("Anonymous space {} was published but owner mapping could not be saved for uid {}",
                     spaceId, viewer.uid, error);
+        }
+        if (aiEnabled) {
+            AiModerationService.Decision decision = aiModeration.review(
+                    spaceId, viewer.uid, text, pic);
+            status = decision.isSafe() ? 1 : 0;
         }
         try {
             jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
@@ -433,10 +517,13 @@ public class SpaceService {
         }
         if (type == 0) {
             removeTopicsBestEffort(id);
+            if (polls != null) {
+                polls.removeForSpace(id);
+            }
         }
         if (type == 1 && number(get(space, "type")) == 3) {
-            notifySpaceComment(number(get(space, "uid")), space,
-                    number(get(space, "created")), value(get(space, "text")));
+            notifySpaceComment(number(get(space, "uid")), space, id,
+                    value(get(space, "text")));
         }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u5df2\u5ba1\u6838\u901a\u8fc7"
@@ -559,15 +646,28 @@ public class SpaceService {
         }
         // Legacy deletion removed only this row. Replies, forwards, and like logs remain and
         // resolve their missing parent through the existing "deleted or hidden" read behavior.
+        int changed = deleteSpaceRow(id);
+        if (viewer.staff && owner != viewer.uid) {
+            sendSystemNotice(viewer.uid, owner,
+                    "\u4f60\u7684\u52a8\u6001\u3010" + value(get(space, "text"))
+                            + "\u3011\u5df2\u88ab\u5220\u9664");
+        }
+        return changed;
+    }
+
+    int deleteForModeration(long id) {
+        requireSpace(id);
+        return deleteSpaceRow(id);
+    }
+
+    private int deleteSpaceRow(long id) {
         int changed = jdbc.update("DELETE FROM starfree_space WHERE id = ?", id);
         if (changed != 1) {
             throw new IllegalStateException("Space delete did not affect exactly one row");
         }
         removeTopicsBestEffort(id);
-        if (viewer.staff && owner != viewer.uid) {
-            sendSystemNotice(viewer.uid, owner,
-                    "\u4f60\u7684\u52a8\u6001\u3010" + value(get(space, "text"))
-                            + "\u3011\u5df2\u88ab\u5220\u9664");
+        if (polls != null) {
+            polls.removeForSpace(id);
         }
         return changed;
     }
@@ -686,6 +786,12 @@ public class SpaceService {
                 "SELECT COUNT(*) FROM starfree_fan WHERE uid = ? AND touid = ?",
                 viewer.uid, owner));
         result.put("topics", topics.forSpace(id, viewer.uid));
+        if (polls != null) {
+            Map<String, Object> poll = polls.forSpace(id, viewer.uid);
+            if (poll != null) {
+                result.put("poll", poll);
+            }
+        }
 
         // Public counters use public rows only; pending/private replies must not leak through
         // aggregate values even when their bodies are filtered from the list.
@@ -1182,7 +1288,7 @@ public class SpaceService {
 
     /** Writes inbox rows for a dynamic owner and, when applicable, the replied-to commenter. */
     private void notifySpaceComment(long actorUid, Map<String, Object> replyTarget,
-                                    long created, String text) {
+                                    long commentId, String text) {
         long parentType = number(get(replyTarget, "type"));
         long parentUid = parentType == 3 ? number(get(replyTarget, "uid")) : 0;
         long rootId = number(get(replyTarget, "id"));
@@ -1196,7 +1302,6 @@ public class SpaceService {
             }
         }
         long ownerUid = number(get(root, "uid"));
-        long commentId = findLatestSpaceId(actorUid, created);
         if (commentId <= 0) {
             return;
         }
@@ -1221,19 +1326,6 @@ public class SpaceService {
         } catch (DataAccessException error) {
             LOG.error("Could not resolve root dynamic {} for notification", id, error);
             return Collections.emptyMap();
-        }
-    }
-
-    private long findLatestSpaceId(long uid, long created) {
-        try {
-            Long id = jdbc.queryForObject(
-                    "SELECT id FROM starfree_space WHERE uid=? AND created=? AND type=3 "
-                            + "ORDER BY id DESC LIMIT 1",
-                    Long.class, uid, created);
-            return id == null ? 0 : id;
-        } catch (DataAccessException error) {
-            LOG.error("Could not resolve dynamic comment id for uid {}", uid, error);
-            return 0;
         }
     }
 

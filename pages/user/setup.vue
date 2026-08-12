@@ -112,6 +112,7 @@
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	var API = require('../../utils/api')
 	var Net = require('../../utils/net')
+	var AppUpdate = require('../../utils/appUpdate')
 	export default {
 		data() {
 			return {
@@ -130,6 +131,9 @@
 				issqq: 0,
 				Update: 0,
 				versionUrl: "",
+				versionTitle: "",
+				versionIntro: "",
+				qzgx: 0,
 				qqlogin: 0,
 				wxlogin: 0,
 				wblogin: 0,
@@ -318,45 +322,57 @@
 				}
 			},
 			isUpdate(Status) {
-							var that = this;
-							plus.runtime.getProperty(plus.runtime.appid, function(inf) {
-								
-								that.wgtVer = inf.version //获取当前版本号
-								that.versionCode = inf.versionCode;
-								var version = inf.versionCode;
-								that.$Net.request({
-									url: that.$API.GetUpdateUrl(),
-									method: 'get',
-									success: function(res) {
-										var versionCode = res.data.versionCode;
-										that.versionUrl =  res.data.versionUrl;
-										if(Status){
-											uni.showToast({
-												title:"检测完成",
-												icon:'none',
-												duration: 1000,
-												position:'bottom',
-											});
-											
-										}
-										if(versionCode > version){
-											console.log("有更新");
-											that.Update=1;
-											if(Status){
-												if(res.data.versionUrl!=""){
-													plus.runtime.openURL(res.data.versionUrl);  
-												}
-											}
-										}
-										
-									},
-									fail:function(res){
-										
-									}
-								})
-								
-							})
+				var that = this;
+				plus.runtime.getProperty(plus.runtime.appid, function(inf) {
+					that.wgtVer = inf.version;
+					that.versionCode = inf.versionCode;
+					that.$Net.request({
+						url: that.$API.GetUpdateUrl(),
+						method: 'get',
+						success: function(res) {
+							var update = AppUpdate.normalizeUpdate(res.data, inf.versionCode);
+							that.versionUrl = update.url;
+							that.versionTitle = update.version;
+							that.versionIntro = update.intro;
+							that.qzgx = update.force ? 1 : 0;
+							that.Update = update.needUpdate ? 1 : 0;
+							if (!Status) return;
+							if (!update.needUpdate) {
+								uni.showToast({ title: '已是最新版本', icon: 'none' });
+								return;
+							}
+							uni.showModal({
+								title: (update.force ? '强制更新' : '普通更新') + (update.version ? ' · ' + update.version : ''),
+								content: update.intro || '新版本已经准备好，建议更新后使用。',
+								showCancel: !update.force,
+								cancelText: '稍后再说',
+								confirmText: '立即更新',
+								success: function(modalRes) {
+									if (modalRes.confirm) that.openUpdateUrl();
+								}
+							});
 						},
+						fail: function() {
+							if (Status) uni.showToast({ title: '检查更新失败，请稍后重试', icon: 'none' });
+						}
+					})
+				})
+			},
+			openUpdateUrl() {
+				var that = this;
+				if (!that.versionUrl) {
+					uni.showToast({ title: '下载地址暂不可用', icon: 'none' });
+					return;
+				}
+				plus.runtime.openURL(that.versionUrl, function() {
+					uni.setClipboardData({
+						data: that.versionUrl,
+						success: function() {
+							uni.showToast({ title: '无法打开下载页，链接已复制', icon: 'none' });
+						}
+					})
+				});
+			},
 			download(url){
 				var that=this;
 				const downloadTask = uni.downloadFile({

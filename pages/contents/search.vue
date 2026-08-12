@@ -87,7 +87,7 @@
 					<text class="cuIcon-text"></text>
 					暂时没有动态
 				</view>
-				<spaceItem :spaceList="spaceList"></spaceItem>
+				<spaceItem :spaceList="spaceList" :night="AppStyle === 'campus-night'"></spaceItem>
 				<view class="load-more search-load-more" @tap="loadMore" v-if="spaceList.length>0">
 					<text>{{moreText}}</text>
 				</view>

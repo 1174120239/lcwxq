@@ -53,6 +53,21 @@
 				</view>
 			</view>
 			<view class="cu-form-group margin-top">
+				<view class="title">性别</view>
+				<picker :range="genderOptions" :value="genderIndex" @change="changeGender">
+					<view class="profile-picker">{{gender || '未设置'}}<text class="cuIcon-right"></text></view>
+				</picker>
+				<view class="profile-visibility"><text>公开</text><switch color="#168573" :checked="showGender" @change="showGender=$event.detail.value"></switch></view>
+			</view>
+			<view class="cu-form-group">
+				<view class="title">生日</view>
+				<picker mode="date" :value="birthday" start="1900-01-01" :end="today" @change="birthday=$event.detail.value">
+					<view class="profile-picker">{{birthday || '未设置'}}<text class="cuIcon-right"></text></view>
+				</picker>
+				<text class="profile-clear" v-if="birthday" @tap="clearBirthday">清除</text>
+				<view class="profile-visibility"><text>公开</text><switch color="#168573" :checked="showBirthday" @change="showBirthday=$event.detail.value"></switch></view>
+			</view>
+			<view class="cu-form-group margin-top">
 				<view class="title">密码</view>
 				<input placeholder="请输入密码,不填则不修改" v-model="password" name="input"></input>
 			</view>
@@ -115,6 +130,11 @@
 				avatar:"",
 				avatarNew:"",
 				introduce:"",
+				genderOptions:['保密', '男', '女'],
+				gender:'',
+				birthday:'',
+				showGender:false,
+				showBirthday:false,
 				backif:0,
 				cacheLoaded:false,
 				modalName: null,
@@ -125,6 +145,16 @@
 		computed: {
 			introduceCount() {
 				return (this.introduce || '').length
+			},
+			genderIndex() {
+				var index = this.genderOptions.indexOf(this.gender)
+				return index < 0 ? 0 : index
+			},
+			today() {
+				var date = new Date()
+				var month = String(date.getMonth() + 1).padStart(2, '0')
+				var day = String(date.getDate()).padStart(2, '0')
+				return date.getFullYear() + '-' + month + '-' + day
 			}
 		},
 		onPullDownRefresh(){
@@ -139,6 +169,7 @@
 			// #endif
 			
 			that.getCacheInfo(false);
+			that.getProfileInfo();
 			
 			if(localStorage.getItem('toAvatar')){
 				var toAvatar = JSON.parse(localStorage.getItem('toAvatar'));
@@ -156,6 +187,31 @@
 			// #endif
 		},
 		methods: {
+			clearBirthday(){
+				this.birthday = ''
+				this.showBirthday = false
+			},
+			changeGender(e){
+				this.gender = this.genderOptions[Number(e.detail.value)] || '保密'
+			},
+			getProfileInfo(){
+				var that = this
+				if(!that.token) return
+				that.$Net.request({
+					url: that.$API.getUserInfo(),
+					data:{token:that.token},
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					method:'get',
+					success:function(res){
+						if(res.data.code!=1) return
+						var profile = res.data.data || {}
+						that.gender = profile.gender || ''
+						that.birthday = profile.birthday || ''
+						that.showGender = Number(profile.showGender || 0) === 1
+						that.showBirthday = Number(profile.showBirthday || 0) === 1
+					}
+				})
+			},
 			back(){
 				uni.navigateBack({
 					delta: 1
@@ -165,6 +221,8 @@
 				var params = this.$API.removeObjectEmptyKey(data);
 				// Empty introduction is meaningful: it clears the previously saved profile text.
 				params.introduce = this.introduce || "";
+				// An empty birthday is also meaningful: it clears the optional profile field.
+				params.birthday = this.birthday || "";
 				return params;
 			},
 			showModal(e) {
@@ -213,6 +271,10 @@
 					password:that.password,
 					introduce:that.introduce,
 					userBg:that.userBg,
+					gender:that.gender,
+					birthday:that.birthday,
+					showGender:that.showGender ? 1 : 0,
+					showBirthday:that.showBirthday ? 1 : 0,
 				}
 				if(that.avatarNew!=''){
 					data.avatar = that.avatarNew;
@@ -257,6 +319,10 @@
 								userInfo.screenName=that.screenName;
 								userInfo.userBg=that.userBg;
 								userInfo.introduce = that.introduce;
+								userInfo.gender = that.gender;
+								userInfo.birthday = that.birthday;
+								userInfo.showGender = that.showGender ? 1 : 0;
+								userInfo.showBirthday = that.showBirthday ? 1 : 0;
 								if(that.avatarNew!=''){
 									userInfo.avatar = that.avatarNew;
 								}
@@ -444,4 +510,11 @@
 .introduce-editor { flex: 1; min-width: 0; }
 .introduce-editor textarea { width: 100%; min-height: 180rpx; line-height: 1.55; white-space: pre-wrap; }
 .introduce-count { display: block; padding: 4rpx 0 12rpx; color: #87918e; font-size: 22rpx; text-align: right; }
+.profile-picker { min-width: 180rpx; color: #34423f; text-align: right; }
+.profile-picker .cuIcon-right { margin-left: 8rpx; color: #95a19e; }
+.profile-clear { margin-left: 16rpx; color: #168573; font-size: 24rpx; }
+.profile-visibility { display: flex; align-items: center; gap: 10rpx; margin-left: 22rpx; color: #788582; font-size: 24rpx; }
+.profile-visibility switch { transform: scale(.72); transform-origin: right center; }
+.campus-settings-page.campus-night .profile-picker { color: #e7ecea; }
+.campus-settings-page.campus-night .profile-clear { color: #79b9a7; }
 </style>

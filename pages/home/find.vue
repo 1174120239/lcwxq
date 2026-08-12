@@ -8,7 +8,10 @@
 				<view class="content text-bold" :style="[{top:StatusBar + 'px'}]">
 					消息中心
 				</view>
-				<view class="action" v-if="privateChatEnabled" @tap="toSearch">
+				<view class="action message-read-all" v-if="type=='inbox' && unreadCount>0" @tap="markAllRead">
+					<text>一键已读</text>
+				</view>
+				<view class="action" v-else-if="privateChatEnabled" @tap="toSearch">
 					<text class="cuIcon-friendadd"></text>
 				</view>
 				
@@ -63,6 +66,7 @@
 							<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
 								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
 									<view class="cu-list menu-avatar comment campus-message-row" @tap="goInbox(item)">
+										<view class="message-unread-dot" v-if="Number(item.isread)===0"></view>
 										<view class="cu-item">
 											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'"></campus-avatar>
 											<view class="content">
@@ -268,6 +272,7 @@
 				campusThemeMode: 'auto',
 				
 				inboxList:[],
+				unreadCount:0,
 				chatList:[],
 				oldChatList:[],
 				uid:0,
@@ -350,7 +355,7 @@
 				
 				that.token = localStorage.getItem('token');
 				that.getInboxList(false);
-				that.setRead();
+				that.refreshUnread();
 			}
 			if(localStorage.getItem('chatList')){
 				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
@@ -452,6 +457,7 @@
 			},
 			goInbox(data){
 				var that = this;
+				that.markOneRead(data);
 				if(data.type=="comment"){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
 				}
@@ -566,6 +572,7 @@
 							}
 							
 						}
+						that.refreshUnread();
 						var timer = setTimeout(function() {
 							that.isLoading=1;
 							clearTimeout('timer')
@@ -810,11 +817,10 @@
 				var userlvStyle ="color:#fff;background-color: "+rankStyle[i];
 				return userlvStyle;
 			},
-			setRead() {
+			refreshUnread() {
 				var that = this;
 				that.$Net.request({
-					
-					url: that.$API.setRead(),
+					url: that.$API.unreadNum(),
 					data:{
 						"token":that.token
 					},
@@ -826,7 +832,8 @@
 					timeout: 15000,
 					success: function(res) {
 						if(res.data.code==1){
-							
+							that.unreadCount = Math.max(0, Number(res.data.data) || 0);
+							uni.$emit('campus:unread-changed', that.unreadCount);
 						}
 					},
 					fail: function(res) {
@@ -836,6 +843,34 @@
 						})
 					}
 				})
+			},
+			markOneRead(item) {
+				var that = this;
+				if(!item || Number(item.isread)!==0) return;
+				item.isread = 1;
+				that.unreadCount = Math.max(0, that.unreadCount - 1);
+				uni.$emit('campus:unread-changed', that.unreadCount);
+				that.$Net.request({
+					url:that.$API.setRead(), data:{token:that.token,id:item.id}, method:'get',
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					success:function(res){ if(!res.data || res.data.code!=1){ item.isread=0; that.refreshUnread(); } },
+					fail:function(){ item.isread=0; that.refreshUnread(); }
+				});
+			},
+			markAllRead() {
+				var that = this;
+				if(!that.unreadCount) return;
+				that.$Net.request({
+					url:that.$API.setRead(), data:{token:that.token,type:'all'}, method:'get',
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					success:function(res){
+						if(res.data.code!=1) return;
+						that.inboxList.forEach(function(item){ item.isread=1; });
+						that.unreadCount=0;
+						uni.$emit('campus:unread-changed', 0);
+						uni.showToast({title:'已全部标记为已读',icon:'none'});
+					}
+				});
 			},
 			goChat(data){
 				var that = this;
@@ -945,6 +980,10 @@
   background: #15191b !important;
   color: #edf0ef;
 }
+
+.message-read-all { color: #168573; font-size: 24rpx; }
+.message-unread-dot { position: absolute; z-index: 4; top: 18rpx; left: 18rpx; width: 16rpx; height: 16rpx; border: 3rpx solid #fff; border-radius: 50%; background: #e5484d; }
+.campus-messages.campus-night .message-unread-dot { border-color: #212628; }
 
 .campus-messages.campus-night .header .cu-bar,
 .campus-messages.campus-night .data-inbox,

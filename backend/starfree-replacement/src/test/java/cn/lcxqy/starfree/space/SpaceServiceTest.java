@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -26,10 +27,11 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -235,11 +237,7 @@ class SpaceServiceTest {
                 .thenReturn(Collections.singletonList(config()));
         when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
                 eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("dynamic comment"), isNull(), eq(3), eq(0),
-                eq(11), eq(1), eq(0))).thenReturn(1);
-        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
-                eq(Long.class), eq(7L), anyLong())).thenReturn(21L);
+        fixture.generatedKey(21L);
         when(fixture.jdbc.update(startsWith("INSERT INTO starfree_inbox"),
                 eq("spaceComment"), eq(7L), anyString(), eq(8L), eq(0), eq(11L),
                 anyLong(), eq(21L))).thenReturn(1);
@@ -265,11 +263,7 @@ class SpaceServiceTest {
                 .thenReturn(Collections.singletonList(config()));
         when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
                 eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("好"), isNull(), eq(3), eq(0),
-                eq(11), eq(1), eq(0))).thenReturn(1);
-        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
-                eq(Long.class), eq(7L), anyLong())).thenReturn(21L);
+        fixture.generatedKey(21L);
 
         Map<String, String> request = addRequest("好");
         request.put("type", "3");
@@ -315,11 +309,7 @@ class SpaceServiceTest {
                 .thenReturn(Collections.singletonList(config()));
         when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_space"),
                 eq(Integer.class), eq(7L), anyLong())).thenReturn(0);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("nested reply"), isNull(), eq(3), eq(0),
-                eq(12), eq(1), eq(0))).thenReturn(1);
-        when(fixture.jdbc.queryForObject(startsWith("SELECT id FROM starfree_space"),
-                eq(Long.class), eq(7L), anyLong())).thenReturn(22L);
+        fixture.generatedKey(22L);
 
         Map<String, String> request = addRequest("nested reply");
         request.put("type", "3");
@@ -376,9 +366,9 @@ class SpaceServiceTest {
         LegacySpaceAbuseGuard.PostReservation reservation =
                 mock(LegacySpaceAbuseGuard.PostReservation.class);
         when(fixture.abuseGuard.reservePost(7L, false, 999, 0)).thenReturn(reservation);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("valid post text"), any(), eq(0), eq(0),
-                eq(0), eq(1), eq(0))).thenReturn(0);
+        doReturn(0).when(fixture.jdbc).update(
+                any(org.springframework.jdbc.core.PreparedStatementCreator.class),
+                any(KeyHolder.class));
 
         assertThatThrownBy(() -> fixture.service.add(addRequest("valid post text"), "127.0.0.1"))
                 .isInstanceOf(IllegalStateException.class)
@@ -1033,6 +1023,7 @@ class SpaceServiceTest {
         private Fixture() {
             when(abuseGuard.reservePost(anyLong(), anyBoolean(), anyInt(), anyInt()))
                     .thenReturn(LegacySpaceAbuseGuard.PostReservation.noop());
+            generatedKey(1L);
         }
 
         private void login(long uid, String group) {
@@ -1042,6 +1033,17 @@ class SpaceServiceTest {
             user.put("experience", 100);
             when(tokens.userId("token")).thenReturn(uid);
             when(tokens.userById(uid)).thenReturn(user);
+        }
+
+        private void generatedKey(long id) {
+            doAnswer(invocation -> {
+                KeyHolder holder = invocation.getArgument(1);
+                holder.getKeyList().clear();
+                holder.getKeyList().add(Collections.singletonMap("GENERATED_KEY", id));
+                return 1;
+            }).when(jdbc).update(
+                    any(org.springframework.jdbc.core.PreparedStatementCreator.class),
+                    any(KeyHolder.class));
         }
     }
 }

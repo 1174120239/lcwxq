@@ -109,6 +109,11 @@ $adminpw = "123456";
                     </a>
                 </li>
                 <li class="side-nav-item">
+					<a href="<?php echo $ADMIN_PATH;?>/dynamicAnalytics.php" class="side-nav-link">
+						<i class="dripicons-graph-line"></i><span>动态数据分析</span><span class="menu-arrow"></span>
+					</a>
+				</li>
+				<li class="side-nav-item">
                     <a href="#" class="side-nav-link">
                         <i class="dripicons-gear"></i>
                         <span>系统设置</span>
@@ -136,6 +141,11 @@ $adminpw = "123456";
                                 <span class="menu-arrow"></span>
                             </a>
                         </li>
+						<li class="side-nav-item right_10">
+							<a href="<?php echo $ADMIN_PATH;?>/aiModeration.php" class="side-nav-link">
+								<i class="dripicons-checkmark"></i><span>AI 动态审核</span><span class="menu-arrow"></span>
+							</a>
+						</li>
                         <li class="side-nav-item right_10">
                             <a href="<?php echo $ADMIN_PATH;?>/setOther.php" class="side-nav-link">
                                 <i class="dripicons-document"></i>

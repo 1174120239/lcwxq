@@ -20,10 +20,12 @@ import java.util.Map;
 public class SpaceController {
     private final SpaceService spaces;
     private final SpaceReportService reports;
+    private final SpacePollService polls;
 
-    public SpaceController(SpaceService spaces, SpaceReportService reports) {
+    public SpaceController(SpaceService spaces, SpaceReportService reports, SpacePollService polls) {
         this.spaces = spaces;
         this.reports = reports;
+        this.polls = polls;
     }
 
     /**
@@ -232,6 +234,12 @@ public class SpaceController {
     @RequestMapping("/reportReview")
     public ApiResponse reportReview(@RequestParam Map<String, String> params) {
         return ApiResponse.success("举报已处理", reports.review(params));
+    }
+
+    /** ANY /SFreeSpace/pollVote: one authenticated, final anonymous poll submission. */
+    @RequestMapping("/pollVote")
+    public ApiResponse pollVote(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("投票成功", polls.vote(params));
     }
 
     private String clientIp(HttpServletRequest request) {

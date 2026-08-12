@@ -52,7 +52,6 @@
 					</view>
 					<view @tap="toLink('/pages/user/usermark')"><view><text class="cuIcon-favor"></text><text>浏览记录</text></view><text>查看内容</text></view>
 					<view @tap="toLink('/pages/user/assets')"><view><text class="cuIcon-card"></text><text>钱包</text></view><text>点击查看</text></view>
-					<view class="profile-share-action" @tap="toLink('/pages/user/invitation')"><view><text class="cuIcon-share"></text><text>分享</text></view><text>邀请好友</text></view>
 					<view class="profile-clock-action" :class="{'is-clocked': isClock==1}" @tap="toClock"><view><text class="cuIcon-calendar"></text><text>{{isClock==1?'已签到':'签到'}}</text></view><text>{{isClock==1?'今日已签':'每日签到'}}</text></view>
 				</view>
 			</view>
@@ -62,7 +61,7 @@
 					<view class="is-active">动态</view>
 				</view>
 				<view class="profile-dynamic-list" v-if="profileSpaceList.length > 0">
-					<spaceItem :spaceList="profileSpaceList" :compact="true"></spaceItem>
+					<spaceItem :spaceList="profileSpaceList" :compact="true" :night="profileNight"></spaceItem>
 				</view>
 				<view class="profile-dynamic-loading" v-else-if="profileSpaceLoading"><view class="campus-loader"></view></view>
 				<view class="profile-empty-state" v-else>
@@ -1860,7 +1859,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 	}
 
 	.profile-quick-actions.has-manage-entry {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 10rpx;
 	}
 
@@ -2092,8 +2091,8 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		.profile-avatar { width: 116rpx; height: 116rpx; }
 		.profile-name { font-size: 30rpx; }
 		.profile-stats { gap: 24rpx; }
-		.profile-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10rpx; }
-		.profile-quick-actions.has-manage-entry { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+		.profile-quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10rpx; }
+		.profile-quick-actions.has-manage-entry { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 		.profile-quick-actions > view { min-height: 96rpx; padding: 0 12rpx; }
 		.profile-quick-actions > view > view { font-size: 22rpx; }
 	}

@@ -8,8 +8,9 @@
 				<view class="content text-bold" :style="[{top:StatusBar + 'px'}]">
 					消息中心
 				</view>
-				<view class="action" v-if="privateChatEnabled" @tap="toSearch">
-					<text class="cuIcon-friendadd"></text>
+				<view class="action">
+					<text v-if="type=='inbox' && unreadCount>0" class="message-read-all" @tap="setRead()">一键已读</text>
+					<text v-else-if="privateChatEnabled" class="cuIcon-friendadd" @tap="toSearch"></text>
 				</view>
 				
 				
@@ -63,6 +64,7 @@
 							<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
 								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
 									<view class="cu-list menu-avatar comment campus-message-row" @tap="goInbox(item)">
+										<view class="message-unread-dot" v-if="Number(item.isread)===0"></view>
 										<view class="cu-item">
 											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'" @tap.stop="openInboxUser(item)"></campus-avatar>
 											<view class="content">
@@ -258,6 +260,7 @@
 				moreText:"加载更多",
 				page:1,
 				token:"",
+				unreadCount:0,
 				
 				isLoading:0,
 				isLoad:0,
@@ -318,7 +321,7 @@
 				}else{
 					that.getInboxList(false);
 				}
-				that.setRead();
+				that.loadUnreadCount();
 			}
 			if(localStorage.getItem('chatList')){
 				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
@@ -351,6 +354,15 @@
 			
 		},
 		methods:{
+			loadUnreadCount(){
+				if(!this.token) return;
+				this.$Net.request({url:this.$API.unreadNum(),data:{token:this.token},method:'get',success:(res)=>{
+					if(res.data.code==1){
+						this.unreadCount=Number(res.data.data||0)
+						uni.$emit('campus:unread-changed',this.unreadCount)
+					}
+				}})
+			},
 			stopChatPolling(){
 				if(this.chatLoading!==null){
 					clearInterval(this.chatLoading);
@@ -413,6 +425,7 @@
 			},
 			goInbox(data){
 				var that = this;
+				that.markInboxRead(data);
 				if(data.type=="comment"){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
 				}
@@ -439,6 +452,25 @@
 					return false;
 				}
 				
+			},
+			markInboxRead(item){
+				if(!item || Number(item.isread)!==0) return;
+				var that = this;
+				that.$set(item,'isread',1);
+				that.unreadCount=Math.max(0,that.unreadCount-1);
+				uni.$emit('campus:unread-changed',that.unreadCount);
+				var rollback = function(){
+					that.$set(item,'isread',0);
+					that.loadUnreadCount();
+				};
+				that.$Net.request({
+					url:that.$API.setRead(),
+					data:{token:that.token,id:item.id},
+					method:'post',
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					success:function(res){ if(!res.data || res.data.code!=1) rollback(); },
+					fail:rollback
+				});
 			},
 			openInboxUser(item){
 				if(!item || item.type == 'system' || item.type == 'finance') return false;
@@ -794,7 +826,8 @@
 					
 					url: that.$API.setRead(),
 					data:{
-						"token":that.token
+						"token":that.token,
+						"type":"all"
 					},
 					header:{
 						'Content-Type':'application/x-www-form-urlencoded'
@@ -804,7 +837,7 @@
 					timeout: 15000,
 					success: function(res) {
 						if(res.data.code==1){
-							
+							that.inboxList.forEach(item=>that.$set(item,'isread',1)); that.unreadCount=0; uni.$emit('campus:unread-changed',0);
 						}
 					},
 					fail: function(res) {
@@ -852,6 +885,7 @@
 </script>
 
 <style>
+	.message-read-all{color:#168573;font-size:24rpx;white-space:nowrap}.campus-message-row{position:relative}.message-unread-dot{position:absolute;z-index:3;left:18rpx;top:16rpx;width:15rpx;height:15rpx;border-radius:50%;background:#e5484d;box-shadow:0 0 0 3rpx #fff}.campus-night .message-unread-dot{box-shadow:0 0 0 3rpx #1d2523}
 	.parent {
   display: flex;
   justify-content: center;

@@ -54,6 +54,7 @@
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
 						</view>
+						<space-poll v-if="item.poll" :poll="item.poll" :night="night" @change="updatePoll(item,$event)"></space-poll>
 					</block>
 					
 					
@@ -146,6 +147,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -156,6 +158,7 @@
 	var owo = [];
 	// #endif
 	export default {
+		components:{SpacePoll},
 	    props: {
 	        spaceList: {
 			  type: Array,
@@ -166,6 +169,10 @@
 			  default: true
 			},
 			compact: {
+			  type: Boolean,
+			  default: false
+			},
+			night: {
 			  type: Boolean,
 			  default: false
 			}
@@ -207,6 +214,7 @@
 			// #endif
 		},
 		methods: {
+			updatePoll(item,poll){ this.$set(item,'poll',poll) },
 			
 			noop(){},
 			

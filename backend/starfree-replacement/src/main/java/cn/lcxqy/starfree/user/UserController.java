@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
@@ -35,6 +36,7 @@ public class UserController {
     private final AccountMaintenanceService accountMaintenance;
     private final UserInteractionService interactions;
     private final ObjectMapper mapper;
+    private UserProfileService profiles;
 
     public UserController(
             LegacyTokenService tokens,
@@ -51,6 +53,11 @@ public class UserController {
         this.accountMaintenance = accountMaintenance;
         this.interactions = interactions;
         this.mapper = mapper;
+    }
+
+    @Autowired
+    void setProfiles(UserProfileService profiles) {
+        this.profiles = profiles;
     }
 
     /**
@@ -105,9 +112,26 @@ public class UserController {
     public ApiResponse edit(@RequestParam Map<String, String> params) {
         Map<String, Object> body = RequestValues.jsonObject(mapper, params.get("params"));
         try {
-            AccountMaintenanceService.EditResult result = accountMaintenance.edit(
-                    RequestValues.text(params, "token"), body);
-            return ApiResponse.success(result.getMessage(), result.getRows());
+            String token = RequestValues.text(params, "token");
+            boolean accountFields = profiles == null || accountMaintenance.containsAccountFields(body);
+            boolean profileFields = profiles != null && profiles.containsProfileFields(body);
+            if (!accountFields && !profileFields) {
+                throw new IllegalArgumentException("参数不正确");
+            }
+            String message = "操作成功";
+            int rows = 0;
+            if (profileFields) {
+                profiles.validate(body);
+            }
+            if (accountFields) {
+                AccountMaintenanceService.EditResult result = accountMaintenance.edit(token, body);
+                message = result.getMessage();
+                rows += result.getRows();
+            }
+            if (profileFields) {
+                rows += profiles.save(token, body);
+            }
+            return ApiResponse.success(message, rows);
         } catch (IllegalArgumentException error) {
             throw error;
         } catch (RuntimeException error) {
@@ -215,6 +239,9 @@ public class UserController {
         if (user == null) {
             return ApiResponse.failure("用户未登录或Token验证失败");
         }
+        if (profiles != null) {
+            profiles.attach(user, true);
+        }
         user.put("token", token);
         return ApiResponse.success(user);
     }
@@ -229,11 +256,16 @@ public class UserController {
     @RequestMapping(value = "/userInfo", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse info(@RequestParam Map<String, String> params) {
         long uid = RequestValues.integer(params, "uid", 0);
+        Long viewerUid = tokens.userId(RequestValues.text(params, "token"));
         Map<String, Object> user;
         if (uid > 0) {
             user = tokens.userById(uid);
         } else {
             user = tokens.user(RequestValues.text(params, "token"));
+        }
+        if (user != null && profiles != null) {
+            long targetUid = ((Number) user.get("uid")).longValue();
+            profiles.attach(user, viewerUid != null && viewerUid == targetUid);
         }
         return user == null ? ApiResponse.failure("用户不存在") : ApiResponse.success(user);
     }

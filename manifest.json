@@ -2,8 +2,8 @@
     "name" : "LCYZ",
     "appid" : "__UNI__850911F",
     "description" : "",
-    "versionName" : "2.0",
-    "versionCode" : 200,
+    "versionName" : "3.0",
+    "versionCode" : 300,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {

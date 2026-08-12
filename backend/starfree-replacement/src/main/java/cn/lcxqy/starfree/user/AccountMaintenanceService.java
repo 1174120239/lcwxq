@@ -101,6 +101,20 @@ public class AccountMaintenanceService {
         return result;
     }
 
+    public boolean containsAccountFields(Map<String, Object> body) {
+        if (body == null) {
+            return false;
+        }
+        String[] fields = {"screenName", "introduce", "userBg", "url", "avatar", "address",
+                "pay", "mail", "phone", "password"};
+        for (String field : fields) {
+            if (body.containsKey(field)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public int setClientId(String token, String clientId) {
         long uid = authenticatedUid(token);
         String normalized = clientId == null ? "" : clientId.trim();

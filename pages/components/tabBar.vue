@@ -6,6 +6,7 @@
 		<view class="tabbar-dock">
 			<block v-for="(item, index) in list" :key="item.path">
 				<view class="tabbar-item animation-reverse" :class="{'is-active': current == index}" @tap="tabbarChange(item.path)">
+					<view class="tabbar-unread-dot" v-if="index===2 && unreadCount>0"></view>
 					<image class="item-img" :src="item.icon_a" v-if="current == index"></image>
 					<image class="item-img" :src="item.icon" v-else></image>
 					<view class="item-name" :class="{'tabbarActive': current == index}" v-if="item.text">{{item.text}}</view>
@@ -30,6 +31,7 @@
 				dockTimer: null,
 				publishTimer: null,
 				editorOpen: false,
+				unreadCount: 0,
 				list: [{
 					text: '此刻',
 					icon: '/static/tabbar/home_line.png',
@@ -55,14 +57,38 @@
 		},
 		mounted() {
 			this.activate()
+			this.refreshUnread()
 			this.$root.$on('campus-editor-visibility', this.handleEditorVisibility)
+			uni.$on('campus:unread-changed', this.handleUnreadChanged)
 		},
 		beforeDestroy() {
 			clearTimeout(this.dockTimer)
 			clearTimeout(this.publishTimer)
 			this.$root.$off('campus-editor-visibility', this.handleEditorVisibility)
+			uni.$off('campus:unread-changed', this.handleUnreadChanged)
 		},
 		methods: {
+			handleUnreadChanged(count) {
+				this.unreadCount = Math.max(0, Number(count) || 0)
+				this.syncNativeBadge()
+			},
+			refreshUnread() {
+				var that = this
+				var token = uni.getStorageSync('token') || ''
+				if(!token) return that.handleUnreadChanged(0)
+				that.$Net.request({
+					url:that.$API.unreadNum(), data:{token:token}, method:'get',
+					header:{'Content-Type':'application/x-www-form-urlencoded'},
+					success:function(res){ if(res.data.code==1) that.handleUnreadChanged(res.data.data) }
+				})
+			},
+			syncNativeBadge() {
+				if(this.unreadCount>0){
+					uni.showTabBarRedDot({index:2, fail:function(){}})
+				}else{
+					uni.hideTabBarRedDot({index:2, fail:function(){}})
+				}
+			},
 			handleEditorVisibility(visible) {
 				this.editorOpen = Boolean(visible)
 			},
@@ -111,6 +137,14 @@
 		box-sizing: border-box;
 		transition: background-color 0.2s ease, transform 0.2s ease;
 	}
+
+	.tabbar-unread-dot {
+		position: absolute; z-index: 3; top: 7rpx; left: calc(50% + 16rpx);
+		width: 15rpx; height: 15rpx; border: 3rpx solid #fff; border-radius: 50%;
+		background: #e5484d; box-sizing: content-box;
+	}
+
+	.tabbar-system.is-night .tabbar-unread-dot { border-color: #1c2123; }
 
 	.tabbar-item.is-active {
 		background-color: #e7f6f3;
