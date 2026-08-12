@@ -108,9 +108,14 @@ $adminpw = "123456";
                         <span class="menu-arrow"></span>
                     </a>
                 </li>
-                <li class="side-nav-item">
+				<li class="side-nav-item">
 					<a href="<?php echo $ADMIN_PATH;?>/dynamicAnalytics.php" class="side-nav-link">
 						<i class="dripicons-graph-line"></i><span>动态数据分析</span><span class="menu-arrow"></span>
+					</a>
+				</li>
+				<li class="side-nav-item">
+					<a href="<?php echo $ADMIN_PATH;?>/dynamicUserAnalytics.php" class="side-nav-link">
+						<i class="dripicons-user-group"></i><span>用户论坛数据</span><span class="menu-arrow"></span>
 					</a>
 				</li>
 				<li class="side-nav-item">
