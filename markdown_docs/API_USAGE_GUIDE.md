@@ -305,10 +305,10 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/topicCreate` | GET/POST / token | `token,name` | 公网新 | 用户自建话题；名称自动去掉首尾 `#` 和空白，只允许中英文、数字、下划线、短横线，1-24 字；创建后自动关注。 |
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
-| `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 代码新/公网旧 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
-| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | `status=0` 把用户举报和 AI 风险/异常项按时间统一分页，以 `source=report/ai` 区分。其他状态仍查询举报记录。 |
-| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 举报项支持 `delete/dismiss`；AI 项传 `source=ai` 并支持 `approve/delete`，处理后向作者发送原因通知。 |
-| `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 代码新/公网旧 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。 |
+| `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 公网新 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
+| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 公网新 | `status=0` 把用户举报和 AI 风险/异常项按时间统一分页，以 `source=report/ai` 区分。其他状态仍查询举报记录。 |
+| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 公网新 | 举报项支持 `delete/dismiss`；AI 项传 `source=ai` 并支持 `approve/delete`，处理后向作者发送原因通知。 |
+| `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 公网新 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
