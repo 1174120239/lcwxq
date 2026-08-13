@@ -47,11 +47,6 @@
 			return
 		}
 		campusLastBackTime = now
-		uni.showToast({
-			title: '再按一次退出',
-			icon: 'none',
-			duration: 1500
-		})
 	}
 
 	function campusHandleBackButton() {
