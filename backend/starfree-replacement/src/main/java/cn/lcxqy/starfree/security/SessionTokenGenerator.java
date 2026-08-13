@@ -7,9 +7,9 @@ import java.security.SecureRandom;
 @Component
 public class SessionTokenGenerator {
     static final String TOKEN_PREFIX = "sf2_";
-    private static final String TOKEN_PATTERN = "^sf2_[0-9a-f]{64}$";
+    private static final String TOKEN_PATTERN = "^sf2_[0-9a-f]{60}$";
     private static final char[] HEX = "0123456789abcdef".toCharArray();
-    private static final int TOKEN_BYTES = 32;
+    private static final int TOKEN_BYTES = 30;
     private final SecureRandom random;
 
     public SessionTokenGenerator() {

@@ -12,7 +12,8 @@ class SessionTokenGeneratorTest {
         String first = generator.generate("public-account-name");
         String second = generator.generate("public-account-name");
 
-        assertThat(first).matches("sf2_[0-9a-f]{64}")
+        assertThat(first).matches("sf2_[0-9a-f]{60}")
+                .hasSize(64)
                 .doesNotContain("public-account-name")
                 .isNotEqualTo(second);
         assertThat(SessionTokenGenerator.isCurrentFormat(first)).isTrue();

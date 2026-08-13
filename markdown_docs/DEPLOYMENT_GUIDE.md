@@ -359,8 +359,8 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 4. 运行 `backend/deploy/production/promote-security-routes.sh`，由脚本备份 Nginx include、检查
    安全前置路由、增量添加精确 location、执行 `nginx -t`、reload 和公网验收；失败自动回滚。
 
-安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 64 位
-小写十六进制随机串；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史
+安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 60 位
+小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史
 `token` 参数只作为兼容通道。切流脚本还必须验证公开资料不含 IP、local、logged 或 clientId。
 
 聊天、上传、社会化绑定、支付创建和卡密等业务实现仍留在 8081，但公网请求先进入 18082，

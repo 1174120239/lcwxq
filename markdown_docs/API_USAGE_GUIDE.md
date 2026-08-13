@@ -42,7 +42,7 @@ curl -sS -X POST 'https://api.lcxqy.cn/SFreeUsers/userStatus' \
   -H 'Authorization: Bearer 你的登录token'
 ```
 
-当前登录 token 固定为 `sf2_` 加 64 位小写十六进制随机串。安全版本上线后，旧格式
+当前登录 token 固定为 `sf2_` 加 60 位小写十六进制随机串，总长度 64 字符。安全版本上线后，旧格式
 token 一律无效，用户必须重新登录；客户端不得解析 token 或从用户名、时间推导 token。
 
 复杂参数放入 `params`，其值仍是一个 JSON 字符串，而不是 JSON request body：
