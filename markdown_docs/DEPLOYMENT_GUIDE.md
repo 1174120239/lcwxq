@@ -146,7 +146,7 @@ sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/ins
 生产站点的 `.user.ini` 可能带 immutable 属性。admin 安装脚本会保留目标目录中已有的
 `.user.ini`，在复制文件前用 `lsattr` 检查属性；写入 PHP 会话安全配置时会临时执行
 `chattr -i`，并通过退出清理逻辑在成功或失败时恢复 `chattr +i`。属性无法检查、解锁或
-恢复时发布会明确失败，必须先人工确认文件属性，不得跳过检查。若失败发布导致 `Config_DB.php` 缺失，脚本会从
+恢复时发布会明确失败，必须先人工确认文件属性，不得跳过检查。`.user.ini` 即使没有结尾换行，安装脚本也会先补齐换行再写入设置，避免第一项会话配置被拼接进 `open_basedir` 等现有指令；PHP 7.2 会通过兼容的 Cookie path 参数补充 `SameSite=Lax`，发布后必须以真实响应头验收 `Secure`、`HttpOnly` 和 `SameSite=Lax`。若失败发布导致 `Config_DB.php` 缺失，脚本会从
 `/srv/lcxqy/backups/*-admin/admin.tar.gz` 中最近一个包含该配置的受控备份恢复运行时文件，
 再覆盖安装仓库源码。
 
@@ -358,6 +358,8 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 3. 迁移 010 仅在用户另行明确授权时执行；它不是前两项发布的默认步骤。
 4. 运行 `backend/deploy/production/promote-security-routes.sh`，由脚本备份 Nginx include、检查
    安全前置路由、增量添加精确 location、执行 `nginx -t`、reload 和公网验收；失败自动回滚。
+
+安全切流脚本读取现有精确 location 时兼容 LF 和 CRLF，不需要为匹配脚本预先改写生产 Nginx include 的整份换行格式。
 
 安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 60 位
 小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史

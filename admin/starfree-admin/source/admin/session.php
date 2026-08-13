@@ -11,7 +11,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
             'samesite' => 'Lax'
         ));
     } else {
-        session_set_cookie_params(0, '/', '', true, true);
+        session_set_cookie_params(0, '/; samesite=Lax', '', true, true);
     }
     session_start();
 }

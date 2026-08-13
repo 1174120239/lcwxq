@@ -76,6 +76,7 @@ declare -A PREREQUISITES=(
 )
 for path in "${!PREREQUISITES[@]}"; do
     block=$(awk -v target="location = $path {" '
+        { sub(/\r$/, "") }
         $0 == target { copy=1 }
         copy { print }
         copy && $0 == "}" { exit }
@@ -107,6 +108,7 @@ for path in "${!ROUTES[@]}"; do
         continue
     fi
     block=$(awk -v target="location = $path {" '
+        { sub(/\r$/, "") }
         $0 == target { copy=1 }
         copy { print }
         copy && $0 == "}" { exit }

@@ -100,6 +100,9 @@ if [[ "$USER_INI_WAS_IMMUTABLE" -eq 1 ]]; then
     fi
 fi
 touch "$USER_INI"
+if [[ -s "$USER_INI" ]] && [[ "$(tail -c 1 "$USER_INI" | wc -l)" -eq 0 ]]; then
+    printf '\n' >>"$USER_INI"
+fi
 while IFS= read -r setting; do
     key="${setting%%=*}"
     if grep -Eq "^[[:space:]]*${key}[[:space:]]*=" "$USER_INI"; then
