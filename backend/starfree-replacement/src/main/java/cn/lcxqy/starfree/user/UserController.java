@@ -187,6 +187,12 @@ public class UserController {
         return ApiResponse.success("登录成功", user);
     }
 
+    /** Closed third-party login cannot be trusted to issue safe sessions and is disabled. */
+    @RequestMapping(value = "/apiLogin", method = {RequestMethod.GET, RequestMethod.POST})
+    public ApiResponse disabledThirdPartyLogin() {
+        return ApiResponse.failure("第三方登录暂时停用，请使用账号密码登录");
+    }
+
     /**
      * GET/POST {@code /SFreeUsers/signOut}：退出当前会话。
      *
@@ -229,9 +235,11 @@ public class UserController {
     @RequestMapping(value = "/userInfo", method = {RequestMethod.GET, RequestMethod.POST})
     public ApiResponse info(@RequestParam Map<String, String> params) {
         long uid = RequestValues.integer(params, "uid", 0);
+        Long viewerUid = tokens.userId(RequestValues.text(params, "token"));
         Map<String, Object> user;
         if (uid > 0) {
-            user = tokens.userById(uid);
+            user = viewerUid != null && viewerUid.longValue() == uid
+                    ? tokens.userById(uid) : tokens.publicUserById(uid);
         } else {
             user = tokens.user(RequestValues.text(params, "token"));
         }

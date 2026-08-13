@@ -516,13 +516,12 @@ public class QaService {
     }
 
     private Map<String, Object> publicUser(long uid) {
-        Map<String, Object> source = tokens.userById(uid);
+        Map<String, Object> source = tokens.publicUserById(uid);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("uid", uid);
         if (source == null) {
             result.put("name", "已注销用户");
             result.put("avatar", "");
-            result.put("group", "visitor");
             result.put("vip", 0);
             result.put("campus", "");
             result.put("grade", "");
@@ -532,7 +531,6 @@ public class QaService {
         String accountName = text(source.get("name"));
         result.put("name", screenName.isEmpty() ? accountName : screenName);
         result.put("avatar", publicAvatar(source));
-        result.put("group", text(source.get("group")));
         result.put("vip", number(source.get("vip")));
         result.put("campus", text(source.get("campus")));
         result.put("grade", text(source.get("grade")));

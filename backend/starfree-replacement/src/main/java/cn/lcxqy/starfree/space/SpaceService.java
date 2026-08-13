@@ -53,8 +53,8 @@ public class SpaceService {
                     + "s.status,s.onlyMe,u.uid AS user_uid,u.name AS user_name,"
                     + "u.screenName AS user_screenName,u.mail AS user_mail,"
                     + "u.avatar AS user_avatar,u.experience AS user_experience,"
-                    + "u.vip AS user_vip,u.`group` AS user_group,u.bantime AS user_bantime,"
-                    + "u.ip AS user_ip,u.local AS user_local,u.customize AS user_customize,"
+                    + "u.vip AS user_vip,u.bantime AS user_bantime,"
+                    + "u.customize AS user_customize,"
                     + "u.introduce AS user_introduce,"
                     + "u.campus_option_id AS user_campus_id,campus.name AS user_campus,"
                     + "u.grade_option_id AS user_grade_id,grade.name AS user_grade "
@@ -826,10 +826,8 @@ public class SpaceService {
         user.put("experience", number(get(row, "user_experience")));
         user.put("vip", number(get(row, "user_vip")));
         user.put("isvip", isVip(get(row, "user_vip")) ? 1 : 0);
-        user.put("groupKey", value(get(row, "user_group")));
+        user.put("groupKey", "");
         user.put("bantime", number(get(row, "user_bantime")));
-        user.put("ip", value(get(row, "user_ip")));
-        user.put("local", value(get(row, "user_local")));
         putNonNull(user, "customize", get(row, "user_customize"));
         putNonNull(user, "introduce", get(row, "user_introduce"));
         putNonNull(user, "campusId", get(row, "user_campus_id"));

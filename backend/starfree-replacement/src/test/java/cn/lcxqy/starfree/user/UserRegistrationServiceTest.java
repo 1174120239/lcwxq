@@ -63,7 +63,7 @@ class UserRegistrationServiceTest {
             EconomyLockExecutor.SqlWork<?> work = invocation.getArgument(0);
             return work.execute(connection);
         });
-        when(passwords.hash("secret")).thenReturn("$P$Bgenerated-password-hash");
+        when(passwords.hash("Secret123")).thenReturn("$P$Bgenerated-password-hash");
         when(journal.fixedKey(eq("user-register"), anyString())).thenReturn(OPERATION_KEY);
     }
 
@@ -331,7 +331,7 @@ class UserRegistrationServiceTest {
     private Map<String, Object> request(String code, String inviteCode) {
         return row(
                 "name", NAME,
-                "password", "secret",
+                "password", "Secret123",
                 "mail", MAIL,
                 "code", code,
                 "inviteCode", inviteCode,

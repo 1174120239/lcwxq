@@ -1,6 +1,6 @@
 # LCXQY API 调用手册
 
-更新时间：2026-08-08
+更新时间：2026-08-12
 
 本手册面向前端、管理端、自动化脚本和集成开发，说明当前客户端实际使用的 API 如何调用。它覆盖 `utils/api.js` 中的 **157 个唯一 API 路径**，并额外记录支付回调和内部兼容路径，区分新后端、公网切流、混合委托和旧端能力。
 
@@ -31,13 +31,19 @@
 
 ### 2.1 表单编码和鉴权
 
-默认使用 `application/x-www-form-urlencoded`。token 放在表单或 query 的 `token` 字段；**不要**改成 `Authorization: Bearer`，旧客户端和兼容层并不依赖它。
+默认使用 `application/x-www-form-urlencoded`。新客户端应把登录态放在
+`Authorization: Bearer <token>` 请求头；新后端会把 Bearer token 映射为兼容的 `token`
+参数，旧客户端暂时仍可使用表单或 query 中的 `token` 字段。不要在新代码中继续使用
+GET query 传 token，避免登录态进入 Nginx 日志、浏览器历史和 Referer。
 
 ```bash
 curl -sS -X POST 'https://api.lcxqy.cn/SFreeUsers/userStatus' \
   -H 'Content-Type: application/x-www-form-urlencoded' \
-  --data-urlencode 'token=你的登录token'
+  -H 'Authorization: Bearer 你的登录token'
 ```
+
+当前登录 token 固定为 `sf2_` 加 64 位小写十六进制随机串。安全版本上线后，旧格式
+token 一律无效，用户必须重新登录；客户端不得解析 token 或从用户名、时间推导 token。
 
 复杂参数放入 `params`，其值仍是一个 JSON 字符串，而不是 JSON request body：
 
@@ -60,8 +66,9 @@ import requests
 
 BASE = "https://api.lcxqy.cn/"
 
-def form_post(path, data):
-    response = requests.post(BASE + path, data=data, timeout=15)
+def form_post(path, data, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    response = requests.post(BASE + path, data=data, headers=headers, timeout=15)
     response.raise_for_status()  # 网络/网关失败才会走这里
     body = response.json()
     if isinstance(body, dict) and body.get("code") == 0:
@@ -69,7 +76,7 @@ def form_post(path, data):
     return body
 
 token = "替换为实际 token"
-result = form_post("SFreeUsers/userStatus", {"token": token})
+result = form_post("SFreeUsers/userStatus", {}, token=token)
 print(result)
 ```
 
@@ -79,7 +86,7 @@ print(result)
 
 | 参数 | 说明 |
 |---|---|
-| `token` | 登录态。不能由客户端传 uid 代替。 |
+| `token` | 登录态。优先通过 Bearer Header 传输；不能由客户端传 uid 代替。 |
 | `params` | JSON 字符串，常放创建/编辑对象。非法 JSON 通常会被兼容解析为空对象，然后以业务错误返回。 |
 | `searchParams` | JSON 字符串，常放列表筛选条件。 |
 | `key` | 历史主键别名，内容、评论、订单等场景含义不同。保留原名。 |
@@ -141,20 +148,20 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/campusIdentityOptions` | GET/POST / 无 | 无 | 公网新 | 返回当前启用的 `campuses/grades`，注册表单必须从这里取稳定选项 id，不能在前端写死。 |
 | `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
 | `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
-| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | `campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；旧一次性邀请码按原逻辑返 assets，用户分享邀请码奖励邀请人 points/experience；成功后不自动登录。 |
-| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 旧端 | 生产旧登录可能只有 Redis session；不要仅查 MySQL `authCode` 判断登录。 |
+| `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | 密码为 8-128 位且必须同时含字母和数字，并拒绝常见弱密码；`campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；成功后不自动登录。 |
+| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，不能用 MySQL `authCode` 恢复过期会话。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
-| `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；成功后撤销关联会话。 |
-| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。简介最多 255 字并保留换行，显式传空字符串可清空；不得传 assets/points/experience/VIP/角色；改密码、邮箱会撤销会话。 |
+| `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；新密码执行统一强度策略；成功后撤销关联会话。 |
+| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
-| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | `uid` 优先；资料投影包含 `campusId/campus/gradeId/grade`，停用历史选项仍正常显示。 |
+| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
 | `SFreeUsers/SendCode` | GET/POST / 无 | `params.name` | 代码新/公网旧 | 找回密码验证码；name 可为用户名或邮箱，实际发送到账号已绑定邮箱，但兼容写入 `starfree_sendCode<用户名>`。有效期 30 分钟、同账号 60 秒冷却。切流后为公网新。 |
-| `SFreeUsers/apiLogin` | GET/POST / 第三方凭据 | 旧端参数待抓包确认 | 旧端 | 不要信任客户端直接传来的 openId；重建时必须校验提供方 code/token。 |
+| `SFreeUsers/apiLogin` | GET/POST / 第三方凭据 | 旧端参数待抓包确认 | 代码禁用/公网旧 | 安全切流后拒绝调用，防止未校验的第三方身份签发登录态；重新启用前必须服务端验证提供方 code/token。 |
 | `SFreeUsers/apiBind` | GET/POST / token+第三方凭据 | 旧端参数待抓包确认 | 旧端 | 社会化绑定，重建时校验 audience、过期和回调状态。 |
 | `SFreeUsers/userBindStatus` | GET/POST / token | 旧端参数待抓包确认 | 旧端 | 查询第三方绑定状态。 |
 | `SFreeUsers/setScan` | GET/POST / token | `codeContent` | 代码新/公网旧 | 只能批准 Redis 已存在的二维码 nonce，不能用它创建 nonce。 |
@@ -183,9 +190,9 @@ form_post("SFreeUsers/userRegister", {
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
 | `SFreeUsers/follow` | GET/POST / token | `touid,type` | 旧端 | `type=1` 关注、`0` 取消；首次关注写粉丝通知。 |
 | `SFreeUsers/isFollow` | GET/POST / token | `touid` | 旧端 | 已关注为 `code=1`，未关注为 `code=0`，不是 `data` 布尔值。 |
-| `SFreeUsers/followList` | GET/POST / 无 | `uid,page,limit` | 旧端 | 关注列表含脱敏 `userJson`。 |
-| `SFreeUsers/fanList` | GET/POST / 无 | `touid,page,limit` | 旧端 | 保留历史参数名 `touid`。 |
-| `SFreeUsers/userList` | GET/POST / 可选 staff | `searchParams,searchKey,order,page,limit,token` | 旧端 | 匿名结果脱敏；`order` 白名单，limit 最大 50。 |
+| `SFreeUsers/followList` | GET/POST / 无 | `uid,page,limit` | 代码新/公网旧 | 关注列表只含脱敏 `userJson`，不返回双方 IP、登录时间或 clientId。 |
+| `SFreeUsers/fanList` | GET/POST / 无 | `touid,page,limit` | 代码新/公网旧 | 保留历史参数名 `touid`；用户投影遵循公开字段白名单。 |
+| `SFreeUsers/userList` | GET/POST / 可选 staff | `searchParams,searchKey,order,page,limit,token` | 代码新/公网旧 | 普通和匿名结果均不返回角色、邮箱、IP、登录时间、clientId 等敏感字段；staff 管理视图保留角色和管理字段；`order` 白名单，limit 最大 50。 |
 | `SFreeUsers/manageUserEdit` | GET/POST / staff | `token,params.uid或name` | 代码新/公网旧 | 白名单更新，含 `campusId/gradeId`；只能新分配启用选项，但用户已引用的停用历史选项可原样保留；改角色、密码或敏感标识会撤销所有会话。 |
 | `SFreeUsers/userDelete` | GET/POST / administrator | `token,key` | 代码新/公网旧 | 删除账号/绑定/session，保留内容、评论和支付审计数据。 |
 | `SFreeUsers/banUser` | GET/POST / staff | `uid,time,type,text` | 代码新/公网旧 | 写 violation、延长禁言并撤销 session；禁止越权封禁。 |

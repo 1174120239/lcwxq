@@ -117,9 +117,8 @@ public class ContentService {
         Integer totalValue = jdbc.queryForObject("SELECT COUNT(*)" + from, Integer.class, args.toArray());
         StringBuilder sql = new StringBuilder(
                 "SELECT c.*, u.uid AS author_uid, u.name AS author_name, u.screenName AS author_screenName, "
-                        + "u.mail AS author_mail, u.avatar AS author_avatar, u.`group` AS author_group, "
-                        + "u.customize AS author_customize, u.vip AS author_vip, u.experience AS author_experience, "
-                        + "u.ip AS author_ip, u.local AS author_local").append(from);
+                        + "u.mail AS author_mail, u.avatar AS author_avatar, "
+                        + "u.customize AS author_customize, u.vip AS author_vip, u.experience AS author_experience").append(from);
         if (random == 1) {
             sql.append(" ORDER BY RAND()");
         } else {
@@ -143,7 +142,7 @@ public class ContentService {
         }
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT c.*, u.uid AS author_uid, u.name AS author_name, u.screenName AS author_screenName, "
-                        + "u.avatar AS author_avatar, u.`group` AS author_group, u.experience AS author_experience "
+                        + "u.avatar AS author_avatar, u.experience AS author_experience "
                         + "FROM starfree_contents c LEFT JOIN starfree_users u ON u.uid = c.authorId WHERE c.cid = ? LIMIT 1",
                 cid);
         return rows.isEmpty() ? null : toContent(rows.get(0));
@@ -845,8 +844,6 @@ public class ContentService {
         author.put("avatar", avatar(row.get("author_avatar"), row.get("author_mail")));
         putNonNull(author, "customize", row.get("author_customize"));
         author.put("experience", number(row.get("author_experience")));
-        author.put("ip", value(row.get("author_ip")));
-        author.put("local", value(row.get("author_local")));
         author.put("isvip", vipStatus(row.get("author_vip")));
         return author;
     }

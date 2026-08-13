@@ -1,6 +1,6 @@
 # 聊一论坛项目技术手册
 
-> 更新日期：2026-08-08
+> 更新日期：2026-08-12
 >
 > 适用仓库：1174120239/lcwxq
 >
@@ -19,7 +19,7 @@
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 296 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 324 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -86,7 +86,7 @@ manifest.json 使用的应用图标位于 static/branding/icons，不再依赖�
 - Java 8 或更高版本。
 - Maven 3.9+。
 - MySQL。
-- Redis；只在验证旧登录态兼容时必须启用。
+- Redis；生产登录态必须启用，Redis TTL 是会话有效期权威。
 
 主要环境变量：
 
@@ -143,12 +143,15 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 006_qqbot_dynamic_ai.sql | NapCat 个人 QQ 动态助手配置、绑定、群同步、幂等和投递日志 |
 | 007_campus_qa.sql | 校园问答问题、回答、回答点赞、评论和回复 |
 | 009_space_reports.sql | 动态举报、处理状态和 staff 审核审计 |
+| 010_admin_password_hash.sql | 将 PHP admin 密码列扩为 `VARCHAR(255)`，允许安全保存 `password_hash()` 结果 |
 
 ## 5. 请求和响应约定
 
 ### 5.1 请求
 
-兼容接口通常同时接受 GET 和 POST，前端主要使用 application/x-www-form-urlencoded。
+兼容接口通常同时接受 GET 和 POST，前端主要使用 application/x-www-form-urlencoded。新客户端
+优先用 `Authorization: Bearer <token>` 传登录态；新后端仍接受历史 `token` 表单/query 参数，
+用于兼容旧客户端和旧端代理。
 
 常见字段：
 
@@ -187,18 +190,17 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 ## 6. 登录态和安全
 
-新后端兼容两类登录态：
+新登录 token 为 `sf2_` 加 64 位小写十六进制随机串，由 32 字节 `SecureRandom` 生成，
+与用户名和时间无关。旧格式 token 全部拒绝，因此安全版本上线时所有用户必须重新登录。
 
-1. 用户表 authCode。
-2. 旧 Redis 中的 Java 序列化或 hash session。
+生产启用 Redis session bridge 后，Redis 中存在且未超过 TTL 的 session 是登录态唯一权威；
+Redis 中不存在的 token 不能再用 MySQL `authCode` 复活。只有未启用 bridge 的本地测试环境
+回退查询 MySQL。登录会轮换 token，退出、改密和敏感资料修改同时撤销 MySQL 与 Redis 登录态。
 
-因此：
-
-- 不能只查 MySQL 判断 token 无效。
-- 登录会轮换 token。
-- 退出、改密和敏感资料修改要同时撤销 MySQL 与 Redis 登录态。
-- Redis session bridge 只用于兼容保留的旧接口。
-- 接口返回用户信息时不得暴露密码散列、支付密钥和内部 token。
+公开用户资料统一使用字段白名单。匿名和跨账号读取不得返回角色、邮箱、手机、地址、资产、积分、
+IP、local、登录时间、clientId 或内部 token；本人读取才可获得完整资料。文章、动态、关系和
+通知中的嵌套用户对象遵守同一边界。所有设置新密码的入口执行 8-128 位、同时包含字母和数字、
+拒绝常见弱密码的策略；本人改密还必须验证原密码。
 
 仓库禁止保存：
 
@@ -270,8 +272,11 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 ### 8.2 混合处理
 
 - contentsAdd/contentsUpdate 只在普通 post/video 场景由新端完整写入；付费、草稿、商品关联和未知类型可委托旧端。
-- 官方充值、卡密和支付回调保留旧实现，但经济锁和日志可能由新端包裹。
+- 官方充值、卡密和支付回调保留旧实现，但登录用户发起请求必须先经过新端 token/角色守卫；
+  支付供应商回调不使用用户 token，按原签名边界转发。
 - token-bearing 列表、广告管理等路径是否进入新端取决于精确 Nginx 路由。
+- 旧聊天、上传、社会化绑定和支付创建仍由 8081 执行业务，但安全切流后公网必须先进入
+  18082 代理；staff/administrator 专用接口由新端在转发前校验角色。
 
 ### 8.3 仍依赖旧端
 
@@ -316,6 +321,8 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 - 推荐、置顶、轮播字段由内容扩展接口维护。
 - 后台话题管理复用 tag/meta 管理页；校区和年级使用独立的稳定选项目录。
 - PHP admin 配置接口仍直接访问 admin.lcxqy.cn。
+- PHP admin 统一启用 `HttpOnly`、`Secure`、`SameSite=Lax` 严格会话 Cookie，登录后轮换
+  session id；历史 MD5 管理员密码在密码列完成 010 迁移后于成功登录时升级为 `password_hash()`。
 - 匿名动态入口在首页发布面板，复用动态发布页（`?anonymous=1`），支持图片、视频和最多 3 个话题；匿名动态以专用匿名账号发布，真实发布者只存服务端映射表，公开接口不返回映射；管理端“匿名动态”模块可配置匿名账号与审核开关。
 - QQ 动态助手使用个人 QQ 号登录 NapCat，再通过 OneBot v11 反向 WebSocket 接 AstrBot；不是 QQ 官方机器人号。后端 `SFreeBot/*` 只开放动态工具，不开放帖子/文章能力。QQ 空间每日同步将每条公开已审核动态生成一张 `P1-P9` 编号图片，NapCat 提供空间凭据后由插件调用 QQ 空间上传/发布接口完成一条最多九图的说说；发布时间和图片模板由 PHP 后台配置，成功后才推进独立游标。
 - 首页帖子流下方保留独立的“校园问答”问题卡片；动态页顶部另提供“普通动态 / 提问区”切换，提问区分页展示全部已发布问答卡片。点击卡片进入问题详情，回答、回答评论和评论回复均在当前页完成。

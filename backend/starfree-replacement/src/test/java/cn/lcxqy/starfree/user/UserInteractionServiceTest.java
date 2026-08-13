@@ -107,7 +107,7 @@ class UserInteractionServiceTest {
         actor.put("avatar", "http://avatar");
         actor.put("vip", 0L);
         actor.put("group", "visitor");
-        when(tokens.userById(7L)).thenReturn(actor);
+        when(tokens.publicUserById(7L)).thenReturn(actor);
         when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -159,7 +159,7 @@ class UserInteractionServiceTest {
         actor.put("avatar", "http://avatar");
         actor.put("vip", 0L);
         actor.put("group", "visitor");
-        when(tokens.userById(7L)).thenReturn(actor);
+        when(tokens.publicUserById(7L)).thenReturn(actor);
         when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -193,7 +193,7 @@ class UserInteractionServiceTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);
         when(tokens.userId("valid-token")).thenReturn(8L);
-        when(tokens.userById(7L)).thenReturn(null);
+        when(tokens.publicUserById(7L)).thenReturn(null);
         when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -226,7 +226,7 @@ class UserInteractionServiceTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);
         when(tokens.userId("valid-token")).thenReturn(8L);
-        when(tokens.userById(7L)).thenReturn(Collections.<String, Object>singletonMap("name", "Answerer"));
+        when(tokens.publicUserById(7L)).thenReturn(Collections.<String, Object>singletonMap("name", "Answerer"));
         when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
 
         Map<String, Object> row = new LinkedHashMap<>();
@@ -261,7 +261,7 @@ class UserInteractionServiceTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);
         when(tokens.userId("valid-token")).thenReturn(8L);
-        when(tokens.userById(7L)).thenReturn(row(
+        when(tokens.publicUserById(7L)).thenReturn(row(
                 "uid", 7L, "name", "3910886328", "screenName", "校园昵称",
                 "mail", "3910886328@qq.com", "avatar", "", "vip", 0L,
                 "group", "visitor"));

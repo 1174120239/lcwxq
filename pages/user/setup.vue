@@ -200,37 +200,6 @@
 			  		
 			  	}
 			},
-			toQQ(){
-				var that = this;
-				var url=API.GetWebUrl();
-				Net.request({
-					url:'https://wk.sxiongd.com/connect.php?act=login',
-					method:'GET',
-					data:{
-						appid:"1006",
-						appkey:'179c734ebf443c7ff4504bdfc8046fbe',
-						type:'qq',
-						redirect_uri:'http://bbs.eyunapps.com/'
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					dataType:'json',
-	                success(res) {
-	                	console.log(res.data.url);
-						var url=res.data.url;
-						window.open(url)
-						// uni.navigateTo({
-						// 	url:'/pages/user/webview?url='+url
-						// })
-	                },
-					fail() {
-                        console.log('获取登陆链接失败');
-					}
-					
-				});
-				
-			},
 			back(){
 				uni.navigateBack({
 					delta: 1

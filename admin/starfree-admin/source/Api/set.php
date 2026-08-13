@@ -6,8 +6,24 @@ if (mysqli_num_rows($result1) > 0) {
 }
 $h5_of = (int) $row1['h5of'];
 if ($h5_of == 1) {
-    header("Access-Control-Allow-Origin: *");
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+    $requestOrigin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+    $originParts = parse_url($requestOrigin);
+    $allowedOrigin = $requestOrigin === 'https://prev.lcxqy.cn';
+    if (is_array($originParts)
+        && isset($originParts['scheme'], $originParts['host'])
+        && ($originParts['scheme'] === 'http' || $originParts['scheme'] === 'https')
+        && $originParts['host'] === 'localhost'
+        && !isset($originParts['user']) && !isset($originParts['pass'])
+        && !isset($originParts['path']) && !isset($originParts['query'])
+        && (!isset($originParts['port'])
+            || ($originParts['port'] >= 1 && $originParts['port'] <= 65535))) {
+        $allowedOrigin = true;
+    }
+    if ($allowedOrigin) {
+        header('Access-Control-Allow-Origin: ' . $requestOrigin);
+        header('Vary: Origin');
+    }
+    header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
     header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization");
 }
 $redis = new Redis();

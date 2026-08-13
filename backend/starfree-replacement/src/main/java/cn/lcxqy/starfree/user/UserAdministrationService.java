@@ -7,6 +7,7 @@ import cn.lcxqy.starfree.security.LegacyRedisKeyStore;
 import cn.lcxqy.starfree.security.LegacySessionBridge;
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.security.PhpassPasswordVerifier;
+import cn.lcxqy.starfree.security.PasswordPolicy;
 import cn.lcxqy.starfree.security.SessionTokenGenerator;
 import cn.lcxqy.starfree.security.StaffAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -146,12 +147,14 @@ public class UserAdministrationService {
         for (Map<String, Object> row : rows) {
             Map<String, Object> item = new LinkedHashMap<>(row);
             long uid = number(get(item, "uid"));
-            item.put("groupKey", value(get(item, "group")));
             item.put("isvip", vipState(get(item, "vip")));
             item.put("isFollow", viewerId == null ? 0 : followCount(viewerId, uid));
             if (!staff) {
                 removeCaseInsensitive(item, "mail", "phone", "assets", "points", "address",
-                        "pay", "clientId", "ip", "local", "invitationCode");
+                        "pay", "clientId", "ip", "local", "invitationCode", "logged", "group");
+                item.put("groupKey", "");
+            } else {
+                item.put("groupKey", value(get(item, "group")));
             }
             data.add(item);
         }
@@ -291,9 +294,7 @@ public class UserAdministrationService {
         }
         String password = rawText(params.get("password"));
         if (!password.isEmpty()) {
-            if (password.length() < 6 || password.length() > 128) {
-                throw new IllegalArgumentException("密码长度必须为6到128位");
-            }
+            PasswordPolicy.requireStrong(password);
             changes.put("password", passwords.hash(password));
         }
         if (changes.isEmpty()) {
@@ -744,7 +745,7 @@ public class UserAdministrationService {
         }
         Map<String, Object> copy = new LinkedHashMap<>(user);
         removeCaseInsensitive(copy, "mail", "phone", "assets", "points", "address", "pay",
-                "clientId", "ip", "local", "invitationCode");
+                "clientId", "ip", "local", "invitationCode", "logged");
         copy.put("isvip", vipState(copy.get("vip")));
         return copy;
     }

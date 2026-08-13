@@ -72,9 +72,9 @@ public class CommentService {
 
         Integer totalValue = jdbc.queryForObject("SELECT COUNT(*)" + from, Integer.class, args.toArray());
         String sql = "SELECT co.*, u.uid AS user_uid, u.name AS user_name, u.screenName AS user_screenName, "
-                + "u.mail AS user_mail, u.avatar AS user_avatar, u.`group` AS user_group, "
+                + "u.mail AS user_mail, u.avatar AS user_avatar, "
                 + "u.customize AS user_customize, u.vip AS user_vip, u.experience AS user_experience, "
-                + "u.ip AS user_ip, u.local AS user_local, c.title AS content_title, c.slug AS content_slug, "
+                + "c.title AS content_title, c.slug AS content_slug, "
                 + "c.type AS content_type" + from + " ORDER BY co." + safeOrder(order) + " DESC LIMIT ?, ?";
         List<Object> pageArgs = new ArrayList<>(args);
         pageArgs.add((safePage - 1) * safeLimit);
@@ -285,11 +285,8 @@ public class CommentService {
         }
         result.put("author", name);
         result.put("avatar", avatar(row.get("user_avatar"), row.get("user_mail")));
-        putNonNull(result, "mail", row.get("user_mail"));
         putNonNull(result, "customize", row.get("user_customize"));
         result.put("experience", number(row.get("user_experience")));
-        result.put("ip", value(row.get("user_ip")));
-        result.put("local", value(row.get("user_local")));
         long vip = number(row.get("user_vip"));
         result.put("isvip", vipStatus(vip));
         result.put("vip", vip);

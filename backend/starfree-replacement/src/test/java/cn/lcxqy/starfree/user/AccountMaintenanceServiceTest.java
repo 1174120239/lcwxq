@@ -19,6 +19,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -68,14 +69,14 @@ class AccountMaintenanceServiceTest {
     @Test
     void passwordResetUsesUsernameCodeConsumesItAndRevokesTheOldSession() throws Exception {
         arrangeConfig(config(true, ""));
-        when(passwords.hash("new-secret")).thenReturn("$P$Bnew-hash");
+        when(passwords.hash("NewSecret123")).thenReturn("$P$Bnew-hash");
         when(repository.accountByMail(connection, "alice@example.com"))
                 .thenReturn(account("old-token"));
         when(codes.verificationCode("alice")).thenReturn("123456");
         when(repository.update(eq(connection), eq(7L), any())).thenReturn(1);
 
         int rows = service.forgotPassword(row(
-                "name", "alice@example.com", "code", "123456", "password", "new-secret"));
+                "name", "alice@example.com", "code", "123456", "password", "NewSecret123"));
 
         assertThat(rows).isEqualTo(1);
         verify(codes).consumeVerificationCode("alice");
@@ -90,12 +91,12 @@ class AccountMaintenanceServiceTest {
     @Test
     void passwordResetRejectsAnIncorrectCodeBeforeAnyWrite() throws Exception {
         arrangeConfig(config(true, ""));
-        when(passwords.hash("new-secret")).thenReturn("$P$Bnew-hash");
+        when(passwords.hash("NewSecret123")).thenReturn("$P$Bnew-hash");
         when(repository.accountByName(connection, "alice")).thenReturn(account("old-token"));
         when(codes.verificationCode("alice")).thenReturn("123456");
 
         assertThrows(IllegalArgumentException.class, () -> service.forgotPassword(row(
-                "name", "alice", "code", "000000", "password", "new-secret")));
+                "name", "alice", "code", "000000", "password", "NewSecret123")));
 
         verify(repository, never()).update(any(), eq(7L), any());
         verify(codes, never()).consumeVerificationCode("alice");
@@ -185,6 +186,54 @@ class AccountMaintenanceServiceTest {
 
         verify(repository).valueExists(connection, "phone", "13800138000", 7L);
         verify(codes).consumePhoneVerificationCode("13800138000");
+    }
+
+    @Test
+    void passwordChangeRequiresAndVerifiesTheCurrentPassword() throws Exception {
+        arrangeAuthenticated(config(false, ""));
+        when(repository.accountByUid(connection, 7L)).thenReturn(account("token"));
+        when(passwords.matches("old-secret", "$P$Bold")).thenReturn(true);
+        when(passwords.hash("NewSecret123")).thenReturn("$P$Bnew");
+        when(repository.update(eq(connection), eq(7L), any())).thenReturn(1);
+
+        service.edit("token", row(
+                "uid", 7, "currentPassword", "old-secret", "password", "NewSecret123"));
+
+        ArgumentCaptor<Map<String, Object>> changes = mapCaptor();
+        verify(repository).update(eq(connection), eq(7L), changes.capture());
+        assertThat(changes.getValue()).containsEntry("password", "$P$Bnew")
+                .containsEntry("authCode", null)
+                .doesNotContainKey("currentPassword");
+    }
+
+    @Test
+    void passwordChangeRejectsMissingOrIncorrectCurrentPassword() throws Exception {
+        arrangeAuthenticated(config(false, ""));
+
+        assertThrows(IllegalArgumentException.class, () -> service.edit("token", row(
+                "uid", 7, "password", "NewSecret123")));
+
+        when(repository.accountByUid(connection, 7L)).thenReturn(account("token"));
+        when(passwords.hash("NewSecret123")).thenReturn("$P$Bnew");
+        when(passwords.matches("wrong-secret", "$P$Bold")).thenReturn(false);
+        assertThrows(IllegalArgumentException.class, () -> service.edit("token", row(
+                "uid", 7, "currentPassword", "wrong-secret", "password", "NewSecret123")));
+        verify(repository, never()).update(any(), eq(7L), any());
+    }
+
+    @Test
+    void emptyPasswordFieldDoesNotTurnAProfileEditIntoPasswordChange() throws Exception {
+        arrangeAuthenticated(config(false, ""));
+        when(repository.accountByUid(connection, 7L)).thenReturn(account("token"));
+        when(repository.update(eq(connection), eq(7L), any())).thenReturn(1);
+
+        service.edit("token", row("uid", 7, "screenName", "Alice", "password", ""));
+
+        ArgumentCaptor<Map<String, Object>> changes = mapCaptor();
+        verify(repository).update(eq(connection), eq(7L), changes.capture());
+        assertThat(changes.getValue()).containsEntry("screenName", "Alice")
+                .doesNotContainKeys("password", "authCode");
+        verify(passwords, never()).hash(anyString());
     }
 
     @Test
