@@ -16,6 +16,8 @@ import java.util.Set;
 
 @Repository
 class AccountMaintenanceRepository {
+    private static final String LEGACY_TEXT_PARAMETER =
+            "CONVERT(? USING utf8) COLLATE utf8_general_ci";
     private static final Set<String> EDITABLE_COLUMNS = Collections.unmodifiableSet(
             new LinkedHashSet<>(Arrays.asList(
                     "password", "mail", "phone", "screenName", "introduce", "userBg",
@@ -61,7 +63,8 @@ class AccountMaintenanceRepository {
             throw new IllegalArgumentException("Unsupported uniqueness column");
         }
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT 1 FROM starfree_users WHERE " + column + "=? AND uid<>? LIMIT 1")) {
+                "SELECT 1 FROM starfree_users WHERE " + column + "="
+                        + LEGACY_TEXT_PARAMETER + " AND uid<>? LIMIT 1")) {
             statement.setString(1, value);
             statement.setLong(2, excludedUid);
             try (ResultSet result = statement.executeQuery()) {
