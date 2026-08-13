@@ -190,8 +190,9 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 ## 6. 登录态和安全
 
-新登录 token 为 `sf2_` 加 64 位小写十六进制随机串，由 32 字节 `SecureRandom` 生成，
-与用户名和时间无关。旧格式 token 全部拒绝，因此安全版本上线时所有用户必须重新登录。
+新登录 token 为 `sf2_` 加 60 位小写十六进制随机串，由 30 字节 `SecureRandom` 生成，
+总长度固定为 64 字符以兼容共享用户表的 `authCode` 列，并且与用户名和时间无关。旧格式 token
+全部拒绝，因此安全版本上线时所有用户必须重新登录。
 
 生产启用 Redis session bridge 后，Redis 中存在且未超过 TTL 的 session 是登录态唯一权威；
 Redis 中不存在的 token 不能再用 MySQL `authCode` 复活。只有未启用 bridge 的本地测试环境
