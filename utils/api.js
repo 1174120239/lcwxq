@@ -260,6 +260,9 @@ module.exports = {
 	setRead:function(){
 		return API_URL + 'SFreeUsers/setRead';
 	},
+	pollVote:function(){
+		return API_URL + 'SFreeSpace/pollVote';
+	},
 	sendUser:function(){
 		return API_URL + 'SFreeUsers/sendUser';
 	},

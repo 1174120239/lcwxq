@@ -88,6 +88,7 @@
 					<!--  #endif -->
 					
 				</block>
+				<space-poll v-if="spaceInfo.poll" :poll="spaceInfo.poll" :night="campusNight" @change="$set(spaceInfo,'poll',$event)"></space-poll>
 
 			</view>
 		</view>
@@ -282,6 +283,8 @@
 			</view>
 		</view>
 		<!--加载遮罩结束-->
+		<space-report-sheet :visible="reportVisible" :night="campusNight" :submitting="reportSubmitting"
+			@close="closeCurrentReport" @submit="submitCurrentReport"></space-report-sheet>
 	</view>
 </template>
 
@@ -290,6 +293,8 @@
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
 	import { normalizeUser } from '@/utils/avatar.js'
 	import { copyText } from '@/utils/clipboard.js'
+	import SpacePoll from '@/components/space-poll/space-poll.vue'
+	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -300,6 +305,7 @@
 	var owo = [];
 	// #endif
 	export default {
+		components: { SpacePoll, SpaceReportSheet },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -350,6 +356,8 @@
 				infoType:0,
 				group:"",
 				uid:0,
+				reportVisible:false,
+				reportSubmitting:false,
 				imageFailures:{},
 				imageRetryVersions:{},
 				replyComposerVisible:false,
@@ -508,25 +516,30 @@
 					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 500);
 					return false;
 				}
-				var reasons = ['广告营销', '人身攻击', '色情低俗', '违法违规', '其他'];
-				uni.showActionSheet({
-					itemList: reasons,
-					success: (choice) => this.submitCurrentReport(reasons[choice.tapIndex])
-				});
+				this.reportVisible = true;
+			},
+			closeCurrentReport(){
+				if(!this.reportSubmitting) this.reportVisible = false;
 			},
 			submitCurrentReport(reason){
-				uni.showLoading({ title: '提交中' });
+				if(this.reportSubmitting) return;
+				this.reportSubmitting = true;
 				this.$Net.request({
 					url: this.$API.spaceReportAdd(),
 					data: { id: this.spaceInfo.id, reason: reason, token: this.token },
 					header: { 'Content-Type':'application/x-www-form-urlencoded' },
 					method: 'post',
 					dataType: 'json',
-					success: (res) => uni.showToast({
-						title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none'
-					}),
+					success: (res) => {
+						if(res.data && res.data.code == 1){
+							this.reportVisible = false;
+							uni.showToast({ title: res.data.msg || '举报已提交', icon: 'success' });
+						}else{
+							uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none' });
+						}
+					},
 					fail: () => uni.showToast({ title: '网络不太好哦', icon: 'none' }),
-					complete: () => uni.hideLoading()
+					complete: () => { this.reportSubmitting = false; }
 				});
 			},
 			loadCampusThemeMode() {

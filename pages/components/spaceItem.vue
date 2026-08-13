@@ -54,6 +54,7 @@
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
 							</view>
 						</view>
+						<space-poll v-if="item.poll" :poll="item.poll" :night="resolvedNight" :compact="compact" @change="updatePoll(item,$event)"></space-poll>
 					</block>
 					
 					
@@ -141,11 +142,15 @@
 			</view>
 			<video :src="curVideo" http-cache="true" play-strategy="0" loop autoplay :title="mp4title"></video>
 		</view>
+		<space-report-sheet :visible="reportVisible" :night="resolvedNight" :submitting="reportSubmitting"
+			@close="closeReport" @submit="submitReport"></space-report-sheet>
 	</view>
 </template>
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import SpacePoll from '@/components/space-poll/space-poll.vue'
+	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -156,6 +161,7 @@
 	var owo = [];
 	// #endif
 	export default {
+		components: { SpacePoll, SpaceReportSheet },
 	    props: {
 	        spaceList: {
 			  type: Array,
@@ -166,6 +172,10 @@
 			  default: true
 			},
 			compact: {
+			  type: Boolean,
+			  default: false
+			},
+			night: {
 			  type: Boolean,
 			  default: false
 			}
@@ -185,7 +195,15 @@
 				uid:0,
 				isPlay:false,
 				curVideo:"",
+				reportVisible:false,
+				reportSubmitting:false,
+				reportTargetId:0,
 			};
+		},
+		computed: {
+			resolvedNight() {
+				return this.night || Boolean(this.$store && this.$store.state && this.$store.state.AppStyle === 'campus-night')
+			}
 		},
 		created(){
 			var that = this;
@@ -207,6 +225,7 @@
 			// #endif
 		},
 		methods: {
+			updatePoll(item,poll){ this.$set(item,'poll',poll) },
 			
 			noop(){},
 			
@@ -594,27 +613,36 @@
 					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 500);
 					return false;
 				}
-				var reasons = ['广告营销', '人身攻击', '色情低俗', '违法违规', '其他'];
-				uni.showActionSheet({
-					itemList: reasons,
-					success: (choice) => this.submitReport(item.id, reasons[choice.tapIndex])
-				});
+				this.reportTargetId = Number(item.id || 0);
+				this.reportVisible = this.reportTargetId > 0;
 			},
-			submitReport(id,reason){
-				uni.showLoading({ title: '提交中' });
+			closeReport(){
+				if(this.reportSubmitting) return;
+				this.reportVisible = false;
+				this.reportTargetId = 0;
+			},
+			submitReport(reason){
+				if(!this.reportTargetId || this.reportSubmitting) return;
+				this.reportSubmitting = true;
 				this.$Net.request({
 					url: this.$API.spaceReportAdd(),
-					data: { id: id, reason: reason, token: localStorage.getItem('token') || '' },
+					data: { id: this.reportTargetId, reason: reason, token: localStorage.getItem('token') || '' },
 					header: { 'Content-Type':'application/x-www-form-urlencoded' },
 					method: 'post',
 					dataType: 'json',
-					success: function(res){
-						uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none' });
+					success: (res) => {
+						if(res.data && res.data.code == 1){
+							this.reportVisible = false;
+							this.reportTargetId = 0;
+							uni.showToast({ title: res.data.msg || '举报已提交', icon: 'success' });
+						}else{
+							uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '提交失败', icon: 'none' });
+						}
 					},
-					fail: function(){
+					fail: () => {
 						uni.showToast({ title: '网络不太好哦', icon: 'none' });
 					},
-					complete: function(){ uni.hideLoading(); }
+					complete: () => { this.reportSubmitting = false; }
 				});
 			},
 			forward(id){

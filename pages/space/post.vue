@@ -79,6 +79,25 @@
 						</view>
 					</view>
 				</view>
+				<view class="component-editor" v-if="postType=='add' && !anonymousMode && type==0">
+					<view class="component-add" v-if="!poll" @tap="openComponentPicker">
+						<view class="component-add-icon"><text class="cuIcon-add"></text></view>
+						<view class="component-add-copy"><text>添加组件</text><text>投票等互动内容</text></view>
+						<text class="cuIcon-right component-add-arrow"></text>
+					</view>
+					<view class="poll-summary" v-else>
+						<view class="poll-summary-main" @tap="openPollEditor">
+							<view class="poll-summary-icon"><text class="cuIcon-rank"></text></view>
+							<view class="poll-summary-copy">
+								<view class="poll-summary-label">投票组件</view>
+								<view class="poll-summary-title">{{poll.title}}</view>
+								<view class="poll-summary-meta">{{poll.multiple ? '多选，最多 '+poll.maxChoices+' 项' : '单选'}} · {{poll.options.length}} 个选项</view>
+							</view>
+							<text class="cuIcon-right poll-summary-arrow"></text>
+						</view>
+						<view class="poll-remove" @tap="removePoll"><text class="cuIcon-delete"></text></view>
+					</view>
+				</view>
 				<view class="topic-editor">
 					<view class="topic-editor-head">
 						<text class="topic-editor-title">话题</text>
@@ -148,6 +167,62 @@
 				<tn-button class="post-policy-confirm" :backgroundColor="campusNight ? '#3a9278' : '#168573'" fontColor="#fff" @tap="okBtn">知道了</tn-button>
 			</view>
 		</tn-popup>
+		<view class="component-sheet-layer" v-if="componentPickerVisible" @tap="closeComponentPicker">
+			<view class="component-sheet" @tap.stop>
+				<view class="sheet-handle"></view>
+				<view class="sheet-head">
+					<view><view class="sheet-title">添加组件</view><view class="sheet-subtitle">为动态增加互动内容</view></view>
+					<view class="sheet-close cuIcon-close" @tap="closeComponentPicker"></view>
+				</view>
+				<view class="component-option" @tap="selectPollComponent">
+					<view class="component-option-icon"><text class="cuIcon-rank"></text></view>
+					<view class="component-option-copy"><view>投票</view><text>发起单选或多选投票，发布后展示结果条</text></view>
+					<text class="cuIcon-right component-option-arrow"></text>
+				</view>
+			</view>
+		</view>
+		<view class="poll-modal-mask" v-if="pollEditorVisible" @tap="closePollEditor">
+			<view class="poll-modal" @tap.stop>
+				<view class="sheet-handle"></view>
+				<view class="poll-modal-head">
+					<text class="poll-cancel" @tap="closePollEditor">取消</text>
+					<view class="poll-modal-heading"><view>{{poll ? '编辑投票' : '创建投票'}}</view><text>发布后不能修改选项</text></view>
+					<text class="poll-save" :class="{'is-disabled': !canSavePoll}" @tap="savePoll">完成</text>
+				</view>
+				<scroll-view scroll-y class="poll-modal-body">
+					<view class="poll-section">
+						<view class="poll-section-head"><text>投票内容</text><text>{{pollDraft.title.length}}/80</text></view>
+						<input class="poll-input" v-model="pollDraft.title" maxlength="80" placeholder="你想问什么？" />
+						<textarea class="poll-intro" v-model="pollDraft.description" maxlength="240" placeholder="补充说明（选填）"></textarea>
+					</view>
+					<view class="poll-section">
+						<view class="poll-section-head"><text>选项</text><text>{{pollDraft.options.length}}/6</text></view>
+						<view class="poll-option-row" v-for="(option,index) in pollDraft.options" :key="index">
+							<view class="poll-option-index">{{index+1}}</view>
+							<input v-model="pollDraft.options[index]" maxlength="80" :placeholder="'选项 '+(index+1)" />
+							<view class="poll-option-remove" v-if="pollDraft.options.length>2" @tap="removePollOption(index)"><text class="cuIcon-close"></text></view>
+						</view>
+						<view class="poll-add-option" :class="{'is-disabled':pollDraft.options.length>=6}" @tap="addPollOption">
+							<text class="cuIcon-add"></text><text>{{pollDraft.options.length<6 ? '增加选项' : '最多添加 6 个选项'}}</text>
+						</view>
+					</view>
+					<view class="poll-section poll-rule-section">
+						<view class="poll-section-head"><text>选择规则</text></view>
+						<view class="poll-mode-segment">
+							<view :class="{'is-active':!pollDraft.multiple}" @tap="setPollMode(false)"><text>单选</text><text class="poll-mode-help">每人选 1 项</text></view>
+							<view :class="{'is-active':pollDraft.multiple}" @tap="setPollMode(true)"><text>多选</text><text class="poll-mode-help">可选择多项</text></view>
+						</view>
+						<view class="poll-setting-row" v-if="pollDraft.multiple">
+							<view><text>最多选择</text><text class="poll-setting-help">每位参与者的选择上限</text></view>
+							<picker :range="pollChoiceRanges" :value="pollChoiceIndex" @change="changePollMax">
+								<view class="poll-choice-picker">{{pollDraft.maxChoices}} 项 <text class="cuIcon-right"></text></view>
+							</picker>
+						</view>
+					</view>
+					<view class="poll-privacy-note"><text class="cuIcon-lock"></text><text>投票匿名展示，其他用户看不到具体选择人。</text></view>
+				</scroll-view>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -198,6 +273,10 @@
 				topicInput: "",
 				showTopicPicker: false,
 				topicLoading: false,
+				poll:null,
+				componentPickerVisible:false,
+				pollEditorVisible:false,
+				pollDraft:{ title:'', description:'', options:['',''], multiple:false, maxChoices:1 },
 				
 				modelVisible: true,
 				forwardJson:null,
@@ -215,6 +294,17 @@
 			}
 		},
 		computed: {
+			pollChoiceRanges() {
+				return Array.from({length: Math.max(1, this.pollDraft.options.length - 1)}, (_, index) => index + 2)
+			},
+			pollChoiceIndex() {
+				return Math.max(0, this.pollChoiceRanges.indexOf(Number(this.pollDraft.maxChoices)))
+			},
+			canSavePoll() {
+				const title = (this.pollDraft.title || '').trim()
+				const options = (this.pollDraft.options || []).map(item => (item || '').trim())
+				return Boolean(title) && options.length >= 2 && options.every(Boolean) && new Set(options).size === options.length
+			},
 			campusNight() {
 				return resolveCampusNight(this.campusThemeMode, isDongchangfuNight(this.campusThemeClock))
 			},
@@ -250,7 +340,7 @@
 					if (!this.stripImageMarker(this.text).trim()) return '视频动态需要填写说明'
 					return ''
 				}
-				if (this.type !== 0 || this.picList.length > 0) return ''
+				if (this.type !== 0 || this.picList.length > 0 || this.poll) return ''
 				const remaining = Math.max(0, 4 - this.stripImageMarker(this.text).trim().length)
 				return remaining > 0 ? '纯文字动态至少需要4个字，还需输入' + remaining + '个字' : ''
 			},
@@ -260,7 +350,7 @@
 				const textLength = this.stripImageMarker(this.text).trim().length
 				const hasText = textLength > 0
 				if (this.type === 4) return hasText && Boolean(this.pic)
-				if (this.type === 0) return textLength >= 4 || this.picList.length > 0
+				if (this.type === 0) return textLength >= 4 || this.picList.length > 0 || Boolean(this.poll)
 				return true
 			},
 			recommendedTopics() {
@@ -348,6 +438,38 @@
 			
 		},
 		methods: {
+			openComponentPicker() { this.componentPickerVisible = true },
+			closeComponentPicker() { this.componentPickerVisible = false },
+			selectPollComponent() { this.componentPickerVisible = false; this.openPollEditor() },
+			blankPollDraft() { return { title:'', description:'', options:['',''], multiple:false, maxChoices:1 } },
+			openPollEditor() {
+				this.pollDraft = this.poll ? JSON.parse(JSON.stringify(this.poll)) : this.blankPollDraft()
+				this.pollEditorVisible = true
+			},
+			closePollEditor() { this.pollEditorVisible = false },
+			addPollOption() { if (this.pollDraft.options.length < 6) this.pollDraft.options.push('') },
+			removePollOption(index) {
+				if (this.pollDraft.options.length > 2) this.pollDraft.options.splice(index, 1)
+				if (this.pollDraft.multiple) this.pollDraft.maxChoices = Math.min(this.pollDraft.maxChoices, this.pollDraft.options.length)
+			},
+			setPollMode(multiple) {
+				this.pollDraft.multiple = Boolean(multiple)
+				this.pollDraft.maxChoices = multiple ? Math.min(2, this.pollDraft.options.length) : 1
+			},
+			changePollMax(event) { this.pollDraft.maxChoices = this.pollChoiceRanges[Number(event.detail.value)] || 2 },
+			savePoll() {
+				if (!this.canSavePoll) {
+					uni.showToast({ title: !(this.pollDraft.title || '').trim() ? '请填写投票标题' : '请检查选项是否完整或重复', icon: 'none' })
+					return
+				}
+				const options = this.pollDraft.options.map(item => item.trim())
+				this.poll = { title:this.pollDraft.title.trim(), description:(this.pollDraft.description || '').trim(), options, multiple:!!this.pollDraft.multiple, maxChoices:this.pollDraft.multiple ? Number(this.pollDraft.maxChoices) : 1 }
+				this.pollEditorVisible = false
+			},
+			removePoll() {
+				uni.showModal({ title:'移除投票', content:'移除后已填写的投票内容不会保留。', confirmColor:'#d45555', success:({confirm}) => { if (confirm) this.poll = null } })
+			},
+			pollPayload() { return this.poll ? JSON.stringify({...this.poll, multiple:this.poll.multiple ? 1 : 0}) : '' },
 			loadTopics() {
 				if (!this.token) return
 				this.topicLoading = true
@@ -552,17 +674,23 @@
 				if (this.isUploading) return
 				uni.showActionSheet({
 					itemList: ['选择图片', '选择视频'],
-					success: ({ tapIndex }) => {
+						success: ({ tapIndex }) => {
 						const nextType = tapIndex === 1 ? 4 : 0
 						const changesMediaType = (nextType === 4 && this.picList.length > 0) || (nextType === 0 && this.type === 4 && this.pic)
-						const selectMedia = () => nextType === 4 ? this.uploadVideo() : this.upload()
-						if (!changesMediaType) {
+						const removesPoll = nextType === 4 && Boolean(this.poll)
+						const selectMedia = () => {
+							if (removesPoll) this.poll = null
+							nextType === 4 ? this.uploadVideo() : this.upload()
+						}
+						if (!changesMediaType && !removesPoll) {
 							selectMedia()
 							return
 						}
 						uni.showModal({
-							title: '替换当前媒体',
-							content: nextType === 4 ? '一条动态不能同时包含图片和视频，继续后将用视频替换当前图片。' : '一条动态不能同时包含视频和图片，继续后将用图片替换当前视频。',
+							title: removesPoll ? '改为视频动态' : '替换当前媒体',
+							content: removesPoll
+								? (changesMediaType ? '视频动态暂不支持投票，继续后将移除投票并替换当前图片。' : '视频动态暂不支持投票，继续后将移除当前投票。')
+								: (nextType === 4 ? '一条动态不能同时包含图片和视频，继续后将用视频替换当前图片。' : '一条动态不能同时包含视频和图片，继续后将用图片替换当前视频。'),
 							success: ({ confirm }) => {
 								if (confirm) selectMedia()
 							}
@@ -765,7 +893,7 @@
 					}
 					that.pic = pic;
 					text = that.imagePayloadText(text);
-					if(text.trim()=="" && that.pic==""){
+					if(text.trim()=="" && that.pic=="" && !that.poll){
 						uni.showToast({
 						    title:"请输入文字或上传图片",
 							icon:'none',
@@ -792,6 +920,7 @@
 					toid:that.toid,
 					pic:that.pic,
 					topicIds:that.topicIdsPayload(),
+					poll:that.pollPayload(),
 					token:that.token
 				}
 				uni.showLoading({
@@ -902,6 +1031,7 @@
 					toid:that.toid,
 					pic:that.pic,
 					topicIds:that.topicIdsPayload(),
+					poll:that.pollPayload(),
 					token:that.token
 				}
 				uni.showLoading({
@@ -2283,6 +2413,80 @@
 		background: rgba(24, 28, 30, 0.72);
 	}
 
+	.component-editor { width: calc(100% - 48rpx); margin: 14rpx 24rpx 0; box-sizing: border-box; }
+	.component-add { display: flex; align-items: center; min-height: 82rpx; padding: 8rpx 0; border-top: 1rpx solid #e5e9e8; box-sizing: border-box; }
+	.component-add-icon { display: flex; align-items: center; justify-content: center; width: 52rpx; height: 52rpx; margin-right: 14rpx; border-radius: 8rpx; background: #edf5f2; color: #287d69; font-size: 26rpx; }
+	.component-add-copy { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 12rpx; }
+	.component-add-copy > text:first-child { font-size: 25rpx; font-weight: 600; color: #344043; }
+	.component-add-copy > text:last-child { font-size: 21rpx; color: #929a9c; }
+	.component-add-arrow { color: #a2aaab; font-size: 24rpx; }
+	.poll-summary { display: flex; align-items: stretch; border: 1rpx solid #dfe6e4; border-radius: 10rpx; background: #f8faf9; overflow: hidden; }
+	.poll-summary-main { display: flex; align-items: center; flex: 1; min-width: 0; padding: 18rpx; }
+	.poll-summary-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 60rpx; height: 60rpx; margin-right: 16rpx; border-radius: 8rpx; background: #e5f2ee; color: #168573; font-size: 30rpx; }
+	.poll-summary-copy { flex: 1; min-width: 0; }
+	.poll-summary-label { font-size: 20rpx; font-weight: 600; color: #468175; }
+	.poll-summary-title { margin-top: 3rpx; color: #2d393c; font-size: 26rpx; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.poll-summary-meta { margin-top: 5rpx; color: #8b9496; font-size: 21rpx; }
+	.poll-summary-arrow { flex: 0 0 auto; margin-left: 12rpx; color: #a1aaab; font-size: 23rpx; }
+	.poll-remove { display: flex; align-items: center; justify-content: center; width: 72rpx; border-left: 1rpx solid #e3e9e7; color: #9a6969; font-size: 28rpx; }
+	.poll-remove:active { background: #f6eeee; }
+
+	.component-sheet-layer, .poll-modal-mask { position: fixed; z-index: 10010; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-top: 80rpx; background: rgba(18, 25, 27, .54); box-sizing: border-box; }
+	.component-sheet, .poll-modal { width: 100%; max-width: 680px; border-radius: 20rpx 20rpx 0 0; background: #fff; box-shadow: 0 -18rpx 50rpx rgba(20, 33, 35, .14); overflow: hidden; }
+	.component-sheet { padding: 0 28rpx calc(30rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
+	.sheet-handle { width: 58rpx; height: 7rpx; margin: 14rpx auto 20rpx; border-radius: 999rpx; background: #d7dddd; }
+	.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 24rpx; }
+	.sheet-title { color: #243033; font-size: 32rpx; font-weight: 700; line-height: 1.3; }
+	.sheet-subtitle { margin-top: 6rpx; color: #8a9496; font-size: 23rpx; }
+	.sheet-close { display: flex; align-items: center; justify-content: center; width: 64rpx; height: 64rpx; margin: -6rpx -10rpx 0 16rpx; border-radius: 50%; color: #7c8789; font-size: 30rpx; }
+	.sheet-close:active { background: #f0f3f2; }
+	.component-option { display: flex; align-items: center; min-height: 112rpx; padding: 16rpx; border: 1rpx solid #dfe6e4; border-radius: 10rpx; background: #f8faf9; box-sizing: border-box; }
+	.component-option:active { border-color: #a8c8bf; background: #edf6f3; }
+	.component-option-icon { display: flex; align-items: center; justify-content: center; width: 66rpx; height: 66rpx; margin-right: 16rpx; border-radius: 8rpx; background: #dfeee9; color: #168573; font-size: 32rpx; }
+	.component-option-copy { flex: 1; min-width: 0; }
+	.component-option-copy > view { color: #2d393c; font-size: 27rpx; font-weight: 650; }
+	.component-option-copy > text { display: block; margin-top: 5rpx; color: #7f898b; font-size: 21rpx; line-height: 1.45; }
+	.component-option-arrow { margin-left: 14rpx; color: #9ca5a6; font-size: 24rpx; }
+
+	.poll-modal { max-height: 92vh; }
+	.poll-modal > .sheet-handle { margin-bottom: 4rpx; }
+	.poll-modal-head { display: grid; grid-template-columns: 90rpx minmax(0, 1fr) 90rpx; align-items: center; min-height: 96rpx; padding: 0 24rpx 10rpx; border-bottom: 1rpx solid #e6eaea; box-sizing: border-box; }
+	.poll-cancel, .poll-save { font-size: 24rpx; }
+	.poll-cancel { color: #6f797b; }
+	.poll-save { justify-self: end; color: #168573; font-weight: 650; }
+	.poll-save.is-disabled { color: #aeb6b5; }
+	.poll-modal-heading { min-width: 0; text-align: center; }
+	.poll-modal-heading > view { color: #283437; font-size: 28rpx; font-weight: 700; }
+	.poll-modal-heading > text { display: block; margin-top: 4rpx; color: #99a1a3; font-size: 19rpx; }
+	.poll-modal-body { max-height: calc(92vh - 120rpx); padding: 22rpx 24rpx calc(34rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
+	.poll-section { margin-bottom: 20rpx; padding: 18rpx; border: 1rpx solid #e1e7e6; border-radius: 10rpx; background: #fafbfb; box-sizing: border-box; }
+	.poll-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14rpx; }
+	.poll-section-head > text:first-child { color: #344043; font-size: 24rpx; font-weight: 650; }
+	.poll-section-head > text:last-child { color: #98a0a2; font-size: 20rpx; }
+	.poll-input, .poll-intro, .poll-option-row { width: 100%; border: 1rpx solid #dfe5e4; border-radius: 7rpx; background: #fff; box-sizing: border-box; }
+	.poll-input { height: 74rpx; padding: 0 16rpx; color: #2b3639; font-size: 26rpx; }
+	.poll-intro { height: 104rpx; margin-top: 12rpx; padding: 14rpx 16rpx; color: #2f3a3d; font-size: 23rpx; line-height: 1.5; }
+	.poll-option-row { display: flex; align-items: center; min-height: 70rpx; margin-top: 10rpx; padding: 7rpx 9rpx 7rpx 12rpx; }
+	.poll-option-row:first-of-type { margin-top: 0; }
+	.poll-option-row input { flex: 1; min-width: 0; height: 54rpx; padding: 0 12rpx; color: #303c3f; font-size: 24rpx; }
+	.poll-option-index { display: flex; align-items: center; justify-content: center; width: 36rpx; height: 36rpx; border-radius: 50%; background: #e6f1ed; color: #287d69; font-size: 20rpx; font-weight: 650; }
+	.poll-option-remove { display: flex; align-items: center; justify-content: center; width: 48rpx; height: 48rpx; color: #9a7777; }
+	.poll-add-option { display: flex; align-items: center; justify-content: center; gap: 8rpx; height: 62rpx; margin-top: 10rpx; border: 1rpx dashed #b9cbc6; border-radius: 7rpx; color: #287d69; font-size: 23rpx; }
+	.poll-add-option.is-disabled { border-color: #dfe4e3; color: #a3abaa; }
+	.poll-rule-section { margin-bottom: 0; }
+	.poll-mode-segment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10rpx; }
+	.poll-mode-segment > view { display: flex; flex-direction: column; justify-content: center; min-height: 72rpx; padding: 8rpx 14rpx; border: 1rpx solid #dce3e1; border-radius: 7rpx; background: #fff; box-sizing: border-box; }
+	.poll-mode-segment > view.is-active { border-color: #78ad9f; background: #edf6f3; }
+	.poll-mode-segment text { color: #354144; font-size: 24rpx; font-weight: 600; }
+	.poll-mode-help, .poll-setting-help { margin-top: 3rpx; color: #8b9597; font-size: 19rpx; }
+	.poll-mode-segment > view.is-active text { color: #256f60; }
+	.poll-setting-row { display: flex; align-items: center; justify-content: space-between; min-height: 78rpx; margin-top: 14rpx; padding-top: 12rpx; border-top: 1rpx solid #e4e9e8; }
+	.poll-setting-row > view:first-child { display: flex; flex-direction: column; }
+	.poll-setting-row > view:first-child > text { color: #354144; font-size: 23rpx; font-weight: 600; }
+	.poll-choice-picker { min-width: 100rpx; padding: 14rpx 4rpx 14rpx 14rpx; color: #287d69; font-size: 23rpx; text-align: right; }
+	.poll-privacy-note { display: flex; align-items: flex-start; gap: 9rpx; margin: 0 4rpx; color: #8d9798; font-size: 20rpx; line-height: 1.5; }
+	.poll-privacy-note .cuIcon-lock { margin-top: 2rpx; color: #5c8178; }
+
 	.topic-editor {
 		width: calc(100% - 48rpx);
 		margin: 18rpx 24rpx 28rpx;
@@ -2514,6 +2718,41 @@
 	.campus-editor-page.campus-night .media-upload:active {
 		background: #222728 !important;
 	}
+
+	.campus-editor-page.campus-night .component-add { border-top-color: #2d3335; }
+	.campus-editor-page.campus-night .component-add-icon { background: #263531; color: #78b5a4; }
+	.campus-editor-page.campus-night .component-add-copy > text:first-child { color: #dfe4e5; }
+	.campus-editor-page.campus-night .component-add-copy > text:last-child, .campus-editor-page.campus-night .component-add-arrow { color: #778183; }
+	.campus-editor-page.campus-night .poll-summary { border-color: #303738; background: #191e1f; }
+	.campus-editor-page.campus-night .poll-summary-icon { background: #263a34; color: #78b5a4; }
+	.campus-editor-page.campus-night .poll-summary-label { color: #79aa9d; }
+	.campus-editor-page.campus-night .poll-summary-title { color: #e0e5e6; }
+	.campus-editor-page.campus-night .poll-summary-meta, .campus-editor-page.campus-night .poll-summary-arrow { color: #7f898b; }
+	.campus-editor-page.campus-night .poll-remove { border-left-color: #303738; color: #a98181; }
+	.campus-editor-page.campus-night .poll-remove:active { background: #2a2324; }
+	.campus-editor-page.campus-night .component-sheet-layer, .campus-editor-page.campus-night .poll-modal-mask { background: rgba(0, 0, 0, .68); }
+	.campus-editor-page.campus-night .component-sheet, .campus-editor-page.campus-night .poll-modal { background: #181d1e; box-shadow: 0 -18rpx 50rpx rgba(0, 0, 0, .28); }
+	.campus-editor-page.campus-night .sheet-handle { background: #3a4243; }
+	.campus-editor-page.campus-night .sheet-title, .campus-editor-page.campus-night .poll-modal-heading > view, .campus-editor-page.campus-night .poll-section-head > text:first-child { color: #e5e9ea; }
+	.campus-editor-page.campus-night .sheet-subtitle, .campus-editor-page.campus-night .poll-modal-heading > text { color: #899395; }
+	.campus-editor-page.campus-night .sheet-close, .campus-editor-page.campus-night .poll-cancel { color: #9aa3a5; }
+	.campus-editor-page.campus-night .sheet-close:active { background: #252b2c; }
+	.campus-editor-page.campus-night .component-option, .campus-editor-page.campus-night .poll-section { border-color: #303738; background: #1b2021; }
+	.campus-editor-page.campus-night .component-option:active { border-color: #4e8073; background: #23322e; }
+	.campus-editor-page.campus-night .component-option-icon { background: #2b403a; color: #78b5a4; }
+	.campus-editor-page.campus-night .component-option-copy > view { color: #e0e5e6; }
+	.campus-editor-page.campus-night .component-option-copy > text, .campus-editor-page.campus-night .component-option-arrow { color: #899395; }
+	.campus-editor-page.campus-night .poll-modal-head { border-bottom-color: #2d3435; }
+	.campus-editor-page.campus-night .poll-save.is-disabled { color: #606a6b; }
+	.campus-editor-page.campus-night .poll-input, .campus-editor-page.campus-night .poll-intro, .campus-editor-page.campus-night .poll-option-row, .campus-editor-page.campus-night .poll-mode-segment > view { border-color: #343b3c; background: #141819; color: #e1e6e7; }
+	.campus-editor-page.campus-night .poll-option-row input, .campus-editor-page.campus-night .poll-mode-segment text, .campus-editor-page.campus-night .poll-setting-row > view:first-child > text { color: #dce2e3; }
+	.campus-editor-page.campus-night .poll-option-index { background: #293b36; color: #81b7a7; }
+	.campus-editor-page.campus-night .poll-add-option { border-color: #40554f; color: #75ad9d; }
+	.campus-editor-page.campus-night .poll-add-option.is-disabled { border-color: #303738; color: #657071; }
+	.campus-editor-page.campus-night .poll-mode-segment > view.is-active { border-color: #4e8778; background: #24342f; }
+	.campus-editor-page.campus-night .poll-mode-segment > view.is-active text { color: #93c5b6; }
+	.campus-editor-page.campus-night .poll-mode-help, .campus-editor-page.campus-night .poll-setting-help, .campus-editor-page.campus-night .poll-privacy-note { color: #879193; }
+	.campus-editor-page.campus-night .poll-setting-row { border-top-color: #303738; }
 
 	.campus-editor-page.campus-night .topic-editor {
 		border-top-color: #2d3335;
