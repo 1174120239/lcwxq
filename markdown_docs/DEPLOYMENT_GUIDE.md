@@ -249,6 +249,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 008 | 008_simple_invitation.sql | 轻量邀请配置、邀请码和奖励记录表 |
 | 009 | 009_space_reports.sql | 动态举报、审核状态和审核审计表 |
 | 010 | 010_admin_password_hash.sql | 将 `starfree_admin_login.pw` 扩为 255 位，支持 PHP `password_hash()` |
+| 011 | 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
 
 规则：
 
@@ -288,6 +289,9 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 `starfree_admin_login` 并确认目标列当前定义；普通开发或组件发布不得顺带执行。未执行 010 时，
 后台仍可验证原 MD5 密码，但会跳过自动升级，避免将 `password_hash()` 结果截断后锁死管理员。
 只有用户明确要求迁移并通过带 `-RunMigrations` 的受控发布入口时才能执行。
+
+011 只新增用户资料、动态投票、AI 审核和分析事件表，并写入一行默认 AI 配置；执行前按表备份，
+确认 001-010 已完成，执行后再部署依赖这些表的 replacement JAR。普通开发和组件发布不会执行 011。
 
 001 可使用：
 

@@ -601,8 +601,11 @@
 		},
 		onPullDownRefresh() {
 			var that = this;
+			var stopRefresh = function() {
+				uni.stopPullDownRefresh();
+			};
 				if (that.squareid == 0 && that.contentMode === 'qa') {
-					that.loadQuestionList(false, function() { uni.stopPullDownRefresh(); });
+					that.loadQuestionList(false, stopRefresh);
 					return;
 				}
 				if (that.follow == 2 && that.squareid == 0) {
@@ -627,9 +630,7 @@
 					that.getSpaceList(false);
 				}
 			
-			var timer = setTimeout(function() {
-				uni.stopPullDownRefresh();
-			}, 1000)
+			setTimeout(stopRefresh, 1200)
 		},
 		onReachBottom() {
 			//触底后执行的方法，比如无限加载之类的
@@ -697,10 +698,15 @@
 			plus.navigator.setStatusBarStyle(that.campusNight ? "light" : "dark")
 			// #endif
 			if (localStorage.getItem('userinfo')) {
-
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");";
-				that.uid = that.userInfo.uid;
+				try {
+					that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
+					that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");";
+					that.uid = that.userInfo.uid;
+				} catch (error) {
+					localStorage.removeItem('userinfo');
+					that.userInfo = null;
+					that.uid = 0;
+				}
 			}
 			if (localStorage.getItem('token')) {
 
@@ -710,7 +716,13 @@
 			}
 			if (!restoreSpacePosition) that.getTopicCenter();
 			if (localStorage.getItem('chatList')) {
-				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
+				try {
+					var cachedChatList = JSON.parse(localStorage.getItem('chatList'));
+					that.oldChatList = Array.isArray(cachedChatList) ? cachedChatList : [];
+				} catch (error) {
+					localStorage.removeItem('chatList');
+					that.oldChatList = [];
+				}
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
 			}
 			that.userStatus();
@@ -1954,15 +1966,16 @@
 				if (a == null || b == null) return false;
 				if (a.length != b.length) return false;
 				for (var c in a) {
+					var match = false;
 					for (var d in b) {
-						if (b[d].id == a[c].id) {
-							if (b[d].lastTime != a[c].lastTime) {
-								return false;
-							}
+						if (String(b[d].id) === String(a[c].id)) {
+							match = b[d].lastTime == a[c].lastTime;
+							break;
 						}
-
 					}
+					if (!match) return false;
 				}
+				return true;
 			},
 			chatFormatDate(datetime) {
 				var datetime = new Date(parseInt(datetime * 1000));
@@ -2043,8 +2056,12 @@
 				var page = that.page;
 				var token = "";
 				if(localStorage.getItem('userinfo')){
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token=userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token=userInfo && userInfo.token ? userInfo.token : that.token;
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				
 				if(isPage){
@@ -2125,7 +2142,7 @@
 				
 				if(localStorage.getItem('userinfo')){
 					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token=userInfo.token;
+					token=userInfo && userInfo.token ? userInfo.token : that.token;
 				}
 				if(isPage){
 					page++;

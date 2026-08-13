@@ -50,6 +50,13 @@ Assert-Tool tar
 Assert-Tool ssh
 Assert-Tool scp
 
+$featureBaseline = Join-Path $PSScriptRoot 'verify-feature-baseline.ps1'
+if (-not (Test-Path -LiteralPath $featureBaseline -PathType Leaf)) {
+    throw "Feature baseline verifier is missing: $featureBaseline"
+}
+& $featureBaseline -RepoRoot $repoRoot
+if ($LASTEXITCODE -ne 0) { throw 'Feature baseline verification failed.' }
+
 $status = Invoke-Git @('status', '--porcelain')
 if ($status) { throw "The working tree is not clean. Commit or resolve these files first:`n$status" }
 $commit = Invoke-Git @('rev-parse', "$Ref^{commit}")

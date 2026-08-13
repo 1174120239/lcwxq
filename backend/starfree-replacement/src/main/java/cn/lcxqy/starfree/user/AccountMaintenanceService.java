@@ -62,6 +62,14 @@ public class AccountMaintenanceService {
         return result;
     }
 
+    public boolean containsAccountFields(Map<String, Object> body) {
+        if (body == null) return false;
+        String[] fields = {"screenName", "introduce", "userBg", "url", "avatar", "address",
+                "pay", "mail", "phone", "password"};
+        for (String field : fields) if (body.containsKey(field)) return true;
+        return false;
+    }
+
     public int forgotPassword(Map<String, Object> body) {
         RegistrationConfig initialConfig = registrationRepository.config();
         if (!initialConfig.isEmailRequired()) {

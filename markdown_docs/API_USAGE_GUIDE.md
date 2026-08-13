@@ -152,11 +152,11 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，普通会话 90 天无操作过期并滑动续期，不能用 MySQL `authCode` 恢复过期会话。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；新密码执行统一强度策略；成功后撤销关联会话。 |
-| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
+| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；可选 `gender,birthday,showGender,showBirthday` 保存用户资料及公开开关；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
 | `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`，同时按阈值续期活跃会话；失效为 `code=0`。 |
-| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`。 |
+| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`，以及按 `showGender/showBirthday` 控制的性别和生日。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
@@ -314,7 +314,7 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 | `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 代码新/公网旧 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
 | `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | 管理端举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回，返回举报人、动态摘要和动态是否已删除。 |
-| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note` | 代码新/公网旧 | `action=delete` 通过举报并删除原动态，同时关闭该动态的全部待处理举报；`action=dismiss` 只驳回当前举报。记录审核人、结果、说明和时间。 |
+| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 普通举报不传或传 `source=report`；`action=delete` 通过举报并删除原动态，同时关闭该动态的全部待处理举报；`action=dismiss` 只驳回当前举报。AI 队列传 `source=ai`，`action=approve` 公开动态，`delete` 拒绝并删除。记录审核人、结果、说明和时间。 |
 | `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 代码新/公网新 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。成功响应中的 `totalVotes/options[].votes/options[].selected` 用于渲染结果条。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。

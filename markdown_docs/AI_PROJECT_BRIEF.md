@@ -144,6 +144,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 007_campus_qa.sql | 校园问答问题、回答、回答点赞、评论和回复 |
 | 009_space_reports.sql | 动态举报、处理状态和 staff 审核审计 |
 | 010_admin_password_hash.sql | 将 PHP admin 密码列扩为 `VARCHAR(255)`，允许安全保存 `password_hash()` 结果 |
+| 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
 
 ## 5. 请求和响应约定
 

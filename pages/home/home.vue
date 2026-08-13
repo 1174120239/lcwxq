@@ -450,13 +450,13 @@
 		<!--加载遮罩结束-->
 		<!--弹窗公告-->
 		<view class="announcement" v-if="isAnnouncement&&Update!=1">
-			<view class="announcement-bg" @tap="isAnnouncement=false">
+			<view class="announcement-bg" @tap="readAnnouncement">
 
 			</view>
 			<view class="announcement-main">
 				<view class="announcement-title">
 					公告
-					<text class="cuIcon-close text-red" @tap="isAnnouncement=false"></text>
+					<text class="cuIcon-close text-red" @tap.stop="readAnnouncement"></text>
 				</view>
 				<view class="announcement-concent" style="background-color: white;">
 					<rich-text :nodes="announcement"></rich-text>
@@ -757,11 +757,16 @@
 				if (that.$refs.publishPanel) that.$refs.publishPanel.activatePage()
 				// #endif
 			})
-			if (localStorage.getItem('userinfo')) {
-
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");"
-				that.group = that.userInfo.group;
+			var cachedUser = localStorage.getItem('userinfo');
+			if (cachedUser) {
+				try {
+					that.userInfo = JSON.parse(cachedUser);
+					that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");"
+					that.group = that.userInfo.group;
+				} catch (error) {
+					localStorage.removeItem('userinfo');
+					that.userInfo = null;
+				}
 			} else {
 				that.userInfo = null;
 			}
@@ -858,7 +863,8 @@
 			//插件检测
 			var cachedPlugins = localStorage.getItem('getPlugins');
 			if (cachedPlugins) {
-				const pluginList = JSON.parse(cachedPlugins);
+				let pluginList = [];
+				try { pluginList = JSON.parse(cachedPlugins); } catch (error) { localStorage.removeItem('getPlugins'); }
 				// 检查插件是否存在于插件列表中
 				that.sy_appbox = pluginList.includes('sy_appbox'); 
 			}
@@ -1161,8 +1167,12 @@
 				}
 				var token = "";
 				if (localStorage.getItem('userinfo')) {
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token = userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token = userInfo && userInfo.token ? userInfo.token : '';
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				that.$Net.request({
 					url: that.$API.getContentsList(),
@@ -1732,8 +1742,12 @@
 				}
 				var token = "";
 				if (localStorage.getItem('userinfo')) {
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token = userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token = userInfo && userInfo.token ? userInfo.token : '';
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				that.$Net.request({
 					url: that.$API.getContentsList(),
@@ -2140,8 +2154,7 @@
 			readAnnouncement() {
 				var that = this;
 				that.isAnnouncement = false;
-				var timestamp = new Date().getTime();
-				localStorage.setItem('isAnnouncement', timestamp);
+				if (that.announcement) localStorage.setItem('isAnnouncement', that.announcement);
 
 			},
 			toAllContents() {
@@ -2194,20 +2207,10 @@
 					},
 					method: 'get',
 					success: function(res) {
-						that.announcement = res.data.announcement;
-						if (that.announcement != "" || res.data.announcement) {
-							if (localStorage.getItem('isAnnouncement')) {
-								var oldTime = Number(localStorage.getItem('isAnnouncement'));
-								var curTime = new Date().getTime();
-								var difference = curTime - oldTime;
-								if (difference > that.gonggaotime) {
-									that.isAnnouncement = true;
-								}
-							} else {
-								that.isAnnouncement = true;
-							}
-			
-						}
+						that.announcement = res.data && typeof res.data.announcement === 'string'
+							? res.data.announcement.trim() : '';
+						that.isAnnouncement = Boolean(that.announcement &&
+							localStorage.getItem('isAnnouncement') !== that.announcement);
 			
 					},
 					fail: function(res) {

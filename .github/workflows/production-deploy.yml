@@ -41,6 +41,10 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 1
 
+      - name: Verify feature baseline
+        shell: pwsh
+        run: ./deploy/verify-feature-baseline.ps1
+
       - name: Reject database migration request
         if: inputs.run_migrations
         run: |

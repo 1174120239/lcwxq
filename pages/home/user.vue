@@ -64,9 +64,13 @@
 					<spaceItem :spaceList="profileSpaceList" :compact="true"></spaceItem>
 				</view>
 				<view class="profile-dynamic-loading" v-else-if="profileSpaceLoading"><view class="campus-loader"></view></view>
+				<view class="profile-empty-state" v-else-if="profileSpaceError">
+					<text class="cuIcon-warn"></text><text>动态加载失败</text>
+					<view @tap="refreshProfile(false)">重新加载</view>
+				</view>
 				<view class="profile-empty-state" v-else>
-					<text class="cuIcon-community"></text><text>动态会记录在这里</text>
-					<view @tap="toLink('/pages/space/post')">发布第一条动态</view>
+					<text class="cuIcon-community"></text><text>{{userInfo ? '动态会记录在这里' : '登录后查看你的动态'}}</text>
+					<view @tap="userInfo ? toLink('/pages/space/post') : toLogin()">{{userInfo ? '发布第一条动态' : '去登录'}}</view>
 				</view>
 			</view>
 		</view>
@@ -292,6 +296,8 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				profileTab: 1,
 				profileSpaceList: [],
 				profileSpaceLoading: false,
+				profileSpaceError: false,
+				profileRefreshPending: false,
 				showProfileMenu: false,
 				StatusBar: this.StatusBar,
 				CustomBar: this.CustomBar,
@@ -330,8 +336,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			}
 		},
 		onPullDownRefresh(){
-			var that = this;
-			
+			this.refreshProfile(true)
 		},
 		onShow(){
 			var that = this;
@@ -352,22 +357,25 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			
 			plus.navigator.setStatusBarStyle(that.profileNight ? "light" : "dark")
 			// #endif
-			if(localStorage.getItem('userinfo')){
-				
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url("+that.userInfo.avatar+");"
-				that.avatar = that.userInfo.avatar;
-				that.uid = that.userInfo.uid;
-				that.group = that.userInfo.group;
-				if(that.userInfo.screenName){
-					that.name = that.userInfo.screenName;
-				}else{
-					that.name = that.userInfo.name;
+			var cachedUser = localStorage.getItem('userinfo')
+			if(cachedUser){
+				try {
+					that.userInfo = JSON.parse(cachedUser);
+				} catch (error) {
+					localStorage.removeItem('userinfo')
+					that.userInfo = null
+				}
+					if (that.userInfo) {
+					that.userInfo.style = "background-image:url("+that.userInfo.avatar+");"
+					that.avatar = that.userInfo.avatar;
+					that.uid = that.userInfo.uid;
+					that.group = that.userInfo.group;
+					that.name = that.userInfo.screenName || that.userInfo.name || '';
+				} else {
+					that.resetProfileState()
 				}
 			}else{
-				that.userInfo =null;
-				that.uid = 0;
-				that.avatar = '';
+				that.resetProfileState()
 			}
 			if(localStorage.getItem('token')){
 				
@@ -375,10 +383,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			}else{
 				that.token = "";
 			}
-			that.getUserData();
-			that.userStatus();
-			that.unreadNum();
-			that.getProfileSpaceList();
+			that.refreshProfile(false)
 			
 		},
 		onHide() {
@@ -442,9 +447,11 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				if (!that.uid) {
 					that.profileSpaceList = []
 					that.profileSpaceLoading = false
+					that.profileSpaceError = false
 					return
 				}
 				that.profileSpaceLoading = true
+				that.profileSpaceError = false
 				const searchParams = { uid: that.uid }
 				that.$Net.request({
 					url: that.$API.spaceList(),
@@ -459,7 +466,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 					dataType: 'json',
 					success(res) {
 						if (res.data.code === 1) {
-							const list = res.data.data || []
+							const list = Array.isArray(res.data.data) ? res.data.data : []
 							list.forEach((item) => {
 								if (item.type === 0) item.picList = item.pic ? item.pic.split('||') : []
 							})
@@ -470,10 +477,49 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 						that.profileSpaceLoading = false
 					},
 					fail() {
-						that.profileSpaceList = []
+						that.profileSpaceError = true
 						that.profileSpaceLoading = false
 					}
 				})
+			},
+			refreshProfile(fromPullDown) {
+				if (this.profileRefreshPending) {
+					if (fromPullDown) uni.stopPullDownRefresh()
+					return
+				}
+				if (!this.token) {
+					this.resetProfileState()
+					if (fromPullDown) uni.stopPullDownRefresh()
+					return
+				}
+				this.profileRefreshPending = true
+				this.profileSpaceError = false
+				this.getUserData()
+				this.userStatus()
+				this.unreadNum()
+				this.getProfileSpaceList()
+				setTimeout(() => {
+					this.profileRefreshPending = false
+					if (fromPullDown) uni.stopPullDownRefresh()
+				}, 900)
+			},
+			resetProfileState() {
+				this.userInfo = null
+				this.name = ''
+				this.uid = 0
+				this.token = ''
+				this.userData = {}
+				this.group = ''
+				this.avatar = ''
+				this.fancount = 0
+				this.isClock = 0
+				this.isvip = 0
+				this.vip = 0
+				this.noticeSum = 0
+				this.profileRefreshPending = false
+				this.profileSpaceList = []
+				this.profileSpaceLoading = false
+				this.profileSpaceError = false
 			},
 			getfsgz() {
 			  var that = this;
@@ -784,12 +830,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 							that.isClock = profileData.isClock;
 						}
 					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+					fail: function() {}
 				})
 			},
 			syncDynamicCommentCount() {
@@ -944,15 +985,10 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 							}
 							localStorage.removeItem('userinfo');
 							localStorage.removeItem('token');
-							that.userInfo = null;
+							that.resetProfileState();
 						}
 					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦",
-							icon: 'none'
-						})
-					}
+					fail: function() {}
 				})
 			},
 			getVipInfo(){
@@ -1149,12 +1185,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 							that.noticeSum = res.data.data;
 						}
 					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+					fail: function() {}
 				})
 			},
 			goFanList(uid){

@@ -101,7 +101,7 @@
 				this.playIntro()
 			},
 			playIntro() {
-				if (!this.visible) return
+				if (!this.visible || this.isReady) return
 				clearTimeout(this.introTimer)
 				this.isReady = false
 				this.$nextTick(() => {

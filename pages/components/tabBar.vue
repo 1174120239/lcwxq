@@ -69,14 +69,18 @@
 			activate() {
 				clearTimeout(this.dockTimer)
 				clearTimeout(this.publishTimer)
-				this.dockReady = false
+				const shouldAnimate = !this.dockReady
+				this.dockReady = true
 				this.$nextTick(() => {
-					this.dockTimer = setTimeout(() => {
-						this.dockReady = true
-					}, 30)
+					if (shouldAnimate) {
+						this.dockReady = false
+						this.dockTimer = setTimeout(() => {
+							this.dockReady = true
+						}, 30)
+					}
 					this.publishTimer = setTimeout(() => {
 						if (this.$refs.publishPanel) this.$refs.publishPanel.activatePage()
-					}, this.current < 2 ? 110 : 30)
+					}, shouldAnimate && this.current < 2 ? 110 : 0)
 				})
 			},
 			tabbarChange(path) {

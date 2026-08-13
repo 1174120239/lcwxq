@@ -101,6 +101,12 @@ setx LCXQY_SSH_KEY "$env:USERPROFILE\.ssh\lcxqy_deploy"
 
 发布脚本只接受干净工作区和当前 commit；它会构建/校验组件、生成带 manifest 和 SHA-256 的压缩包、通过 SSH/SCP 上传到服务器临时目录，再调用服务器固定入口。`all` 按顺序处理三个组件，不会自动执行迁移或 Nginx 切流。
 
+发布入口和 GitHub Actions 会先运行 `deploy/verify-feature-baseline.ps1`。该检查不编译前端、不连接服务器，只验证动态数据分析、用户详情、AI 审核、投票及相关接口文件仍然存在，避免分支合并时整块功能被删除后继续发布。日常合并前也可以单独运行：
+
+```powershell
+.\deploy\verify-feature-baseline.ps1
+```
+
 数据库迁移不属于普通一键发布。只有先按 `DEPLOYMENT_GUIDE.md` 审查迁移和备份数据库后，才可在独立维护任务中执行；发布参数 `-RunMigrations` 会故意中止并提醒维护者，不会静默修改数据库。
 
 ## GitHub Actions

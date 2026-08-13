@@ -70,6 +70,8 @@ public class SpaceService {
     private final SpaceTopicService topics;
     private final UniPushService push;
     private final EmailNotificationService email;
+    private SpacePollService polls;
+    private AiModerationService aiModeration;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
@@ -87,6 +89,16 @@ public class SpaceService {
         this.topics = new SpaceTopicService(jdbc);
         this.push = push;
         this.email = email;
+    }
+
+    @Autowired
+    void setPolls(SpacePollService polls) {
+        this.polls = polls;
+    }
+
+    @Autowired
+    void setAiModeration(AiModerationService aiModeration) {
+        this.aiModeration = aiModeration;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -113,9 +125,15 @@ public class SpaceService {
         if (type == 4 && (pic == null || pic.isEmpty())) {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
-        boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
+        SpacePollService.PollDraft pollDraft = polls == null ? null
+                : polls.draft(RequestValues.text(request, "poll"));
+        boolean mediaAllowsEmptyText = type == 0 && ((pic != null && !pic.isEmpty())
+                || pollDraft != null);
         String text = validateText(request.get("text"), mediaAllowsEmptyText, type == 3 ? 1 : 4);
         List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
+        if (pollDraft != null && type != 0) {
+            throw new IllegalArgumentException("\u6295\u7968\u53ea\u80fd\u6dfb\u52a0\u5230\u666e\u901a\u52a8\u6001");
+        }
         SpaceConfig config = config();
 
         Map<String, Object> user = viewer.user;
@@ -155,22 +173,46 @@ public class SpaceService {
         if (type == 3 && recentDuplicateReply(viewer.uid, toid, text, now)) {
             return false;
         }
-        int status = config.spaceAudit == 1 ? 0 : 1;
+        boolean aiEnabled = type != 3 && config.spaceAudit != 1
+                && aiModeration != null && aiModeration.enabled();
+        int status = (config.spaceAudit == 1 || aiEnabled) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
         boolean published = false;
+        long spaceId = 0;
         try {
-            int inserted = jdbc.update(
-                    "INSERT INTO starfree_space "
-                            + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
-                            + "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    viewer.uid, now, now, text.replace("||rn||", "\r\n"),
-                    pic, type, 0, toid, status, onlyMe);
+            String sql = "INSERT INTO starfree_space "
+                    + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            final String contentText = text.replace("||rn||", "\r\n");
+            final String contentPic = pic;
+            final int contentType = type;
+            final int contentToId = toid;
+            final int contentStatus = status;
+            final int contentOnlyMe = onlyMe;
+            int inserted = jdbc.update(connection -> {
+                PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+                int i = 1;
+                statement.setLong(i++, viewer.uid);
+                statement.setLong(i++, now);
+                statement.setLong(i++, now);
+                statement.setString(i++, contentText);
+                statement.setString(i++, contentPic);
+                statement.setInt(i++, contentType);
+                statement.setInt(i++, 0);
+                statement.setInt(i++, contentToId);
+                statement.setInt(i++, contentStatus);
+                statement.setInt(i++, contentOnlyMe);
+                return statement;
+            }, keyHolder);
             if (inserted != 1) {
                 throw new IllegalStateException("Space insert did not affect exactly one row");
             }
             published = true;
+            Number generatedId = keyHolder.getKey();
+            if (generatedId != null) spaceId = generatedId.longValue();
         } finally {
             if (!published) {
                 // starfree_space is MyISAM: only release the Redis quota when no row was written.
@@ -180,19 +222,40 @@ public class SpaceService {
 
         if (!topicIds.isEmpty()) {
             try {
-                Long spaceId = jdbc.queryForObject(
-                        "SELECT id FROM starfree_space WHERE uid=? AND created=? AND modified=? "
-                                + "AND type=? ORDER BY id DESC LIMIT 1",
-                        Long.class, viewer.uid, now, now, type);
-                if (spaceId == null || spaceId <= 0) {
-                    throw new IllegalStateException("Published Space id could not be read");
+                if (spaceId <= 0) {
+                    Long resolved = jdbc.queryForObject("SELECT id FROM starfree_space WHERE uid=? AND created=? AND modified=? AND type=? ORDER BY id DESC LIMIT 1", Long.class, viewer.uid, now, now, type);
+                    spaceId = resolved == null ? 0 : resolved;
                 }
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
                 topics.replace(spaceId, topicIds);
             } catch (RuntimeException error) {
                 // The MyISAM Space row already exists. Do not make the client retry and create a
                 // duplicate; log the missing secondary relation for operational repair instead.
                 LOG.error("Space was published but its topic relations could not be saved for uid {}",
                         viewer.uid, error);
+            }
+        }
+
+        if (pollDraft != null) {
+            try {
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
+                polls.create(spaceId, pollDraft);
+            } catch (RuntimeException error) {
+                LOG.error("Could not create poll for new space {}; keeping dynamic pending", spaceId, error);
+                if (spaceId > 0) {
+                    try { jdbc.update("UPDATE starfree_space SET status=0 WHERE id=?", spaceId); }
+                    catch (RuntimeException ignored) { }
+                }
+            }
+        }
+
+        if (aiEnabled) {
+            if (spaceId > 0) {
+                AiModerationService.Decision decision = aiModeration.review(spaceId, viewer.uid, text, pic);
+                status = decision.isSafe() ? 1 : 0;
+            } else {
+                status = 0;
+                sendSystemNotice(0, viewer.uid, "\u4f60\u7684\u52a8\u6001\u6b63\u5728\u4eba\u5de5\u5ba1\u6838\uff1a\u5ba1\u6838\u8bb0\u5f55\u6682\u65f6\u65e0\u6cd5\u5efa\u7acb");
             }
         }
 
@@ -280,7 +343,9 @@ public class SpaceService {
         }
 
         long now = Instant.now().getEpochSecond();
-        int status = (config.spaceAudit == 1 || reviewRequired) ? 0 : 1;
+        boolean aiEnabled = config.spaceAudit != 1 && !reviewRequired
+                && aiModeration != null && aiModeration.enabled();
+        int status = (config.spaceAudit == 1 || reviewRequired || aiEnabled) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
@@ -336,6 +401,10 @@ public class SpaceService {
         } catch (RuntimeException error) {
             LOG.error("Anonymous space {} was published but owner mapping could not be saved for uid {}",
                     spaceId, viewer.uid, error);
+        }
+        if (aiEnabled) {
+            AiModerationService.Decision decision = aiModeration.review(spaceId, viewer.uid, text, pic);
+            status = decision.isSafe() ? 1 : 0;
         }
         try {
             jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
@@ -433,6 +502,7 @@ public class SpaceService {
         }
         if (type == 0) {
             removeTopicsBestEffort(id);
+            if (polls != null) polls.removeForSpace(id);
         }
         if (type == 1 && number(get(space, "type")) == 3) {
             notifySpaceComment(number(get(space, "uid")), space,
@@ -564,11 +634,21 @@ public class SpaceService {
             throw new IllegalStateException("Space delete did not affect exactly one row");
         }
         removeTopicsBestEffort(id);
+        if (polls != null) polls.removeForSpace(id);
         if (viewer.staff && owner != viewer.uid) {
             sendSystemNotice(viewer.uid, owner,
                     "\u4f60\u7684\u52a8\u6001\u3010" + value(get(space, "text"))
                             + "\u3011\u5df2\u88ab\u5220\u9664");
         }
+        return changed;
+    }
+
+    int deleteForModeration(long id) {
+        Map<String, Object> space = requireSpace(id);
+        int changed = jdbc.update("DELETE FROM starfree_space WHERE id = ?", id);
+        if (changed != 1) throw new IllegalStateException("Space moderation delete did not affect one row");
+        removeTopicsBestEffort(id);
+        if (polls != null) polls.removeForSpace(id);
         return changed;
     }
 
@@ -686,6 +766,10 @@ public class SpaceService {
                 "SELECT COUNT(*) FROM starfree_fan WHERE uid = ? AND touid = ?",
                 viewer.uid, owner));
         result.put("topics", topics.forSpace(id, viewer.uid));
+        if (polls != null) {
+            Map<String, Object> poll = polls.forSpace(id, viewer.uid);
+            if (poll != null) result.put("poll", poll);
+        }
 
         // Public counters use public rows only; pending/private replies must not leak through
         // aggregate values even when their bodies are filtered from the list.

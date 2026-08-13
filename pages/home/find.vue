@@ -57,8 +57,13 @@
 				<view class="cu-card dynamic no-card">
 					<view class="cu-item">
 						<view class="cu-list menu-avatar comment" style="border-radius: 20px;">
-							<view class="no-data" v-if="inboxList.length==0">
-								暂时没有消息
+							<view class="message-loading" v-if="messageLoading && inboxList.length==0">
+								<view class="campus-loader"></view>
+							</view>
+							<view class="no-data" v-else-if="inboxList.length==0">
+								<text class="cuIcon-notice"></text>
+								<text>{{messageError ? '消息加载失败' : '暂时没有消息'}}</text>
+								<view class="message-empty-action" v-if="messageError" @tap="refreshMessages">重新加载</view>
 							</view>
 							<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
 								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
@@ -212,6 +217,14 @@
 					</block>
 					
 				</view>
+				<view class="no-data" v-else-if="!messageLoading">
+					<text class="cuIcon-friend"></text>
+					<text>{{messageError ? '私聊加载失败' : '暂时没有私聊'}}</text>
+					<view class="message-empty-action" v-if="messageError" @tap="refreshMessages">重新加载</view>
+				</view>
+				<view class="message-loading" v-else>
+					<view class="campus-loader"></view>
+				</view>
 				
 			</block>
 			</view>
@@ -279,6 +292,9 @@
 				
 				isLoading:0,
 				isLoad:0,
+				messageLoading:false,
+				messageError:false,
+				messageGeneration:0,
 				// 请求锁避免页面重复显示或快速切换时产生并发列表请求。
 				inboxRequesting:false,
 				chatRequesting:false,
@@ -297,8 +313,7 @@
 			}
 		},
 		onPullDownRefresh(){
-			var that = this;
-			
+			this.refreshMessages()
 		},
 		onHide() {
 			var that = this
@@ -336,24 +351,46 @@
 				// #endif
 			})
 			that.page=1;
+			that.messageGeneration++;
 			// #ifdef APP-PLUS
 			
 			
 			plus.navigator.setStatusBarStyle(that.campusNight ? "light" : "dark")
 			// #endif
-			if(localStorage.getItem('userinfo')){
-				
-				var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.uid = userInfo.uid;
+			var cachedUser = localStorage.getItem('userinfo')
+			if(cachedUser){
+				try {
+					var userInfo = JSON.parse(cachedUser);
+					that.uid = userInfo && userInfo.uid ? userInfo.uid : 0;
+				} catch (error) {
+					localStorage.removeItem('userinfo')
+					that.uid = 0
+				}
+			}else{
+				that.uid = 0
 			}
 			if(localStorage.getItem('token')){
 				
 				that.token = localStorage.getItem('token');
-				that.getInboxList(false);
+				that.messageLoading = true
+				if (that.type === 'chat' && that.privateChatEnabled) that.getMyChat(false);
+				else that.getInboxList(false);
 				that.setRead();
+			}else{
+				that.token = ''
+				that.inboxList = []
+				that.chatList = []
+				that.messageError = false
+				that.messageLoading = false
 			}
 			if(localStorage.getItem('chatList')){
-				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
+				try {
+					var cachedChatList = JSON.parse(localStorage.getItem('chatList'));
+					that.oldChatList = Array.isArray(cachedChatList) ? cachedChatList : [];
+				} catch (error) {
+					localStorage.removeItem('chatList')
+					that.oldChatList = []
+				}
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
 			}
 			
@@ -422,6 +459,19 @@
 						that.getInboxList(true);
 					}
 				}
+			},
+			refreshMessages() {
+				if (!this.token) {
+					this.messageLoading = false
+					uni.stopPullDownRefresh()
+					return
+				}
+				this.page = 1
+				this.moreText = '加载更多'
+				this.messageError = false
+				this.messageLoading = true
+				if (this.type === 'inbox') this.getInboxList(false, true)
+				else this.getMyChat(false, true)
 			},
 			markHtml(text){
 				var that = this;
@@ -505,8 +555,11 @@
 					return false;
 				}
 				that.type=i;
+				that.messageGeneration++;
 				that.page=1;
 				that.moreText="加载更多";
+				that.messageError = false;
+				that.messageLoading = true;
 				that.isLoad=0;
 				if(i=="inbox"){
 					clearInterval(that.chatLoading);
@@ -519,14 +572,16 @@
 				
 				
 			},
-			getInboxList(isPage){
+			getInboxList(isPage, fromPullDown){
 				var that = this;
+				var requestGeneration = that.messageGeneration;
 				var page = that.page;
 				if(isPage){
 					page++;
 				}
 				if(that.token=="" || that.inboxRequesting){
-					
+					if (fromPullDown) uni.stopPullDownRefresh()
+					if (fromPullDown) that.messageLoading = false
 					return false
 				}
 				that.inboxRequesting = true;
@@ -545,9 +600,10 @@
 					dataType: 'json',
 					timeout: 15000,
 					success: function(res) {
+						if (requestGeneration !== that.messageGeneration || that.type !== 'inbox') return;
 						that.isLoad=0;
 						if(res.data.code==1){
-							var list = res.data.data;
+							var list = Array.isArray(res.data.data) ? res.data.data : [];
 							if(list.length>0){
 								var inboxList = [];
 								for(var i in list){
@@ -561,10 +617,13 @@
 								}else{
 									that.inboxList = inboxList;
 								}
-							}else{
+							}else if (!isPage){
+								that.inboxList = []
 								that.moreText="没有更多消息了";
 							}
-							
+							that.messageError = false
+						} else if (!isPage) {
+							that.messageError = true
 						}
 						var timer = setTimeout(function() {
 							that.isLoading=1;
@@ -572,7 +631,9 @@
 						}, 300)
 					},
 					fail: function(res) {
+						if (requestGeneration !== that.messageGeneration || that.type !== 'inbox') return;
 						that.isLoad=0;
+						that.messageError = true
 						that.moreText="加载更多";
 						var timer = setTimeout(function() {
 							that.isLoading=1;
@@ -582,6 +643,8 @@
 					complete: function() {
 						that.inboxRequesting = false;
 						that.isLoad = 0;
+						if (requestGeneration === that.messageGeneration && that.type === 'inbox') that.messageLoading = false;
+						if (fromPullDown) uni.stopPullDownRefresh()
 					}
 				})
 			},
@@ -598,14 +661,16 @@
 				});
 			},
 			//为了性能考虑，只显示最近30条聊天
-			getMyChat(isPage){
+			getMyChat(isPage, fromPullDown){
 				var that = this;
+				var requestGeneration = that.messageGeneration;
 				var page = that.page;
 				if(isPage){
 					page++;
 				}
 				if(that.token=="" || that.chatRequesting){
-					
+					if (fromPullDown) uni.stopPullDownRefresh()
+					if (fromPullDown) that.messageLoading = false
 					return false
 				}
 				that.chatRequesting = true;
@@ -624,9 +689,10 @@
 					dataType: 'json',
 					timeout: 15000,
 					success: function(res) {
+						if (requestGeneration !== that.messageGeneration || that.type !== 'chat') return;
 						that.isLoad=0;
 						if(res.data.code==1){
-							var list = res.data.data;
+							var list = Array.isArray(res.data.data) ? res.data.data : [];
 							if(list.length>0){
 								var chatList = [];
 								for(var i in list){
@@ -680,9 +746,13 @@
 									
 									
 								}
-							}else{
+							}else if (!isPage){
+								that.chatList = []
 								that.moreText="没有更多消息了";
 							}
+							that.messageError = false
+						} else if (!isPage) {
+							that.messageError = true
 							
 						}
 						var timer = setTimeout(function() {
@@ -691,7 +761,9 @@
 						}, 300)
 					},
 					fail: function(res) {
+						if (requestGeneration !== that.messageGeneration || that.type !== 'chat') return;
 						that.isLoad=0;
+						that.messageError = true
 						that.moreText="加载更多";
 						var timer = setTimeout(function() {
 							that.isLoading=1;
@@ -700,6 +772,8 @@
 					},
 					complete: function() {
 						that.chatRequesting = false;
+						if (requestGeneration === that.messageGeneration && that.type === 'chat') that.messageLoading = false;
+						if (fromPullDown) uni.stopPullDownRefresh()
 					}
 				})
 			},
@@ -707,16 +781,17 @@
 				if (a === b) return true;
 				if (a == null || b == null) return false;
 				if (a.length != b.length) return false;
-				for(var c in a){
-					for(var d in b){
-						if(b[d].id == a[c].id){
-							if(b[d].lastTime != a[c].lastTime){
-								return false;
-							}
+				for (var c in a) {
+					var match = false;
+					for (var d in b) {
+						if (String(b[d].id) === String(a[c].id)) {
+							match = b[d].lastTime == a[c].lastTime;
+							break;
 						}
-						
 					}
+					if (!match) return false;
 				}
+				return true;
 			},
 			commentsAdd(title,coid,reply,cid){
 				var that = this;
@@ -830,10 +905,7 @@
 						}
 					},
 					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
+						// 读取失败由列表空态展示重试入口，避免重复弹窗打断浏览。
 					}
 				})
 			},
@@ -933,11 +1005,49 @@
   border-bottom: solid 2px #3cc9a4;
   color: #3cc9a4;
 }
-	.no-data .cuIcon-community {
+	.no-data > .cuIcon-community,
+	.no-data > .cuIcon-notice,
+	.no-data > .cuIcon-friend,
+	.no-data > .cuIcon-warn {
 	    display: block;
 	    font-size: 32px;
 	    color: #ddd;
 	    margin-bottom: 6px;
+	}
+
+	.no-data > text {
+		display: block;
+	}
+
+	.message-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 220rpx;
+	}
+
+	.message-empty-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-top: 22rpx;
+		padding: 12rpx 24rpx;
+		border-radius: 18rpx;
+		background: #e8f4f1;
+		color: #167f77;
+		font-size: 24rpx;
+	}
+
+	.campus-messages.campus-night .message-empty-action {
+		background: #293b38;
+		color: #8bd4c2;
+	}
+
+	.campus-messages.campus-night .no-data > .cuIcon-community,
+	.campus-messages.campus-night .no-data > .cuIcon-notice,
+	.campus-messages.campus-night .no-data > .cuIcon-friend,
+	.campus-messages.campus-night .no-data > .cuIcon-warn {
+		color: #6d827d;
 	}
 
 .campus-messages.campus-night {
