@@ -122,6 +122,7 @@
 				introduce:"",
 				backif:0,
 				cacheLoaded:false,
+				avatarCropRequested:false,
 				modalName: null,
 				
 				token:'',
@@ -145,9 +146,24 @@
 			
 			that.getCacheInfo(false);
 			
-			if(localStorage.getItem('toAvatar')){
-				var toAvatar = JSON.parse(localStorage.getItem('toAvatar'));
-				that.avatarUpload(toAvatar.dataUrl);
+			var pendingAvatar = localStorage.getItem('toAvatar');
+			if(that.avatarCropRequested){
+				that.avatarCropRequested = false;
+				if(pendingAvatar){
+					// Consume the crop result before uploading so a failed attempt is not retried on every onShow.
+					localStorage.removeItem('toAvatar');
+					try {
+						var toAvatar = JSON.parse(pendingAvatar);
+						if (toAvatar && toAvatar.dataUrl) {
+							that.avatarUpload(toAvatar.dataUrl);
+						}
+					} catch (error) {
+						console.error('头像裁剪结果无效', error);
+					}
+				}
+			}else if(pendingAvatar){
+				// A leftover result from an earlier failed attempt must not upload on page entry.
+				localStorage.removeItem('toAvatar');
 			}else{
 				console.log("没有头像缓存")
 			}
@@ -398,6 +414,8 @@
 			toAvatar(){
 				// #ifdef APP-PLUS || H5
 				const that = this;
+				that.avatarCropRequested = true;
+				localStorage.removeItem('toAvatar');
 				  uni.navigateTo({
 					url: "../../uni_modules/buuug7-img-cropper/pages/cropper",
 					events: {
