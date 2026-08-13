@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class RedisLegacySessionBridge implements LegacySessionBridge {
     private static final long DETACHED_SESSION_TTL_SECONDS = 300;
+    private static final long DEFAULT_SESSION_TTL_SECONDS = 90L * 24 * 60 * 60;
     private final RedisTemplate<Object, Object> redis;
     private final boolean enabled;
     private final String prefix;
@@ -34,11 +35,14 @@ public class RedisLegacySessionBridge implements LegacySessionBridge {
             RedisTemplate<Object, Object> redis,
             @Value("${legacy.redis.enabled:false}") boolean enabled,
             @Value("${legacy.redis.prefix:starfree}") String prefix,
-            @Value("${legacy.redis.session-ttl:86400}") long sessionTtl) {
+            @Value("${legacy.redis.session-ttl:7776000}") long sessionTtl) {
         this.redis = redis;
         this.enabled = enabled;
         this.prefix = prefix == null || prefix.trim().isEmpty() ? "starfree" : prefix.trim();
-        this.sessionTtl = sessionTtl > 0 ? sessionTtl : 86400;
+        // Existing production start scripts may still pass the closed API's shorter TTL.
+        // Keep the requested long-lived login policy inside the JAR so a normal JAR-only
+        // deployment takes effect immediately without requiring a separate service-script change.
+        this.sessionTtl = Math.max(sessionTtl, DEFAULT_SESSION_TTL_SECONDS);
     }
 
     /**
@@ -113,6 +117,38 @@ public class RedisLegacySessionBridge implements LegacySessionBridge {
         }
     }
 
+    /**
+     * 使用半程阈值实现滑动过期，避免每次鉴权都写 Redis。旧 API 创建的较短会话会在首次
+     * 通过新后端鉴权时延长到当前配置值。账号别名只在仍指向同一 token 时续期，不能覆盖
+     * 用户之后登录生成的新 token。
+     */
+    @Override
+    public void refreshIfNeeded(String token) {
+        if (!enabled || token == null || token.trim().isEmpty()) {
+            return;
+        }
+        String normalizedToken = token.trim();
+        String sessionKey = sessionKey(normalizedToken);
+        Long remaining = redis.getExpire(sessionKey, TimeUnit.SECONDS);
+        // Redis returns -1 for an existing key without expiry and -2 for a missing key.
+        // Bound historical non-expiring sessions, but never recreate a missing session.
+        if (remaining == null || remaining == -2 || remaining > refreshThreshold()) {
+            return;
+        }
+
+        Map<Object, Object> session = redis.opsForHash().entries(sessionKey);
+        if (session == null || session.isEmpty()) {
+            return;
+        }
+        Boolean refreshed = redis.expire(sessionKey, sessionTtl, TimeUnit.SECONDS);
+        if (!Boolean.TRUE.equals(refreshed)) {
+            return;
+        }
+        refreshSessionAccountLink(session, "name", normalizedToken);
+        refreshSessionAccountLink(session, "mail", normalizedToken);
+        refreshSessionAccountLink(session, "phone", normalizedToken);
+    }
+
     /** 删除 session，并清理 hash 中可发现的 name/mail/phone 别名。 */
     @Override
     public void remove(String token) {
@@ -185,6 +221,22 @@ public class RedisLegacySessionBridge implements LegacySessionBridge {
         if (account != null) {
             removeAccountLink(String.valueOf(account), token);
         }
+    }
+
+    private void refreshSessionAccountLink(Map<Object, Object> session, String field, String token) {
+        Object account = session.get(field);
+        if (account == null || String.valueOf(account).trim().isEmpty()) {
+            return;
+        }
+        String key = accountKey(String.valueOf(account));
+        Object current = redis.opsForValue().get(key);
+        if (current != null && token.equals(String.valueOf(current))) {
+            redis.expire(key, sessionTtl, TimeUnit.SECONDS);
+        }
+    }
+
+    private long refreshThreshold() {
+        return Math.max(1L, sessionTtl / 2L);
     }
 
     private Map<Object, Object> serializableValues(Map<String, Object> session) {

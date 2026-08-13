@@ -13,6 +13,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class LegacyTokenServiceTest {
@@ -29,6 +31,7 @@ class LegacyTokenServiceTest {
         Long uid = new LegacyTokenService(jdbc, sessions).userId(TOKEN);
 
         assertThat(uid).isEqualTo(7L);
+        verify(sessions).refreshIfNeeded(TOKEN);
         org.mockito.Mockito.verifyNoInteractions(jdbc);
     }
 
@@ -43,6 +46,7 @@ class LegacyTokenServiceTest {
         Long uid = new LegacyTokenService(jdbc, sessions).userId(TOKEN);
 
         assertThat(uid).isNull();
+        verify(sessions, never()).refreshIfNeeded(TOKEN);
         org.mockito.Mockito.verifyNoInteractions(jdbc);
     }
 

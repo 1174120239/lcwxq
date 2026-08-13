@@ -29,6 +29,10 @@ public interface LegacySessionBridge {
         }
 
         @Override
+        public void refreshIfNeeded(String token) {
+        }
+
+        @Override
         public void remove(String token) {
         }
 
@@ -48,6 +52,12 @@ public interface LegacySessionBridge {
 
     /** 仅从旧 Redis session 解析 uid；找不到或桥接关闭返回 null。 */
     Long userId(String token);
+
+    /**
+     * 在会话剩余时间低于阈值时续期 token hash 及仍指向该 token 的账号别名。
+     * 已撤销或不存在的会话不能通过该方法恢复。
+     */
+    void refreshIfNeeded(String token);
 
     /** 删除 session，并仅在账号别名仍指向该 token 时删除对应 userkey。 */
     void remove(String token);

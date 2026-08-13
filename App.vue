@@ -4,6 +4,7 @@
 	// #endif
 	import Vue from 'vue'
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
+	import { refreshSession } from '@/utils/session.js'
 	// #ifdef APP-PLUS
 	const CAMPUS_HOME_TAB = '/pages/home/home'
 	const CAMPUS_TAB_ROUTES = [
@@ -86,6 +87,7 @@
 		// #endif
 			onLaunch: function() {
 			applyCampusThemeShell(getCampusThemeMode())
+			refreshSession({ force: true })
 			// #ifdef APP-PLUS
 			campusInstallBackButtonHandler()
 			
@@ -272,6 +274,7 @@
 		},
 		onShow: function() {
 			applyCampusThemeShell(getCampusThemeMode())
+			refreshSession()
 			console.log('App Show')
 		},
 		onHide: function() {

@@ -149,13 +149,13 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
 | `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
 | `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | 密码为 8-128 位且必须同时含字母和数字，并拒绝常见弱密码；`campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；成功后不自动登录。 |
-| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，不能用 MySQL `authCode` 恢复过期会话。 |
+| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，普通会话 90 天无操作过期并滑动续期，不能用 MySQL `authCode` 恢复过期会话。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；新密码执行统一强度策略；成功后撤销关联会话。 |
 | `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
-| `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
+| `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`，同时按阈值续期活跃会话；失效为 `code=0`。 |
 | `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
@@ -505,7 +505,9 @@ form_post("SFreeShop/buyShop", {
 
 ### 7.1 上传
 
-`upload/full` 仍由旧端处理。已确认的前端协议是 multipart，文件字段名为 `file`，token 是普通表单字段：
+`upload/full` 仍由旧端处理。已确认的前端协议是 multipart，文件字段名为 `file`，token 是普通表单字段。
+公网请求先由 replacement 校验登录态；Spring 解析 multipart 后，安全代理会使用原字段、文件名、
+媒体类型和文件内容重新生成 multipart 边界，再转发给旧端，不能从已解析的原始输入流直接复制：
 
 ```bash
 curl -sS -X POST 'https://api.lcxqy.cn/upload/full' \

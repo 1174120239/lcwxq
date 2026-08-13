@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -31,14 +32,33 @@ class RedisLegacySessionBridgeTest {
         session.put("uid", 7);
         session.put("name", "alice");
         session.put("group", "contributor");
-        new RedisLegacySessionBridge(redis, true, "starfree", 86400)
+        new RedisLegacySessionBridge(redis, true, "starfree", 15552000)
                 .store("alice", "new-token", session);
 
         verify(redis).delete("starfree_userInfoold-token");
-        verify(strings).set("starfree_userkeyalice", "new-token", 86400, TimeUnit.SECONDS);
+        verify(strings).set("starfree_userkeyalice", "new-token", 15552000, TimeUnit.SECONDS);
         verify(redis).delete("starfree_userInfonew-token");
         verify(hashes).putAll(org.mockito.ArgumentMatchers.eq("starfree_userInfonew-token"), anyMap());
-        verify(redis).expire("starfree_userInfonew-token", 86400, TimeUnit.SECONDS);
+        verify(redis).expire("starfree_userInfonew-token", 15552000, TimeUnit.SECONDS);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void enforcesNinetyDayMinimumWhenRuntimeStillSuppliesLegacyTtl() {
+        RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
+        ValueOperations<Object, Object> strings = mock(ValueOperations.class);
+        HashOperations<Object, Object, Object> hashes = mock(HashOperations.class);
+        when(redis.opsForValue()).thenReturn(strings);
+        when(redis.opsForHash()).thenReturn(hashes);
+
+        Map<String, Object> session = new HashMap<>();
+        session.put("uid", 7);
+        session.put("name", "alice");
+        new RedisLegacySessionBridge(redis, true, "starfree", 86400)
+                .store("alice", "new-token", session);
+
+        verify(strings).set("starfree_userkeyalice", "new-token", 7776000, TimeUnit.SECONDS);
+        verify(redis).expire("starfree_userInfonew-token", 7776000, TimeUnit.SECONDS);
     }
 
     @SuppressWarnings("unchecked")
@@ -84,6 +104,62 @@ class RedisLegacySessionBridgeTest {
                 .userId("legacy-token");
 
         assertThat(uid).isEqualTo(7L);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void refreshesExpiringSessionAndOnlyMatchingAccountAliases() {
+        RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
+        HashOperations<Object, Object, Object> hashes = mock(HashOperations.class);
+        ValueOperations<Object, Object> strings = mock(ValueOperations.class);
+        when(redis.opsForHash()).thenReturn(hashes);
+        when(redis.opsForValue()).thenReturn(strings);
+        when(redis.getExpire("starfree_userInfotoken", TimeUnit.SECONDS)).thenReturn(60L);
+        when(redis.expire("starfree_userInfotoken", 7776000, TimeUnit.SECONDS)).thenReturn(true);
+        Map<Object, Object> session = new HashMap<>();
+        session.put("uid", 7);
+        session.put("name", "alice");
+        session.put("mail", "alice@example.com");
+        when(hashes.entries("starfree_userInfotoken")).thenReturn(session);
+        when(strings.get("starfree_userkeyalice")).thenReturn("token");
+        when(strings.get("starfree_userkeyalice@example.com")).thenReturn("newer-token");
+
+        new RedisLegacySessionBridge(redis, true, "starfree", 7776000)
+                .refreshIfNeeded("token");
+
+        verify(redis).expire("starfree_userInfotoken", 7776000, TimeUnit.SECONDS);
+        verify(redis).expire("starfree_userkeyalice", 7776000, TimeUnit.SECONDS);
+        verify(redis, never()).expire("starfree_userkeyalice@example.com", 7776000, TimeUnit.SECONDS);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void doesNotRewriteHealthySessionOnEveryRequest() {
+        RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
+        when(redis.getExpire("starfree_userInfotoken", TimeUnit.SECONDS)).thenReturn(7000000L);
+
+        new RedisLegacySessionBridge(redis, true, "starfree", 7776000)
+                .refreshIfNeeded("token");
+
+        verify(redis, never()).expire("starfree_userInfotoken", 7776000, TimeUnit.SECONDS);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void boundsHistoricalSessionWithoutExpiry() {
+        RedisTemplate<Object, Object> redis = mock(RedisTemplate.class);
+        HashOperations<Object, Object, Object> hashes = mock(HashOperations.class);
+        when(redis.opsForHash()).thenReturn(hashes);
+        when(redis.getExpire("starfree_userInfotoken", TimeUnit.SECONDS)).thenReturn(-1L);
+        when(redis.expire("starfree_userInfotoken", 7776000, TimeUnit.SECONDS)).thenReturn(true);
+        Map<Object, Object> session = new HashMap<>();
+        session.put("uid", 7);
+        when(hashes.entries("starfree_userInfotoken")).thenReturn(session);
+
+        new RedisLegacySessionBridge(redis, true, "starfree", 7776000)
+                .refreshIfNeeded("token");
+
+        verify(redis).expire("starfree_userInfotoken", 7776000, TimeUnit.SECONDS);
     }
 
     @SuppressWarnings("unchecked")

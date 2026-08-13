@@ -4,11 +4,18 @@ import cn.lcxqy.starfree.economy.EconomyLockExecutor;
 import cn.lcxqy.starfree.security.BearerTokenFilter;
 import cn.lcxqy.starfree.security.StaffAccess;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.mock.web.MockMultipartHttpServletRequest;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -140,5 +147,42 @@ class LegacyProxyControllerTest {
         verify(restTemplate).exchange(
                 eq(URI.create("http://127.0.0.1:8081/upload/full?token=sf2_header")),
                 eq(HttpMethod.POST), any(HttpEntity.class), eq(byte[].class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void parsedMultipartUploadIsRebuiltBeforeForwarding() throws Exception {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        EconomyLockExecutor economyLock = mock(EconomyLockExecutor.class);
+        StaffAccess staffAccess = mock(StaffAccess.class);
+        when(restTemplate.exchange(any(URI.class), eq(HttpMethod.POST),
+                any(HttpEntity.class), eq(byte[].class)))
+                .thenReturn(ResponseEntity.ok("{\"code\":1}".getBytes(StandardCharsets.UTF_8)));
+        LegacyProxyController controller = new LegacyProxyController(
+                restTemplate, "http://127.0.0.1:8081", economyLock, staffAccess);
+        MockMultipartHttpServletRequest request = new MockMultipartHttpServletRequest();
+        request.setMethod("POST");
+        request.setRequestURI("/upload/full");
+        request.setParameter("token", "sf2_token");
+        request.addFile(new MockMultipartFile(
+                "file", "avatar.jpg", "image/jpeg", "image-data".getBytes(StandardCharsets.UTF_8)));
+
+        controller.proxy(request, new MockHttpServletResponse());
+
+        ArgumentCaptor<HttpEntity> entity = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(staffAccess).requireUser("sf2_token");
+        verify(restTemplate).exchange(eq(URI.create("http://127.0.0.1:8081/upload/full")),
+                eq(HttpMethod.POST), entity.capture(), eq(byte[].class));
+        assertThat(entity.getValue().getHeaders().getContentType())
+                .isEqualTo(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        MultiValueMap<String, Object> form =
+                (MultiValueMap<String, Object>) entity.getValue().getBody();
+        assertThat(form.getFirst("token")).isEqualTo("sf2_token");
+        HttpEntity<ByteArrayResource> file =
+                (HttpEntity<ByteArrayResource>) form.getFirst("file");
+        assertThat(file.getHeaders().getContentType().toString()).isEqualTo("image/jpeg");
+        assertThat(file.getBody().getFilename()).isEqualTo("avatar.jpg");
+        assertThat(file.getBody().getByteArray())
+                .isEqualTo("image-data".getBytes(StandardCharsets.UTF_8));
     }
 }

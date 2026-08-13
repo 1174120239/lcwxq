@@ -362,7 +362,9 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 安全切流脚本读取现有精确 location 时兼容 LF 和 CRLF，不需要为匹配脚本预先改写生产 Nginx include 的整份换行格式。
 
 安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 60 位
-小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史
+小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。普通
+会话默认 90 天无操作过期，并在活跃请求中滑动续期；退出、改密、敏感资料修改和封禁仍立即撤销。
+客户端优先使用 Bearer Header，历史
 `token` 参数只作为兼容通道。切流脚本还必须验证公开资料不含 IP、local、logged 或 clientId。
 
 聊天、上传、社会化绑定、支付创建和卡密等业务实现仍留在 8081，但公网请求先进入 18082，

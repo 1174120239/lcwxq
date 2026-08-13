@@ -19,7 +19,7 @@
 - 积分、签到、奖励、提现、商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除和按话题筛选。
-- 后端当前全量测试为 324 个，Failures=0，Errors=0，Skipped=0。
+- 后端当前全量测试为 330 个，Failures=0，Errors=0，Skipped=0。
 
 ## 2. 系统架构
 
@@ -196,7 +196,9 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 
 生产启用 Redis session bridge 后，Redis 中存在且未超过 TTL 的 session 是登录态唯一权威；
 Redis 中不存在的 token 不能再用 MySQL `authCode` 复活。只有未启用 bridge 的本地测试环境
-回退查询 MySQL。登录会轮换 token，退出、改密和敏感资料修改同时撤销 MySQL 与 Redis 登录态。
+回退查询 MySQL。普通登录态采用 90 天无操作过期，并在剩余时间低于一半时滑动续期；网站加载、
+App 启动或回到前台也会静默校验。登录会轮换 token，退出、改密和敏感资料修改同时撤销 MySQL
+与 Redis 登录态。
 
 公开用户资料统一使用字段白名单。匿名和跨账号读取不得返回角色、邮箱、手机、地址、资产、积分、
 IP、local、登录时间、clientId 或内部 token；本人读取才可获得完整资料。文章、动态、关系和

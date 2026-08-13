@@ -3,6 +3,7 @@ package cn.lcxqy.starfree.proxy;
 import cn.lcxqy.starfree.economy.EconomyLockExecutor;
 import cn.lcxqy.starfree.security.BearerTokenFilter;
 import cn.lcxqy.starfree.security.StaffAccess;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -12,11 +13,17 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
+import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -27,6 +34,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -165,18 +174,86 @@ public class LegacyProxyController {
                     : query + "&token=" + encodedToken;
         }
         String target = baseUrl + request.getRequestURI() + (query == null ? "" : "?" + query);
+        MultipartHttpServletRequest multipart = multipartRequest(request);
         HttpHeaders headers = new HttpHeaders();
         Enumeration<String> names = request.getHeaderNames();
         if (names != null) {
             for (String name : Collections.list(names)) {
-                if (!"host".equalsIgnoreCase(name) && !"content-length".equalsIgnoreCase(name)) {
+                if (!"host".equalsIgnoreCase(name) && !"content-length".equalsIgnoreCase(name)
+                        && (multipart == null || !"content-type".equalsIgnoreCase(name))) {
                     headers.put(name, Collections.list(request.getHeaders(name)));
                 }
             }
         }
+        if (multipart != null) {
+            forwardMultipart(target, method, multipart, headers, response);
+            return;
+        }
         byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
         ResponseEntity<byte[]> result = restTemplate.exchange(URI.create(target), method,
                 new HttpEntity<>(body, headers), byte[].class);
+        copyResponse(result, response);
+    }
+
+    /**
+     * DispatcherServlet parses multipart before this catch-all controller runs. Reusing the raw
+     * input stream after token validation can therefore send an empty body to the legacy upload
+     * service. Rebuild the form from parsed fields and files so RestTemplate generates a fresh,
+     * valid multipart boundary.
+     */
+    private void forwardMultipart(String target, HttpMethod method,
+                                  MultipartHttpServletRequest request, HttpHeaders headers,
+                                  HttpServletResponse response) throws IOException {
+        MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
+        for (Map.Entry<String, String[]> entry : request.getParameterMap().entrySet()) {
+            if (entry.getValue() != null) {
+                for (String value : entry.getValue()) {
+                    form.add(entry.getKey(), value);
+                }
+            }
+        }
+        for (Map.Entry<String, List<MultipartFile>> entry
+                : request.getMultiFileMap().entrySet()) {
+            for (MultipartFile file : entry.getValue()) {
+                form.add(entry.getKey(), filePart(file));
+            }
+        }
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        ResponseEntity<byte[]> result = restTemplate.exchange(URI.create(target), method,
+                new HttpEntity<MultiValueMap<String, Object>>(form, headers), byte[].class);
+        copyResponse(result, response);
+    }
+
+    private HttpEntity<ByteArrayResource> filePart(MultipartFile file) throws IOException {
+        final String filename = file.getOriginalFilename() == null
+                ? "upload.bin" : file.getOriginalFilename();
+        ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
+            @Override
+            public String getFilename() {
+                return filename;
+            }
+        };
+        HttpHeaders headers = new HttpHeaders();
+        if (file.getContentType() != null && !file.getContentType().trim().isEmpty()) {
+            headers.setContentType(MediaType.parseMediaType(file.getContentType()));
+        }
+        return new HttpEntity<>(resource, headers);
+    }
+
+    private MultipartHttpServletRequest multipartRequest(HttpServletRequest request) {
+        ServletRequest current = request;
+        while (current instanceof HttpServletRequestWrapper) {
+            if (current instanceof MultipartHttpServletRequest) {
+                return (MultipartHttpServletRequest) current;
+            }
+            current = ((HttpServletRequestWrapper) current).getRequest();
+        }
+        return current instanceof MultipartHttpServletRequest
+                ? (MultipartHttpServletRequest) current : null;
+    }
+
+    private void copyResponse(ResponseEntity<byte[]> result, HttpServletResponse response)
+            throws IOException {
         response.setStatus(result.getStatusCodeValue());
         MediaType contentType = result.getHeaders().getContentType();
         if (contentType != null) {
