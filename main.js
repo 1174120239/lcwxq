@@ -52,6 +52,18 @@ import API from './utils/api.js'
 import Net from './utils/net.js'
 Vue.prototype.$API = API
 Vue.prototype.$Net = Net
+
+// Keep the legacy token parameter during migration, while allowing rebuilt endpoints to
+// authenticate without putting new tokens in URLs once callers move to the header.
+uni.addInterceptor('request', {
+	invoke(args) {
+		if (!args || !args.data || !args.data.token) return
+		args.header = args.header || {}
+		if (!args.header.Authorization) {
+			args.header.Authorization = 'Bearer ' + args.data.token
+		}
+	}
+})
 import articleItem from './pages/components/articleItem.vue'
 Vue.component('articleItem',articleItem)
 

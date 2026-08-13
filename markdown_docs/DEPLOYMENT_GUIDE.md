@@ -144,7 +144,9 @@ sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/ins
 - `$ADMIN_PATH` 与后台访问路径一致。
 
 生产站点的 `.user.ini` 可能带 immutable 属性。admin 安装脚本会保留目标目录中已有的
-`.user.ini`，不会尝试覆盖或递归修改它；若失败发布导致 `Config_DB.php` 缺失，脚本会从
+`.user.ini`，在复制文件前用 `lsattr` 检查属性；写入 PHP 会话安全配置时会临时执行
+`chattr -i`，并通过退出清理逻辑在成功或失败时恢复 `chattr +i`。属性无法检查、解锁或
+恢复时发布会明确失败，必须先人工确认文件属性，不得跳过检查。若失败发布导致 `Config_DB.php` 缺失，脚本会从
 `/srv/lcxqy/backups/*-admin/admin.tar.gz` 中最近一个包含该配置的受控备份恢复运行时文件，
 再覆盖安装仓库源码。
 
@@ -246,6 +248,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 007 | 007_campus_qa.sql | 校园问答的问题、回答、点赞和评论表 |
 | 008 | 008_simple_invitation.sql | 轻量邀请配置、邀请码和奖励记录表 |
 | 009 | 009_space_reports.sql | 动态举报、审核状态和审核审计表 |
+| 010 | 010_admin_password_hash.sql | 将 `starfree_admin_login.pw` 扩为 255 位，支持 PHP `password_hash()` |
 
 规则：
 
@@ -280,6 +283,11 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 如已存在则先定向备份并核对字段、唯一键 `uk_space_reporter` 和三个查询索引。执行后先验证表结构，
 再部署举报服务 JAR，最后通过 `promote-space-report-routes.sh` 切换三个精确接口。回滚 JAR 或 Nginx
 时保留举报表及其审核记录。
+
+010 修改 PHP admin 登录表的密码列长度。它必须在独立、明确授权的生产迁移会话中执行，先备份
+`starfree_admin_login` 并确认目标列当前定义；普通开发或组件发布不得顺带执行。未执行 010 时，
+后台仍可验证原 MD5 密码，但会跳过自动升级，避免将 `password_hash()` 结果截断后锁死管理员。
+只有用户明确要求迁移并通过带 `-RunMigrations` 的受控发布入口时才能执行。
 
 001 可使用：
 
@@ -341,7 +349,26 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
-### 9.2 当前边界
+### 9.2 安全版本切流
+
+渗透测试修复不能只更新 JAR。必须在独立发布会话按以下顺序执行：
+
+1. 构建、发布并验证 replacement JAR，确认 Redis 登录态已启用且 `/health` 正常。
+2. 发布 PHP admin，验证登录页、严格会话 Cookie、登录后 session id 轮换及 `mp3.php` 输出转义。
+3. 迁移 010 仅在用户另行明确授权时执行；它不是前两项发布的默认步骤。
+4. 运行 `backend/deploy/production/promote-security-routes.sh`，由脚本备份 Nginx include、检查
+   安全前置路由、增量添加精确 location、执行 `nginx -t`、reload 和公网验收；失败自动回滚。
+
+安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 64 位
+小写十六进制随机串；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史
+`token` 参数只作为兼容通道。切流脚本还必须验证公开资料不含 IP、local、logged 或 clientId。
+
+聊天、上传、社会化绑定、支付创建和卡密等业务实现仍留在 8081，但公网请求先进入 18082，
+由新端验证 token，管理接口还会验证 staff/administrator 角色，再受控转发到旧端。支付供应商
+回调保持原签名路径，不按用户 token 处理。不得为了保留旧功能而恢复基于 `$arg_token` 的 8081
+直连回落。
+
+### 9.3 当前边界
 
 新后端已覆盖的主要范围：
 
@@ -368,7 +395,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 邮箱验证码上线前必须确认新后端运行环境同时具备：`LEGACY_REDIS_ENABLED=true`、与旧端一致的 Redis 前缀、SMTP 配置，以及 `VERIFICATION_EMAIL_ENABLED=true`。生产 JAR 在没有显式 `SPRING_MAIL_HOST/PORT/USERNAME/PASSWORD/FROM` 时，会仅从 `/opt/application.properties` 兼容读取同名 `spring.mail.*` 五项，不导入端口、数据库、Redis 或其他旧端设置；生产 `start.sh` 也会执行相同的白名单读取，且都不会输出凭据。QQ 邮箱的 password 必须填写 SMTP 授权码，不是 QQ 登录密码。验证码 SMTP 默认限制为同时 2 个请求、真实尝试至少间隔 1000 毫秒；认证失败会全局退避 300 秒，避免 QQ 的 `535` 登录限频被连续重试放大，可分别通过 `VERIFICATION_EMAIL_MAX_CONCURRENT`、`VERIFICATION_EMAIL_MINIMUM_ATTEMPT_INTERVAL_MILLIS` 和 `VERIFICATION_EMAIL_AUTHENTICATION_BACKOFF_SECONDS` 调整。`NOTIFICATION_EMAIL_ENABLED` 默认保持 true，动态评论邮件提醒继续使用同一 SMTP，且失败不会影响评论落库。先在本机 `18082` 使用测试邮箱验证成功和失败清理，再运行 `backend/deploy/production/promote-email-verification-routes.sh`；脚本只切 `RegSendCode` 和 `SendCode`，不修改短信、登录或其他账号接口。
 
-### 9.3 路由识别
+### 9.4 路由识别
 
 ~~~bash
 curl -skI 'https://api.lcxqy.cn/SFreeSpace/spaceList?searchParams=%7B%7D&limit=1&page=1'

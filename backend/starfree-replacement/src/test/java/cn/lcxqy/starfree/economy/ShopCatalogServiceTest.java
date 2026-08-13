@@ -60,7 +60,9 @@ class ShopCatalogServiceTest {
         item.put("user_uid", 7);
         item.put("user_name", "seller");
         item.put("user_mail", "seller@example.test");
-        item.put("user_group", "contributor");
+        item.put("user_group", "administrator");
+        item.put("user_ip", "203.0.113.9");
+        item.put("user_local", "private-location");
         item.put("user_vip", 0);
         when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
         when(jdbc.queryForList(contains("FROM starfree_shop s LEFT JOIN"), eq(0), eq(15)))
@@ -74,7 +76,9 @@ class ShopCatalogServiceTest {
         assertThat(page.getData()).hasSize(1);
         assertThat(page.getData().get(0)).doesNotContainKey("value");
         assertThat(page.getData().get(0).get("userJson"))
-                .isInstanceOf(Map.class);
+                .isInstanceOfSatisfying(Map.class, user -> assertThat(user)
+                        .containsEntry("groupKey", "")
+                        .doesNotContainKeys("ip", "local", "group"));
         verify(jdbc).queryForList(sql.capture(), eq(0), eq(15));
         assertThat(sql.getValue()).contains("ORDER BY s.created DESC,s.id DESC")
                 .doesNotContain("DROP TABLE");

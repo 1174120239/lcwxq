@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/session.php';
 
 function generateCaptcha($length = 4) {
     $chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';

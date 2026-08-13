@@ -5,6 +5,7 @@ import cn.lcxqy.starfree.economy.EconomyLockExecutor;
 import cn.lcxqy.starfree.security.LegacySessionBridge;
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.security.PhpassPasswordVerifier;
+import cn.lcxqy.starfree.security.PasswordPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,9 +75,10 @@ public class AccountMaintenanceService {
         if (account.isEmpty() || code.isEmpty() || password.isEmpty()) {
             throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
         }
-        if (account.length() > 200 || password.length() > 4096) {
+        if (account.length() > 200) {
             throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
         }
+        PasswordPolicy.requireStrong(password);
         String passwordHash = passwords.hash(password);
         return lock.execute(connection -> resetPasswordLocked(
                 connection, account, code, passwordHash));
@@ -165,6 +167,11 @@ public class AccountMaintenanceService {
         }
         Map<String, Object> changes = new LinkedHashMap<>(request.changes);
         boolean introductionRejected = false;
+
+        if (request.passwordChanged
+                && !passwords.matches(request.currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("\u539f\u5bc6\u7801\u9519\u8bef");
+        }
 
         if (request.mail != null) {
             if (!config.isEmailRequired()) {
@@ -265,20 +272,23 @@ public class AccountMaintenanceService {
             changes.put("phone", phone);
         }
 
-        boolean passwordChanged = body.containsKey("password");
+        Object rawPassword = body.get("password");
+        String password = rawPassword == null ? "" : String.valueOf(rawPassword);
+        boolean passwordChanged = !password.isEmpty();
+        String currentPassword = optionalText(body, "currentPassword", false);
         if (passwordChanged) {
-            Object raw = body.get("password");
-            String password = raw == null ? "" : String.valueOf(raw);
-            if (password.isEmpty() || password.length() > 4096) {
+            if (currentPassword == null || currentPassword.isEmpty()) {
                 throw new IllegalArgumentException("\u53c2\u6570\u4e0d\u6b63\u786e");
             }
+            PasswordPolicy.requireStrong(password);
             changes.put("password", passwords.hash(password));
         }
         if (changes.isEmpty()) {
             throw new IllegalArgumentException("\u53c2\u6570\u4e0d\u6b63\u786e");
         }
         return new EditRequest(changes, screenName, introduce, mail, phone,
-                code == null ? "" : code, passwordChanged);
+                code == null ? "" : code, currentPassword == null ? "" : currentPassword,
+                passwordChanged);
     }
 
     private void verifyEmailCode(String keyPart, String submitted) {
@@ -430,16 +440,19 @@ public class AccountMaintenanceService {
         private final String mail;
         private final String phone;
         private final String code;
+        private final String currentPassword;
         private final boolean passwordChanged;
 
         EditRequest(Map<String, Object> changes, String screenName, String introduce,
-                    String mail, String phone, String code, boolean passwordChanged) {
+                    String mail, String phone, String code, String currentPassword,
+                    boolean passwordChanged) {
             this.changes = changes;
             this.screenName = screenName;
             this.introduce = introduce;
             this.mail = mail;
             this.phone = phone;
             this.code = code;
+            this.currentPassword = currentPassword;
             this.passwordChanged = passwordChanged;
         }
     }

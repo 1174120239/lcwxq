@@ -56,10 +56,9 @@ public class ShopCatalogService {
                     + "s.subtype,s.isView";
     private static final String SHOP_WITH_USER = SHOP_COLUMNS
             + ",u.uid AS user_uid,u.name AS user_name,u.screenName AS user_screenName,"
-            + "u.mail AS user_mail,u.`group` AS user_group,u.avatar AS user_avatar,"
+            + "u.mail AS user_mail,u.avatar AS user_avatar,"
             + "u.customize AS user_customize,u.experience AS user_experience,"
-            + "u.introduce AS user_introduce,u.bantime AS user_bantime,u.ip AS user_ip,"
-            + "u.local AS user_local,u.vip AS user_vip";
+            + "u.introduce AS user_introduce,u.bantime AS user_bantime,u.vip AS user_vip";
 
     private static final List<String> PRODUCT_KEYS = Collections.unmodifiableList(Arrays.asList(
             "id", "title", "imgurl", "text", "price", "integral", "num", "type",
@@ -555,15 +554,13 @@ public class ShopCatalogService {
         }
         Object vip = get(row, "user_vip");
         user.put("name", name);
-        user.put("groupKey", text(get(row, "user_group")));
+        user.put("groupKey", "");
         user.put("uid", userId);
         user.put("avatar", avatar(get(row, "user_avatar"), get(row, "user_mail"), avatarPrefix));
         putIfPresent(user, "customize", get(row, "user_customize"));
         user.put("experience", integer(get(row, "user_experience"), 0));
         putIfPresent(user, "introduce", get(row, "user_introduce"));
         user.put("bantime", integer(get(row, "user_bantime"), 0));
-        putIfPresent(user, "ip", get(row, "user_ip"));
-        putIfPresent(user, "local", get(row, "user_local"));
         user.put("vip", integer(vip, 0));
         long vipTime = number(vip);
         user.put("isvip", vipTime == 1 || vipTime > Instant.now().getEpochSecond() ? 1 : 0);

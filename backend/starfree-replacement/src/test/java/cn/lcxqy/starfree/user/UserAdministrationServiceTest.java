@@ -68,7 +68,7 @@ class UserAdministrationServiceTest {
                         "phone", "13800138000", "assets", 900, "points", 50,
                         "address", "private", "pay", "private", "clientId", "push",
                         "ip", "127.0.0.1", "local", "city", "invitationCode", "secret",
-                        "vip", 0));
+                        "logged", 1800000000L, "group", "administrator", "vip", 0));
 
         UserAdministrationService.Page result = service.users(
                 stringRow("page", "1", "limit", "500", "searchKey", "alice"));
@@ -79,8 +79,10 @@ class UserAdministrationServiceTest {
                 .containsEntry("uid", 7)
                 .containsEntry("name", "alice")
                 .containsEntry("isvip", 0)
+                .containsEntry("groupKey", "")
                 .doesNotContainKeys("mail", "phone", "assets", "points", "address", "pay",
-                        "clientId", "ip", "local", "invitationCode");
+                        "clientId", "ip", "local", "invitationCode", "group");
+        assertThat(result.getData().get(0)).doesNotContainKey("logged");
     }
 
     @Test

@@ -215,14 +215,13 @@ public class UserInteractionService {
     }
 
     private Map<String, Object> publicUser(long uid) {
-        Map<String, Object> source = tokens.userById(uid);
+        Map<String, Object> source = tokens.publicUserById(uid);
         if (source == null) {
             Map<String, Object> removed = new LinkedHashMap<>();
             removed.put("uid", uid);
             removed.put("name", "已注销用户");
             removed.put("avatar", "");
-            removed.put("group", "visitor");
-            removed.put("groupKey", "visitor");
+            removed.put("groupKey", "");
             removed.put("isvip", 0);
             return removed;
         }
@@ -231,8 +230,8 @@ public class UserInteractionService {
         String accountName = text(source.get("name"));
         result.put("name", screenName.isEmpty() ? accountName : screenName);
         result.put("avatar", publicAvatar(source));
-        String group = String.valueOf(source.get("group"));
-        result.put("groupKey", group);
+        result.remove("group");
+        result.put("groupKey", "");
         result.put("isvip", isVip(source.get("vip")) ? 1 : 0);
         return result;
     }

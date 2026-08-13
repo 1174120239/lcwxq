@@ -144,6 +144,8 @@ class SpaceServiceTest {
         row.put("views", 4);
         row.put("user_uid", 8L);
         row.put("user_name", "campus-user");
+        row.put("user_ip", "203.0.113.9");
+        row.put("user_local", "private-location");
         row.put("user_campus_id", 3L);
         row.put("user_campus", "东校区");
         row.put("user_grade_id", 5L);
@@ -166,7 +168,8 @@ class SpaceServiceTest {
                 .containsEntry("campusId", 3L)
                 .containsEntry("campus", "东校区")
                 .containsEntry("gradeId", 5L)
-                .containsEntry("grade", "2024级");
+                .containsEntry("grade", "2024级")
+                .doesNotContainKeys("ip", "local");
         verify(fixture.jdbc).update(
                 eq("UPDATE starfree_space SET views = COALESCE(views, 0) + 1 WHERE id = ?"),
                 eq(11L));

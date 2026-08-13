@@ -1,4 +1,11 @@
 <?php
+require_once __DIR__ . '/session.php';
+if (!isset($_SESSION['loginadmin']) || $_SESSION['loginadmin'] === '') {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('error' => 'Unauthorized'));
+    exit;
+}
 include_once 'connect.php';
 $dataType = isset($_GET['dataType']) ? $_GET['dataType'] : '';
 if ($dataType === 'registrations') {

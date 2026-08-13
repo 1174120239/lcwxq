@@ -4,6 +4,7 @@ import cn.lcxqy.starfree.api.RequestValues;
 import cn.lcxqy.starfree.economy.EconomyLockExecutor;
 import cn.lcxqy.starfree.economy.EconomyOperationJournal;
 import cn.lcxqy.starfree.security.PhpassPasswordVerifier;
+import cn.lcxqy.starfree.security.PasswordPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -315,9 +316,7 @@ public class UserRegistrationService {
         if (name.isEmpty() || name.length() > 32 || hasControlCharacter(name)) {
             throw new IllegalArgumentException("\u7528\u6237\u540d\u683c\u5f0f\u4e0d\u6b63\u786e");
         }
-        if (password.isEmpty() || password.length() > 128) {
-            throw new IllegalArgumentException("\u5bc6\u7801\u683c\u5f0f\u4e0d\u6b63\u786e");
-        }
+        PasswordPolicy.requireStrong(password);
         if (!mail.isEmpty() && (mail.length() > 200 || !EMAIL.matcher(mail).matches())) {
             throw new IllegalArgumentException("\u8bf7\u8f93\u5165\u6b63\u786e\u7684\u90ae\u7bb1");
         }

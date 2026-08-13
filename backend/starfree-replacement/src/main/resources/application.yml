@@ -1,7 +1,15 @@
 server:
   port: ${APP_PORT:8082}
   error:
-    include-message: always
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    whitelabel:
+      enabled: false
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://prev.lcxqy.cn,http://localhost:*,https://localhost:*}
 
 spring:
   servlet:

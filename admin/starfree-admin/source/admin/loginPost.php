@@ -1,7 +1,8 @@
 <?php
 error_reporting(0);
-session_start();
+require_once __DIR__ . '/session.php';
 include_once "connect.php";
+require_once __DIR__ . '/password.php';
 if (!isset($_SESSION['login_attempts'])) {
     $_SESSION['login_attempts'] = 0;
     $_SESSION['first_attempt_time'] = time();
@@ -49,15 +50,14 @@ if (!preg_match('/^[a-zA-Z0-9_]{3,16}$/', $user)) {
     die("<script>alert('用户名只能包含3-16位字母、数字和下划线');location.href = '".$ADMIN_PATH."/login.php';</script>");
 }
 
-if (strlen($pw) < 5 || strlen($pw) > 20) {
-    die("<script>alert('密码长度必须在5-20位之间');location.href = '".$ADMIN_PATH."/login.php';</script>");
+if (strlen($pw) < 5 || strlen($pw) > 72) {
+    die("<script>alert('密码长度不正确');location.href = '".$ADMIN_PATH."/login.php';</script>");
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sql = "SELECT * FROM ".$db_prefix."_admin_login WHERE user = ?";
     $stmt = $connect->prepare($sql);
     $stmt->bind_param("s", $user);
-    $PW = md5($pw);
     $stmt->execute();
     $stmt->store_result();
 
@@ -65,7 +65,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_result($id, $Login_user, $Login_pw);
         $stmt->fetch();
         
-        if ($user === $Login_user && $PW === $Login_pw) {
+        $passwordInfo = password_get_info($Login_pw);
+        $modernHash = !empty($passwordInfo['algo']);
+        $passwordValid = $modernHash
+            ? password_verify($pw, $Login_pw)
+            : hash_equals($Login_pw, md5($pw));
+
+        if ($user === $Login_user && $passwordValid) {
+            if (!$modernHash || password_needs_rehash($Login_pw, PASSWORD_DEFAULT)) {
+                $upgradedHash = password_hash($pw, PASSWORD_DEFAULT);
+                $loginTable = $db_prefix . '_admin_login';
+                if ($upgradedHash !== false
+                    && admin_password_column_supports(
+                        $connect, $db_name, $loginTable, $upgradedHash
+                    )) {
+                    $upgrade = $connect->prepare(
+                        "UPDATE ".$db_prefix."_admin_login SET pw = ? WHERE id = ?"
+                    );
+                    if ($upgrade) {
+                        $upgrade->bind_param("si", $upgradedHash, $id);
+                        if (!$upgrade->execute()) {
+                            error_log('Could not upgrade the administrator password hash');
+                        }
+                        $upgrade->close();
+                    }
+                } else {
+                    error_log('Administrator password column is too short for password_hash');
+                }
+            }
+            session_regenerate_id(true);
             $_SESSION['login_attempts'] = 0;
             $_SESSION['loginadmin'] = $user;
             $_SESSION['login_time'] = time();

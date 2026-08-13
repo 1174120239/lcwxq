@@ -5,17 +5,31 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * token 到用户的兼容解析和公开用户快照读取。
  *
- * <p>先查 MySQL authCode，再查 LegacySessionBridge。Redis 只用于解析 uid，最终用户字段重新从
- * MySQL 读取，避免长期信任过期 session 快照。返回字段白名单不包含 password/authCode。
+ * <p>生产启用 LegacySessionBridge 后，Redis TTL 是登录态的唯一有效期来源；不存在的 Redis
+ * session 不能再凭 MySQL authCode 复活。未启用桥接的本地环境才回退 MySQL。用户字段始终从
+ * MySQL 重读，避免信任过期 session 快照。返回字段白名单不包含 password/authCode。
  */
 @Service
 public class LegacyTokenService {
+    private static final Set<String> PUBLIC_PROFILE_FIELDS = new LinkedHashSet<>();
+
+    static {
+        String[] fields = {"uid", "name", "url", "screenName", "created", "activated",
+                "introduce", "customize", "vip", "experience", "avatar", "bantime",
+                "posttime", "userBg", "campusId", "campus", "gradeId", "grade"};
+        for (String field : fields) {
+            PUBLIC_PROFILE_FIELDS.add(field);
+        }
+    }
+
     private final JdbcTemplate jdbc;
     private final LegacySessionBridge sessions;
 
@@ -29,23 +43,44 @@ public class LegacyTokenService {
         this(jdbc, LegacySessionBridge.NOOP);
     }
 
-    /** MySQL 优先、Redis 后备地解析 uid；空 token 或两边都不存在时返回 null。 */
+    /** Redis enabled时严格服从TTL；仅桥接关闭的本地环境读取MySQL authCode。 */
     public Long userId(String token) {
         if (token == null || token.trim().isEmpty()) {
             return null;
         }
         String normalizedToken = token.trim();
+        if (!SessionTokenGenerator.isCurrentFormat(normalizedToken)) {
+            return null;
+        }
+        if (sessions.available()) {
+            return sessions.userId(normalizedToken);
+        }
         List<Long> ids = jdbc.query(
                 "SELECT uid FROM starfree_users WHERE authCode = ? LIMIT 1",
                 new Object[]{normalizedToken},
                 (rs, rowNum) -> rs.getLong("uid"));
-        return ids.isEmpty() ? sessions.userId(normalizedToken) : ids.get(0);
+        return ids.isEmpty() ? null : ids.get(0);
     }
 
     /** 解析 token 后读取脱敏用户；不存在返回 null。 */
     public Map<String, Object> user(String token) {
         Long uid = userId(token);
         return uid == null ? null : userById(uid);
+    }
+
+    /** Public profile projection for anonymous and cross-account reads. */
+    public Map<String, Object> publicUserById(long uid) {
+        Map<String, Object> user = userById(uid);
+        if (user == null) {
+            return null;
+        }
+        Map<String, Object> projection = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : user.entrySet()) {
+            if (PUBLIC_PROFILE_FIELDS.contains(entry.getKey())) {
+                projection.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return projection;
     }
 
     /**

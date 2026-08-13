@@ -1,6 +1,8 @@
 package cn.lcxqy.starfree.proxy;
 
 import cn.lcxqy.starfree.economy.EconomyLockExecutor;
+import cn.lcxqy.starfree.security.BearerTokenFilter;
+import cn.lcxqy.starfree.security.StaffAccess;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -19,6 +21,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,17 +54,55 @@ public class LegacyProxyController {
                     "/pay/notify",
                     "/pay/wxPayNotify",
                     "/pay/EPayNotify")));
+    private static final Set<String> LEGACY_STAFF_PATHS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
+                    "/SFreeChat/allChat",
+                    "/SFreeChat/banChat")));
+    private static final Set<String> LEGACY_USER_PATHS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
+                    "/SFreeUsers/apiBind",
+                    "/SFreeUsers/userBindStatus",
+                    "/upload/full",
+                    "/upload/base64",
+                    "/SFreeChat/getPrivateChat",
+                    "/SFreeChat/sendMsg",
+                    "/SFreeChat/myChat",
+                    "/SFreeChat/msgList",
+                    "/SFreeChat/deleteChat",
+                    "/SFreeChat/deleteMsg",
+                    "/SFreeChat/createGroup",
+                    "/SFreeChat/editGroup",
+                    "/SFreeChat/groupInfo",
+                    "/pay/scancodePayStar",
+                    "/pay/WxPayStar",
+                    "/pay/tokenPay",
+                    "/pay/tokenPayStar",
+                    "/pay/EPayStar",
+                    "/pay/qrCodeStar")));
+    private static final Set<String> LEGACY_ADMINISTRATOR_PATHS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
+                    "/pay/tokenPayList",
+                    "/pay/tokenPayExcel",
+                    "/pay/madetoken")));
+    private static final Set<String> LEGACY_CALLBACK_PATHS = Collections.unmodifiableSet(
+            new HashSet<>(Arrays.asList(
+                    "/pay/notify",
+                    "/pay/wxPayNotify",
+                    "/pay/EPayNotify")));
 
     private final RestTemplate restTemplate;
     private final String baseUrl;
     private final EconomyLockExecutor economyLock;
+    private final StaffAccess staffAccess;
 
     public LegacyProxyController(RestTemplate restTemplate,
                                  @Value("${legacy.api.base-url}") String baseUrl,
-                                 EconomyLockExecutor economyLock) {
+                                 EconomyLockExecutor economyLock,
+                                 StaffAccess staffAccess) {
         this.restTemplate = restTemplate;
         this.baseUrl = baseUrl.replaceAll("/$", "");
         this.economyLock = economyLock;
+        this.staffAccess = staffAccess;
     }
 
     /**
@@ -78,7 +119,19 @@ public class LegacyProxyController {
             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
             return;
         }
-        if (requiresEconomyLock(request.getRequestURI())) {
+        String path = request.getRequestURI();
+        String token = request.getParameter("token");
+        if (LEGACY_ADMINISTRATOR_PATHS.contains(path)) {
+            staffAccess.requireAdministrator(request.getParameter("token"));
+        } else if (LEGACY_STAFF_PATHS.contains(path)) {
+            staffAccess.requireStaff(request.getParameter("token"));
+        } else if (LEGACY_USER_PATHS.contains(path)) {
+            staffAccess.requireUser(token);
+        } else if (!LEGACY_CALLBACK_PATHS.contains(path)
+                && token != null && !token.trim().isEmpty()) {
+            staffAccess.requireUser(token);
+        }
+        if (requiresEconomyLock(path)) {
             try {
                 economyLock.execute(connection -> {
                     try {
@@ -104,6 +157,13 @@ public class LegacyProxyController {
             return;
         }
         String query = request.getQueryString();
+        if (Boolean.TRUE.equals(request.getAttribute(BearerTokenFilter.BEARER_ONLY_ATTRIBUTE))) {
+            String encodedToken = URLEncoder.encode(
+                    request.getParameter("token"), StandardCharsets.UTF_8.name());
+            query = query == null || query.isEmpty()
+                    ? "token=" + encodedToken
+                    : query + "&token=" + encodedToken;
+        }
         String target = baseUrl + request.getRequestURI() + (query == null ? "" : "?" + query);
         HttpHeaders headers = new HttpHeaders();
         Enumeration<String> names = request.getHeaderNames();

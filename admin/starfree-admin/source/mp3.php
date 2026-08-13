@@ -1,6 +1,10 @@
 <?php
 include_once 'Config_DB.php';
 $token = isset($_GET['token']) ? $_GET['token'] : null;
+$tokenJson = json_encode(
+    $token === null ? '' : $token,
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
 ?>
 <!DOCTYPE html>
 <html>
@@ -139,7 +143,7 @@ $token = isset($_GET['token']) ? $_GET['token'] : null;
             var mp3url = document.getElementById('mp3url');
             var mp3url = document.getElementById('mp3url');
             
-            var token = '<?php echo $token; ?>';
+            var token = <?php echo $tokenJson; ?>;
             uploadBtn.addEventListener('click', function () {
                 var fileInput = document.getElementById('audio');
                 var file = fileInput.files[0];
@@ -164,7 +168,7 @@ $token = isset($_GET['token']) ? $_GET['token'] : null;
                 var formData = new FormData();
                 formData.append('file', file);
                 if (token) {
-                    formData.append('token', '<?php echo $token; ?>');
+                    formData.append('token', token);
                 } else {
                     alert('登录状态错误，请退出登录后重试！');
                     return;

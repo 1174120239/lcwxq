@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/session.php';
 include_once 'ipban.php';
 include_once 'connect.php';
 if (!isset($_SESSION['loginadmin'])) {

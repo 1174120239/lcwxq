@@ -53,12 +53,16 @@
 				</view>
 			</view>
 			<view class="cu-form-group margin-top">
+				<view class="title">原密码</view>
+				<input placeholder="修改密码时必填" v-model="currentPassword" type="password" name="input"></input>
+			</view>
+			<view class="cu-form-group">
 				<view class="title">密码</view>
-				<input placeholder="请输入密码,不填则不修改" v-model="password" name="input"></input>
+				<input placeholder="请输入新密码,不填则不修改" v-model="password" type="password" name="input"></input>
 			</view>
 			<view class="cu-form-group">
 				<view class="title">确认密码</view>
-				<input placeholder="请再次输入密码" v-model="repassword" name="input"></input>
+				<input placeholder="请再次输入密码" v-model="repassword" type="password" name="input"></input>
 			</view>
 		</form>
 		<!--  #ifdef H5 || APP-PLUS -->
@@ -109,6 +113,7 @@
 				name:'',
 				screenName:'',
 				password:'',
+				currentPassword:'',
 				repassword:'',
 				mail:'',
 				userBg:"",
@@ -194,6 +199,20 @@
 			userEdit() {
 				var that = this;
 				if (that.password != "") {
+					if (that.password.length < 8 || !/[A-Za-z]/.test(that.password) || !/[0-9]/.test(that.password)) {
+						uni.showToast({
+							title:"新密码至少8位且包含字母和数字",
+							icon:'none'
+						});
+						return false
+					}
+					if (that.currentPassword == "") {
+						uni.showToast({
+							title:"请输入原密码",
+							icon:'none'
+						});
+						return false
+					}
 					if (that.password != that.repassword) {
 						uni.showToast({
 						    title:"两次密码不一致",
@@ -211,6 +230,7 @@
 					name:that.name,
 					screenName:that.screenName,
 					password:that.password,
+					currentPassword:that.currentPassword,
 					introduce:that.introduce,
 					userBg:that.userBg,
 				}
