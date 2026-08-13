@@ -52,7 +52,6 @@
 					</view>
 					<view @tap="toLink('/pages/user/usermark')"><view><text class="cuIcon-favor"></text><text>浏览记录</text></view><text>查看内容</text></view>
 					<view @tap="toLink('/pages/user/assets')"><view><text class="cuIcon-card"></text><text>钱包</text></view><text>点击查看</text></view>
-					<view class="profile-share-action" @tap="toLink('/pages/user/invitation')"><view><text class="cuIcon-share"></text><text>分享</text></view><text>邀请好友</text></view>
 					<view class="profile-clock-action" :class="{'is-clocked': isClock==1}" @tap="toClock"><view><text class="cuIcon-calendar"></text><text>{{isClock==1?'已签到':'签到'}}</text></view><text>{{isClock==1?'今日已签':'每日签到'}}</text></view>
 				</view>
 			</view>
@@ -1854,7 +1853,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		position: relative;
 		z-index: 2;
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 14rpx;
 		margin-top: 30rpx;
 	}
