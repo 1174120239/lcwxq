@@ -24,6 +24,16 @@
 					<view class="message-overview-subtitle">评论、系统提醒和互动消息都会在这里汇总</view>
 				</view>
 			</view>
+			<scroll-view v-if="!privateChatEnabled" scroll-x class="message-category-strip" :show-scrollbar="false">
+				<view class="message-category-track">
+					<view v-for="category in messageCategories" :key="category.key"
+						class="message-category-item" :class="{'is-active': selectedMessageCategory === category.key}"
+						@tap="selectMessageCategory(category.key)">
+						<text :class="category.icon"></text>
+						<text>{{category.label}}</text>
+					</view>
+				</view>
+			</scroll-view>
 			<view class="search-type grid parent col-2" v-if="privateChatEnabled" style="height: 220upx;line-height:40px;font-size:0px;border-radius: 100px;">
 				<view class="index-sort-box">
 					<view itemClass="butclass">
@@ -54,91 +64,39 @@
 			
 			<block v-if="type=='inbox'">
 				
-				<view class="cu-card dynamic no-card">
-					<view class="cu-item">
-						<view class="cu-list menu-avatar comment" style="border-radius: 20px;">
-							<view class="message-loading" v-if="messageLoading && inboxList.length==0">
-								<view class="campus-loader"></view>
-							</view>
-							<view class="no-data" v-else-if="inboxList.length==0">
-								<text class="cuIcon-notice"></text>
-								<text>{{messageError ? '消息加载失败' : '暂时没有消息'}}</text>
-								<view class="message-empty-action" v-if="messageError" @tap="refreshMessages">重新加载</view>
-							</view>
-							<view class="cu-card dynamic no-card" style="margin-top: 20upx;">
-								<view class="cu-item" v-for="(item,index) in inboxList" :key="index" v-if="inboxList.length>0">
-									<view class="cu-list menu-avatar comment campus-message-row" @tap="goInbox(item)">
-										<view class="cu-item">
-											<campus-avatar class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'"></campus-avatar>
-											<view class="content">
-												<view class="text-black">
-													<block v-if="item.userJson.isvip>0">
-													<text class="text-shojo2">{{item.userJson.name}}</text>
-													</block>
-													<block v-else>{{item.userJson.name}}</block>
-													<block  v-if="item.type=='system'">
-														<text class="userlv bg-red">系统通知</text>
-													</block>
-													<block  v-if="item.type=='finance'">
-														<text class="userlv bg-gradual-orange">财务通知</text>
-													</block>
-													<block  v-if="item.type=='comment'">
-												<block v-if="item.userJson.isvip>0">
-													<block v-if="item.userJson.vip==1">
-														<text class="userlv" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
-													</block>
-													<block v-else>
-														<text class="userlv" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
-													</block>
-												</block>
-													</block>
-											<block v-if="item.type=='spaceComment'">
-												<text class="userlv bg-green">动态评论</text>
-											</block>
-											<block v-if="item.type=='qaAnswer'">
-												<text class="userlv bg-green">问答回答</text>
-											</block>
-											<block v-if="item.type=='qaComment'">
-												<text class="userlv bg-blue">问答评论</text>
-											</block>
-												</view>
-												<view class="text-content text-df break-all">
-													<rich-text :nodes="markHtml(item.text)"></rich-text>
-												</view>
-												<view class="bg-blue light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='comment'">
-													<view class="flex">
-														<view>{{item.contenTitle}}</view>
-														
-													</view>
-												</view>
-										<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='spaceComment'">
-													<view v-if="item.spaceState=='deleted'">原动态已删除</view>
-													<view v-else-if="item.spaceState=='hidden'">原动态不可见</view>
-													<view v-else>动态：{{item.spaceInfo && item.spaceInfo.text ? subText(item.spaceInfo.text, 80) : '查看动态'}}</view>
-												</view>
-												<view class="margin-top-sm flex justify-between message-meta">
-													<view class="text-gray text-df">{{formatDate(item.created)}}</view>
-													<view>
-													</view>
-												</view>
-											</view>
-										</view>
-										<view class="bg-green light padding-sm radius margin-top-sm text-sm message-source-chip" v-if="item.type=='qaAnswer' || item.type=='qaComment'">
-											<view v-if="item.questionState=='deleted'">原问题已删除</view>
-											<view v-else-if="item.questionState=='hidden'">原问题已停用</view>
-											<view v-else>问题：{{item.questionInfo && item.questionInfo.title ? item.questionInfo.title : '查看问答'}}</view>
-										</view>
-							
-										
+				<view class="message-list-shell">
+					<view class="message-loading" v-if="messageLoading && inboxList.length==0">
+						<view class="campus-loader"></view>
+					</view>
+					<view class="no-data" v-else-if="filteredInboxList.length==0">
+						<text class="cuIcon-notice"></text>
+						<text>{{messageError ? '消息加载失败' : inboxList.length ? '该分类暂无消息' : '暂时没有消息'}}</text>
+						<view class="message-empty-action" v-if="messageError" @tap="refreshMessages">重新加载</view>
+					</view>
+					<view v-else class="message-list">
+						<view class="message-item" v-for="(item,index) in filteredInboxList" :key="item.id || index" @tap="goInbox(item)">
+							<campus-avatar class="message-item-avatar" :src="item.userJson.avatar" :name="item.userJson.name" :fallback-icon="item.type=='system' ? 'notice' : 'people'"></campus-avatar>
+							<view class="message-item-content">
+								<view class="message-item-head">
+									<view class="message-item-actor">
+										<text class="message-item-name" :class="{'text-shojo2': item.userJson.isvip>0}">{{item.type=='system' ? '系统通知' : item.userJson.name}}</text>
+										<text class="message-item-action">{{messageActionLabel(item)}}</text>
 									</view>
+									<view class="message-unread-dot" v-if="item.isread==0"></view>
 								</view>
+								<view class="message-item-body" v-if="messageBody(item)">
+									<rich-text :nodes="markHtml(messageBody(item))"></rich-text>
+								</view>
+								<view class="message-context" v-if="messageContext(item)">
+									<text class="cuIcon-right message-context-icon"></text>
+									<text class="message-context-text">{{messageContext(item)}}</text>
+								</view>
+								<view class="message-item-meta">{{formatDate(item.created)}}</view>
 							</view>
-							
-							<view class="load-more" @tap="loadMore" v-if="inboxList.length>0">
-								<text>{{moreText}}</text>
-							</view>
-							
 						</view>
+					</view>
+					<view class="load-more" @tap="loadMore" v-if="inboxList.length>0">
+						<text>{{moreText}}</text>
 					</view>
 				</view>
 				
@@ -285,6 +243,13 @@
 				oldChatList:[],
 				uid:0,
 				type:"inbox",
+				selectedMessageCategory: 'all',
+				messageCategories: [
+					{ key: 'all', label: '全部', icon: 'cuIcon-list' },
+					{ key: 'dynamic', label: '动态互动', icon: 'cuIcon-comment' },
+					{ key: 'qa', label: '问答互动', icon: 'cuIcon-question' },
+					{ key: 'system', label: '系统与财务', icon: 'cuIcon-notice' }
+				],
 				zb_info:0,
 				moreText:"加载更多",
 				page:1,
@@ -310,6 +275,10 @@
 		computed: {
 			campusNight() {
 				return resolveCampusNight(this.campusThemeMode, isDongchangfuNight(this.campusThemeClock))
+			},
+			filteredInboxList() {
+				if (this.selectedMessageCategory === 'all') return this.inboxList
+				return this.inboxList.filter(item => this.messageCategory(item) === this.selectedMessageCategory)
 			}
 		},
 		onPullDownRefresh(){
@@ -420,6 +389,49 @@
 			
 		},
 		methods:{
+			selectMessageCategory(category) {
+				if (!category || this.selectedMessageCategory === category) return
+				this.selectedMessageCategory = category
+				uni.pageScrollTo({ scrollTop: 0, duration: 180 })
+			},
+			messageCategory(item) {
+				var type = item && item.type ? String(item.type) : ''
+				if (type === 'qaAnswer' || type === 'qaComment') return 'qa'
+				if (type === 'system' || type === 'finance' || type === 'fan') return 'system'
+				return 'dynamic'
+			},
+			messageActionLabel(item) {
+				var type = item && item.type ? String(item.type) : ''
+				var text = item && item.text ? String(item.text) : ''
+				if (type === 'spaceLike') return '赞了你的动态'
+				if (type === 'spaceComment') return text.indexOf('回复了你的动态评论') === 0 ? '回复了你的评论' : '评论了你的动态'
+				if (type === 'qaAnswer') return '回答了你的问题'
+				if (type === 'qaComment') return text.indexOf('回复了你的评论') === 0 ? '回复了你的问答评论' : '评论了你的回答'
+				if (type === 'comment' || type === 'postComment') return '评论了你的内容'
+				if (type === 'finance') return '财务通知'
+				if (type === 'fan') return '关注了你'
+				return '系统通知'
+			},
+			messageBody(item) {
+				var value = item && item.text ? String(item.text) : ''
+				return value.replace(/^(评论了你的动态|回复了你的动态评论|回答了问题|评论了你的回答|回复了你的评论|评论了你的内容|赞了你的动态)[：:]\s*/, '')
+			},
+			messageContext(item) {
+				if (!item) return ''
+				var type = String(item.type || '')
+				if (type === 'spaceComment' || type === 'spaceLike') {
+					if (item.spaceState === 'deleted') return '原动态已删除'
+					if (item.spaceState === 'hidden') return '原动态不可见'
+					return '动态：' + (item.spaceInfo && item.spaceInfo.text ? this.subText(item.spaceInfo.text, 80) : '查看动态')
+				}
+				if (type === 'qaAnswer' || type === 'qaComment') {
+					if (item.questionState === 'deleted') return '原问题已删除'
+					if (item.questionState === 'hidden') return '原问题已停用'
+					return '问题：' + (item.questionInfo && item.questionInfo.title ? item.questionInfo.title : '查看问答')
+				}
+				if (type === 'comment' || type === 'postComment') return item.contenTitle ? '内容：' + item.contenTitle : ''
+				return ''
+			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
 				applyCampusThemeShell(this.campusThemeMode, this.campusThemeClock)
@@ -502,20 +514,26 @@
 			},
 			goInbox(data){
 				var that = this;
-				if(data.type=="comment"){
+				if((data.type=="comment" || data.type=="postComment") && data.contentsInfo && data.contentsInfo.cid){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
 				}
-				if(data.type=="spaceComment" && data.spaceState=="visible"){
+				if((data.type=="spaceComment" || data.type=="spaceLike") && data.spaceState=="visible"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
 					uni.navigateTo({
 						url: '/pages/space/info?id='+data.value
 					});
 				}
+				if((data.type=="spaceComment" || data.type=="spaceLike") && data.spaceState && data.spaceState!="visible"){
+					uni.showToast({ title: data.spaceState=="deleted" ? '原动态已删除' : '原动态不可见', icon: 'none' });
+				}
 				if((data.type=="qaAnswer" || data.type=="qaComment") && data.questionState=="visible"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
 					uni.navigateTo({ url: '/pages/qa/info?id=' + data.value });
+				}
+				if((data.type=="qaAnswer" || data.type=="qaComment") && data.questionState && data.questionState!="visible"){
+					uni.showToast({ title: data.questionState=="deleted" ? '原问题已删除' : '原问题已停用', icon: 'none' });
 				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);
@@ -1034,13 +1052,241 @@
 		padding: 12rpx 24rpx;
 		border-radius: 18rpx;
 		background: #e8f4f1;
-		color: #167f77;
+		color: #237c74;
 		font-size: 24rpx;
 	}
 
 	.campus-messages.campus-night .message-empty-action {
 		background: #293b38;
 		color: #8bd4c2;
+	}
+
+	.message-category-strip {
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+		padding: 0 0 18rpx;
+		white-space: nowrap;
+	}
+
+	.message-category-track {
+		display: flex;
+		align-items: center;
+		gap: 12rpx;
+		width: max-content;
+		min-width: 100%;
+	}
+
+	.message-category-item {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8rpx;
+		min-height: 66rpx;
+		padding: 0 18rpx;
+		border: 1rpx solid #dce9e5;
+		border-radius: 15rpx;
+		background: #ffffff;
+		color: #718581;
+		font-size: 23rpx;
+		line-height: 1;
+		box-sizing: border-box;
+		transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+	}
+
+	.message-category-item text:first-child {
+		font-size: 25rpx;
+	}
+
+	.message-category-item.is-active {
+		border-color: #83cbb9;
+		background: #e8f7f1;
+		color: #167e73;
+		font-weight: 700;
+		box-shadow: 0 5rpx 13rpx rgba(50, 145, 124, 0.1);
+	}
+
+	.message-category-item:active {
+		transform: scale(0.97);
+	}
+
+	.message-list-shell {
+		min-height: 260rpx;
+	}
+
+	.message-list {
+		display: flex;
+		flex-direction: column;
+		gap: 14rpx;
+	}
+
+	.message-item {
+		display: flex;
+		align-items: flex-start;
+		min-width: 0;
+		padding: 22rpx;
+		border: 1rpx solid #dce9e5;
+		border-radius: 18rpx;
+		background: #ffffff;
+		box-shadow: 0 6rpx 18rpx rgba(29, 64, 57, 0.05);
+		box-sizing: border-box;
+		transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+	}
+
+	.message-item:active {
+		transform: scale(0.992);
+		border-color: #b7dcd2;
+		background: #f9fcfb;
+	}
+
+	.message-item-avatar {
+		display: flex !important;
+		flex: 0 0 72rpx;
+		width: 72rpx !important;
+		height: 72rpx !important;
+		margin: 2rpx 18rpx 0 0;
+		border: 2rpx solid #ffffff;
+		border-radius: 18rpx;
+		box-shadow: 0 4rpx 12rpx rgba(31, 63, 58, 0.1);
+		box-sizing: border-box;
+	}
+
+	.message-item-content {
+		min-width: 0;
+		flex: 1;
+		color: #263c39;
+	}
+
+	.message-item-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12rpx;
+		min-width: 0;
+	}
+
+	.message-item-actor {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: 8rpx;
+		min-width: 0;
+		line-height: 1.4;
+	}
+
+	.message-item-name {
+		max-width: 100%;
+		color: #203532;
+		font-size: 28rpx;
+		font-weight: 700;
+		word-break: break-all;
+	}
+
+	.message-item-action {
+		color: #63807a;
+		font-size: 23rpx;
+		line-height: 1.4;
+	}
+
+	.message-unread-dot {
+		flex: 0 0 12rpx;
+		width: 12rpx;
+		height: 12rpx;
+		margin-top: 10rpx;
+		border-radius: 50%;
+		background: #e56b62;
+		box-shadow: 0 0 0 4rpx rgba(229, 107, 98, 0.12);
+	}
+
+	.message-item-body {
+		margin-top: 8rpx;
+		color: #516763;
+		font-size: 25rpx;
+		line-height: 1.55;
+		word-break: break-word;
+	}
+
+	.message-context {
+		display: flex;
+		align-items: flex-start;
+		gap: 7rpx;
+		min-width: 0;
+		margin-top: 13rpx;
+		padding: 9rpx 12rpx;
+		border: 1rpx solid #d9e9e4;
+		border-radius: 10rpx;
+		background: #eef6f3;
+		color: #467069;
+		font-size: 22rpx;
+		line-height: 1.4;
+		box-sizing: border-box;
+	}
+
+	.message-context-icon {
+		flex: 0 0 auto;
+		margin-top: 2rpx;
+		font-size: 20rpx;
+	}
+
+	.message-context-text {
+		min-width: 0;
+		flex: 1;
+		word-break: break-all;
+	}
+
+	.message-item-meta {
+		margin-top: 12rpx;
+		color: #8a9a96;
+		font-size: 22rpx;
+		line-height: 1.3;
+	}
+
+	.campus-messages.campus-night .message-category-item {
+		border-color: rgba(222, 234, 229, 0.1);
+		background: #20282a;
+		color: #9ba8a4;
+	}
+
+	.campus-messages.campus-night .message-category-item.is-active {
+		border-color: rgba(112, 201, 154, 0.58);
+		background: #263b35;
+		color: #8fe0c0;
+		box-shadow: none;
+	}
+
+	.campus-messages.campus-night .message-item {
+		border-color: rgba(222, 234, 229, 0.1);
+		background: #202628;
+		box-shadow: none;
+	}
+
+	.campus-messages.campus-night .message-item:active {
+		border-color: rgba(112, 201, 154, 0.3);
+		background: #252c2e;
+	}
+
+	.campus-messages.campus-night .message-item-avatar {
+		border-color: #2a3234;
+		box-shadow: none;
+	}
+
+	.campus-messages.campus-night .message-item-name {
+		color: #edf2f0;
+	}
+
+	.campus-messages.campus-night .message-item-action,
+	.campus-messages.campus-night .message-item-body {
+		color: #b7c2be;
+	}
+
+	.campus-messages.campus-night .message-context {
+		border-color: rgba(112, 201, 154, 0.14);
+		background: #26332e;
+		color: #a8d3bb;
+	}
+
+	.campus-messages.campus-night .message-item-meta {
+		color: #98a5a1;
 	}
 
 	.campus-messages.campus-night .no-data > .cuIcon-community,

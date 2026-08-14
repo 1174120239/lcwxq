@@ -61,7 +61,7 @@
 				<view class="all-box home-feed" :style="TabCur!=0?'margin-top:0;':''">
 					<view v-if="hometop==1"><block v-for="(item,index) in topContents" :key="'top-new'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view>
 					<view v-if="act_of==1">
-						<block v-for="(item,index) in contentsList" :key="item.cid || ('feed'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
+						<block v-for="(item,index) in contentsList" :key="item.cid || ('feed'+index)"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
 						<view class="qa-home-section" v-if="questionList.length>0">
 							<view class="qa-home-heading"><text>校园问答</text><text class="qa-home-subtitle">一起把问题说清楚</text></view>
 							<view class="qa-home-list">
@@ -96,7 +96,7 @@
 					<qa-question-card :question="questionList[0]" :night="weatherTheme.isDark" @open="openQuestion"></qa-question-card>
 				</view>
 				<view class="section-heading"><text>推荐帖子</text><view class="more" @tap="toRecommend"><text>查看更多</text><text class="cuIcon-right"></text></view></view>
-				<block v-for="(item,index) in recommendList" :key="item.cid || ('recommend'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
+				<block v-for="(item,index) in recommendList" :key="item.cid || ('recommend'+index)"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
 				<view class="dataLoad" v-if="!dataLoad"><view class="campus-loader"></view></view>
 			</view>
 		</view>
@@ -442,7 +442,7 @@
 		</view>
 
 		<!--加载遮罩-->
-		<view class="loading" v-if="isLoading==0">
+		<view class="loading" v-if="isLoading==0 && contentsList.length===0 && topContents.length===0 && recommendList.length===0 && swiperList.length===0">
 			<view class="loading-main">
 				<view class="campus-loader"></view>
 			</view>
@@ -2985,7 +2985,7 @@
 	}
 
 	.home-mode-item.is-active {
-		color: #167f77;
+		color: var(--campus-primary, #237c74);
 		background: rgba(255, 255, 255, 0.78);
 		box-shadow: 0 6rpx 18rpx rgba(34, 76, 73, 0.1);
 	}
@@ -3067,10 +3067,10 @@
 		transform: translateY(2rpx) scale(0.92);
 	}
 
-	.shortcut-green { background: #36a978 !important; }
-	.shortcut-blue { background: #438fd2 !important; }
-	.shortcut-violet { background: #7f75c7 !important; }
-	.shortcut-coral { background: linear-gradient(145deg, #ffac86, #e77a5f) !important; }
+	.shortcut-green { background: #4a9b85 !important; }
+	.shortcut-blue { background: #5c93bf !important; }
+	.shortcut-violet { background: #8079ad !important; }
+	.shortcut-coral { background: #c88778 !important; }
 
 	.home-notice {
 		display: flex;
@@ -3087,7 +3087,7 @@
 		gap: 8rpx;
 		padding: 7rpx 13rpx;
 		border-radius: 15rpx;
-		background: linear-gradient(135deg, #ff6450, #ff8870);
+		background: #c9853a;
 		font-size: 22rpx;
 		font-weight: 600;
 		color: #fff;

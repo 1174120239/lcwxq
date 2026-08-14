@@ -389,6 +389,9 @@
 				<view class="campus-loader"></view>
 			</view>
 		</view>
+		<view v-if="showBackToTop && squareid === 0" class="square-back-top" title="回到顶部" aria-label="回到顶部" @tap.stop="backToTop">
+			<text class="cuIcon-top"></text>
+		</view>
 		<!--  #ifdef APP-PLUS -->
 		<view style="height: 100upx;"></view>
 		<Tabbar ref="tabbar" :current="1" :night="campusNight"></Tabbar>
@@ -430,6 +433,7 @@
 				left_tabbar: [],
 				scrollTop: 0, 
 				pageScrollTop: 0,
+				showBackToTop: false,
 				spaceReturnScrollTop: 0,
 				spaceReturnPending: false,
 				current: 0,
@@ -660,6 +664,7 @@
 		},
 		onPageScroll(event) {
 			this.pageScrollTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
+			this.showBackToTop = this.pageScrollTop > 520
 			this.collapseSquareMenu()
 		},
 		onHide() {
@@ -800,6 +805,31 @@
 			
 		},
 		methods: {
+			backToTop() {
+				if (this.squareid !== 0) return
+				this.showBackToTop = false
+				uni.pageScrollTo({
+					scrollTop: 0,
+					duration: 260
+				})
+				setTimeout(() => {
+					this.pageScrollTop = 0
+					if (this.contentMode === 'qa') {
+						this.loadQuestionList(false)
+						return
+					}
+					this.page = 1
+					if (this.follow === 2) {
+						this.changeLoading = 0
+						this.getSpaceList2(false)
+					} else if (this.follow === 3) {
+						this.changeLoading = 0
+						this.getSpaceList3(false)
+					} else {
+						this.getSpaceList(false)
+					}
+				}, 280)
+			},
 			rememberSpaceReturn() {
 				this.spaceReturnScrollTop = Number(this.pageScrollTop) || 0;
 				this.spaceReturnPending = true;
@@ -2495,6 +2525,30 @@
 		overflow: visible !important;
 	}
 
+	.square-back-top {
+		position: fixed;
+		right: 24rpx;
+		bottom: calc(172rpx + env(safe-area-inset-bottom));
+		z-index: 980;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 76rpx;
+		height: 76rpx;
+		border: 1rpx solid rgba(35, 124, 116, 0.16);
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.96);
+		color: #237c74;
+		font-size: 34rpx;
+		box-shadow: 0 10rpx 26rpx rgba(41, 67, 73, 0.16);
+		transition: transform 180ms ease, background-color 180ms ease, color 180ms ease;
+	}
+
+	.square-back-top:active {
+		transform: scale(0.9);
+		background: #e6f3f1;
+	}
+
 	.square-mainbar {
 		display: grid;
 		grid-template-columns: 78rpx 1fr 78rpx;
@@ -2571,7 +2625,7 @@
 	.square-section-item.is-active {
 		background: #e6f4f2;
 		font-weight: 700;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.square-section-item:active {
@@ -2588,7 +2642,10 @@
 		border-top: 1rpx solid #edf1f3;
 		background: rgba(255, 255, 255, 0.58);
 		box-sizing: border-box;
+		transition: background-color 180ms ease;
 	}
+
+	.square-filter-row:active { background: rgba(230, 243, 241, 0.86); }
 
 	.square-qa-list {
 		width: calc(100% - 24rpx);
@@ -2676,9 +2733,9 @@
 	}
 
 	.filter-menu-options view.is-active {
-		background: #e0f2ef;
+		background: #e6f3f1;
 		font-weight: 600;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.service-title {
@@ -2690,7 +2747,7 @@
 
 	.filter-topic-count {
 		font-weight: 600;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.filter-menu-services {
@@ -3833,6 +3890,13 @@
 		min-height: 100vh;
 		background: #15191b !important;
 		color: #edf0ef;
+	}
+
+	.campus-square.campus-night .square-back-top {
+		border-color: rgba(110, 186, 174, 0.24);
+		background: rgba(32, 37, 39, 0.96);
+		color: #6ebaae;
+		box-shadow: 0 10rpx 26rpx rgba(0, 0, 0, 0.28);
 	}
 
 	.campus-square.campus-night .square-header {

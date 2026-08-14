@@ -10,6 +10,7 @@
 					<CampusThemeToggle class="profile-theme-toggle" :night="profileNight" :value="campusThemeMode" :compact="true" @change="handleCampusThemeMode"></CampusThemeToggle>
 					<view class="profile-tool" @tap="toSetup"><text class="cuIcon-light"></text></view>
 				</view>
+				<view class="profile-menu-backdrop" v-if="showProfileMenu" @tap="showProfileMenu=false"></view>
 				<view class="profile-menu" :class="{'is-open':showProfileMenu}">
 					<view @tap="toLink('/pages/user/useredit');showProfileMenu=false"><text class="cuIcon-edit"></text><text>编辑资料</text></view>
 					<view @tap="toSetUp();showProfileMenu=false"><text class="cuIcon-settings"></text><text>账户设置</text></view>
@@ -298,6 +299,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				profileSpaceLoading: false,
 				profileSpaceError: false,
 				profileRefreshPending: false,
+				profileRequestGeneration: 0,
 				showProfileMenu: false,
 				StatusBar: this.StatusBar,
 				CustomBar: this.CustomBar,
@@ -340,6 +342,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		},
 		onShow(){
 			var that = this;
+			that.showProfileMenu = false;
 			that.loadCampusThemeMode();
 			that.startProfileThemeClock();
 			that.$nextTick(function() {
@@ -444,6 +447,8 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			},
 			getProfileSpaceList() {
 				const that = this
+				const requestGeneration = ++that.profileRequestGeneration
+				const requestUid = that.uid
 				if (!that.uid) {
 					that.profileSpaceList = []
 					that.profileSpaceLoading = false
@@ -465,6 +470,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 					method: 'get',
 					dataType: 'json',
 					success(res) {
+						if (requestGeneration !== that.profileRequestGeneration || requestUid !== that.uid) return
 						if (res.data.code === 1) {
 							const list = Array.isArray(res.data.data) ? res.data.data : []
 							list.forEach((item) => {
@@ -477,6 +483,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 						that.profileSpaceLoading = false
 					},
 					fail() {
+						if (requestGeneration !== that.profileRequestGeneration || requestUid !== that.uid) return
 						that.profileSpaceError = true
 						that.profileSpaceLoading = false
 					}
@@ -517,6 +524,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				this.vip = 0
 				this.noticeSum = 0
 				this.profileRefreshPending = false
+				this.profileRequestGeneration += 1
 				this.profileSpaceList = []
 				this.profileSpaceLoading = false
 				this.profileSpaceError = false
@@ -1687,6 +1695,13 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 	.profile-tool:active {
 		transform: scale(0.9);
 		background: rgba(255, 255, 255, 0.16);
+	}
+
+	.profile-menu-backdrop {
+		position: absolute;
+		z-index: 7;
+		inset: 0;
+		background: transparent;
 	}
 
 	.profile-menu {

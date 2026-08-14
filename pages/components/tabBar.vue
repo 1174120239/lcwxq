@@ -94,7 +94,7 @@
 
 <style>
 	.tabbarActive {
-		color: #167f77 !important;
+		color: #237c74 !important;
 	}
 
 	.tabbar-item {
@@ -153,27 +153,17 @@
 		padding: 8rpx 12rpx;
 		border: 1rpx solid rgba(255, 255, 255, 0.82);
 		border-radius: 56rpx;
-		background: rgba(247, 250, 250, 0.94);
+		background: rgba(247, 250, 250, 0.96);
 		box-shadow: 0 16rpx 46rpx rgba(39, 59, 66, 0.15), inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
 		box-sizing: border-box;
-		transform: translate3d(-50%, 0, 0);
-		transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
-		will-change: transform;
+		opacity: 0;
+		transform: translate3d(-50%, 14rpx, 0);
+		transition: opacity 220ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		will-change: opacity, transform;
 	}
 
-	.tabbar-system.has-publish:not(.is-ready) .tabbar-dock {
-		transform: translate3d(-50%, 0, 0);
-	}
-
-	.tabbar-system.has-publish.is-ready .tabbar-dock {
-		transform: translate3d(-50%, 0, 0) translate3d(60rpx, 0, 0);
-	}
-
-	.tabbar-system:not(.has-publish):not(.is-ready) .tabbar-dock {
-		transform: translate3d(-50%, 0, 0) translate3d(60rpx, 0, 0);
-	}
-
-	.tabbar-system:not(.has-publish).is-ready .tabbar-dock {
+	.tabbar-system.is-ready .tabbar-dock {
+		opacity: 1;
 		transform: translate3d(-50%, 0, 0);
 	}
 
@@ -188,14 +178,14 @@
 		background: rgba(220, 243, 240, 0.72);
 	}
 
-	.tabbar-current-0 .tabbar-dock .tabbar-item.is-active { background: rgba(222, 239, 255, 0.78); }
-	.tabbar-current-1 .tabbar-dock .tabbar-item.is-active { background: rgba(255, 238, 213, 0.8); }
-	.tabbar-current-2 .tabbar-dock .tabbar-item.is-active { background: rgba(220, 244, 240, 0.8); }
-	.tabbar-current-3 .tabbar-dock .tabbar-item.is-active { background: rgba(253, 228, 236, 0.82); }
-	.tabbar-current-0 .tabbarActive { color: #168cf0 !important; }
-	.tabbar-current-1 .tabbarActive { color: #e98200 !important; }
-	.tabbar-current-2 .tabbarActive { color: #168f84 !important; }
-	.tabbar-current-3 .tabbarActive { color: #d95879 !important; }
+	.tabbar-current-0 .tabbar-dock .tabbar-item.is-active { background: rgba(230, 243, 241, 0.86); }
+	.tabbar-current-1 .tabbar-dock .tabbar-item.is-active { background: rgba(230, 243, 241, 0.86); }
+	.tabbar-current-2 .tabbar-dock .tabbar-item.is-active { background: rgba(230, 243, 241, 0.86); }
+	.tabbar-current-3 .tabbar-dock .tabbar-item.is-active { background: rgba(230, 243, 241, 0.86); }
+	.tabbar-current-0 .tabbarActive,
+	.tabbar-current-1 .tabbarActive,
+	.tabbar-current-2 .tabbarActive,
+	.tabbar-current-3 .tabbarActive { color: #237c74 !important; }
 
 	.tabbar-dock .tabbar-item:active {
 		transform: scale(0.91);
@@ -264,6 +254,7 @@
 		.tabbar-dock .tabbar-item {
 			transition: none;
 		}
+		.tabbar-dock { opacity: 1; transform: translate3d(-50%, 0, 0); }
 	}
 
 	.tabbar-system.is-editor-hidden {

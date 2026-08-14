@@ -1,14 +1,17 @@
 <template>
 	<view class="publish-system" :class="{'is-night': night}">
 		<view class="global-publish-trigger"
-			:class="{'is-ready': isReady, 'is-hidden': isOpen, 'is-disabled': !visible}"
+			:class="{'is-ready': isReady, 'is-hidden': isOpen || isLeaving, 'is-disabled': !visible}"
 			@tap.stop="openPanel">
 			<text class="cuIcon-add"></text>
 		</view>
 
-		<view class="publish-curtain" :class="{'is-open': isOpen}" @tap="closePanel">
-			<scroll-view scroll-y class="publish-curtain-scroll" @tap="closePanel">
-				<view class="publish-curtain-content">
+		<view class="publish-curtain" :class="{'is-open': isOpen, 'is-leaving': isLeaving}" @tap="closePanel">
+			<view class="publish-curtain-mask" @tap="closePanel"></view>
+			<view class="publish-sheet" @tap.stop>
+				<view class="publish-sheet-handle" aria-hidden="true"></view>
+				<scroll-view scroll-y class="publish-curtain-scroll">
+					<view class="publish-curtain-content">
 					<!-- Protected UI baseline: keep in sync with AI_PROJECT_BRIEF.md section 22. -->
 					<view class="publish-announcement" @tap.stop>
 						<text class="announcement-heading">近期公告</text>
@@ -33,8 +36,9 @@
 						</view>
 						<text class="publish-option-hint">匿名动态不展示真实身份，请遵守社区规范</text>
 					</view>
-				</view>
-			</scroll-view>
+					</view>
+				</scroll-view>
+			</view>
 		</view>
 	</view>
 </template>
@@ -63,6 +67,7 @@
 				isReady: false,
 				introTimer: null,
 				closeTimer: null,
+				navigateTimer: null,
 				announcement: '',
 				fallbackAnnouncement: '欢迎来到校园社区。分享日常、记录成长，也请尊重每一位认真表达的人。'
 			}
@@ -88,6 +93,7 @@
 		beforeDestroy() {
 			clearTimeout(this.introTimer)
 			clearTimeout(this.closeTimer)
+			clearTimeout(this.navigateTimer)
 			this.removeTabbarState()
 			this.unlockPageScroll()
 		},
@@ -113,6 +119,7 @@
 			resetPanel() {
 				clearTimeout(this.introTimer)
 				clearTimeout(this.closeTimer)
+				clearTimeout(this.navigateTimer)
 				this.isReady = false
 				this.isOpen = false
 				this.isLeaving = false
@@ -120,18 +127,21 @@
 			},
 			openPanel() {
 				if (!this.visible || !this.isReady || this.isOpen || this.isLeaving) return
+				clearTimeout(this.closeTimer)
+				clearTimeout(this.navigateTimer)
+				this.isLeaving = false
 				this.isOpen = true
 				this.lockPageScroll()
 			},
 			closePanel() {
-				if (!this.isOpen || this.isLeaving) return
+				if ((!this.isOpen && !this.isLeaving) || this.isLeaving) return
 				this.isLeaving = true
 				this.isOpen = false
 				clearTimeout(this.closeTimer)
 				this.closeTimer = setTimeout(() => {
 					this.isLeaving = false
 					this.unlockPageScroll()
-				}, 700)
+				}, 320)
 			},
 			loadAnnouncement() {
 				const that = this
@@ -162,14 +172,16 @@
 				})
 			},
 			goPublish(url) {
-				if (this.isLeaving) return
+				if (!this.isOpen || this.isLeaving) return
 				this.isLeaving = true
 				this.isOpen = false
-				setTimeout(() => {
+				clearTimeout(this.closeTimer)
+				clearTimeout(this.navigateTimer)
+				this.navigateTimer = setTimeout(() => {
 					this.unlockPageScroll()
 					this.isLeaving = false
 					uni.navigateTo({url: url})
-				}, 420)
+				}, 320)
 			},
 			lockPageScroll() {
 				// #ifdef H5
@@ -217,21 +229,17 @@
 	/* #endif */
 
 	.publish-system {
-		--publish-origin-left: 74rpx;
-		--publish-origin-bottom: calc(70rpx + env(safe-area-inset-bottom));
+		--publish-primary: #237c74;
+		--publish-background: #f5f8f7;
+		--publish-surface: #ffffff;
 	}
-
-	/* #ifdef H5 */
-	.publish-system {
-		--publish-origin-bottom: calc(42px + env(safe-area-inset-bottom));
-	}
-	/* #endif */
 
 	.global-publish-trigger {
 		position: fixed;
 		z-index: 1202;
 		left: 28rpx;
-		bottom: calc(24rpx + env(safe-area-inset-bottom));
+		/* Keep the trigger above the app dock instead of sharing its hit area. */
+		bottom: calc(144rpx + env(safe-area-inset-bottom));
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -241,7 +249,7 @@
 		border-radius: 50%;
 		background: rgba(247, 251, 252, 0.96);
 		box-shadow: 0 16rpx 46rpx rgba(39, 59, 66, 0.16), inset 0 1rpx 0 rgba(255, 255, 255, 0.78);
-		color: #168cf0;
+		color: var(--publish-primary, #237c74);
 		opacity: 0;
 		transform: translateY(10rpx) scale(0.58) translateZ(0);
 		transition: opacity 260ms ease, transform 440ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms ease;
@@ -250,7 +258,7 @@
 
 	/* #ifdef H5 */
 	.global-publish-trigger {
-		bottom: calc(42px + env(safe-area-inset-bottom) - 46rpx);
+		bottom: calc(92px + env(safe-area-inset-bottom));
 	}
 	/* #endif */
 
@@ -266,8 +274,8 @@
 
 	.global-publish-trigger:active {
 		transform: scale(0.92);
-		background: rgba(232, 247, 255, 0.9);
-		box-shadow: 0 8rpx 22rpx rgba(35, 129, 193, 0.16), inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
+		background: #e6f3f1;
+		box-shadow: 0 8rpx 22rpx rgba(35, 124, 116, 0.16), inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
 	}
 
 	.global-publish-trigger.is-hidden,
@@ -281,37 +289,77 @@
 		position: fixed;
 		z-index: 1201;
 		inset: 0;
-		background: #fcfcfb;
-		clip-path: circle(36rpx at var(--publish-origin-left) calc(100% - var(--publish-origin-bottom)));
-		-webkit-clip-path: circle(36rpx at var(--publish-origin-left) calc(100% - var(--publish-origin-bottom)));
+		background: transparent;
 		opacity: 0;
 		visibility: hidden;
 		pointer-events: none;
-		transform: translateZ(0);
-		transition: clip-path 680ms cubic-bezier(0.16, 1, 0.3, 1), -webkit-clip-path 680ms cubic-bezier(0.16, 1, 0.3, 1), opacity 160ms ease, visibility 0s linear 680ms;
-		will-change: clip-path, opacity;
+		transition: opacity 220ms ease, visibility 0s linear 320ms;
+		will-change: opacity;
 	}
 
-	.publish-curtain.is-open {
-		clip-path: circle(150vmax at var(--publish-origin-left) calc(100% - var(--publish-origin-bottom)));
-		-webkit-clip-path: circle(150vmax at var(--publish-origin-left) calc(100% - var(--publish-origin-bottom)));
+	.publish-curtain.is-open,
+	.publish-curtain.is-leaving {
 		opacity: 1;
 		visibility: visible;
-		pointer-events: auto;
 		transition-delay: 0s;
 	}
 
+	.publish-curtain.is-open {
+		pointer-events: auto;
+	}
+
+	.publish-curtain.is-leaving { pointer-events: none; }
+
+	.publish-curtain-mask {
+		position: absolute;
+		inset: 0;
+		background: rgba(24, 40, 38, 0.22);
+	}
+
+	.publish-sheet {
+		position: absolute;
+		left: 50%;
+		right: auto;
+		bottom: 0;
+		width: 100%;
+		max-width: 760px;
+		height: 86vh;
+		max-height: 1180rpx;
+		min-height: 620rpx;
+		border-radius: 34rpx 34rpx 0 0;
+		background: var(--publish-background, #f5f8f7);
+		box-shadow: 0 -18rpx 60rpx rgba(39, 59, 66, 0.18);
+		overflow: hidden;
+		transform: translate3d(-50%, 100%, 0);
+		transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		will-change: transform;
+	}
+
+	.publish-curtain.is-open .publish-sheet {
+		transform: translate3d(-50%, 0, 0);
+	}
+
+	.publish-sheet-handle {
+		position: absolute;
+		z-index: 2;
+		top: 16rpx;
+		left: 50%;
+		width: 72rpx;
+		height: 8rpx;
+		border-radius: 8rpx;
+		background: rgba(115, 133, 129, 0.28);
+		transform: translateX(-50%);
+	}
+
 	.publish-curtain-scroll {
-		height: 100vh;
-		height: 100dvh;
+		height: 100%;
 	}
 
 	.publish-curtain-content {
 		display: flex;
 		flex-direction: column;
-		min-height: 100vh;
-		min-height: 100dvh;
-		padding: calc(106rpx + env(safe-area-inset-top)) 96rpx calc(190rpx + env(safe-area-inset-bottom));
+		min-height: 100%;
+		padding: calc(66rpx + env(safe-area-inset-top)) 48rpx calc(42rpx + env(safe-area-inset-bottom));
 		box-sizing: border-box;
 	}
 
@@ -320,7 +368,7 @@
 		margin: 0 auto;
 		opacity: 0;
 		transform: translateY(28rpx);
-		transition: opacity 360ms ease 210ms, transform 540ms cubic-bezier(0.16, 1, 0.3, 1) 210ms;
+		transition: opacity 260ms ease 80ms, transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 80ms;
 	}
 
 	.is-open .publish-announcement {
@@ -359,7 +407,7 @@
 		padding-top: 96rpx;
 		opacity: 0;
 		transform: translateY(26rpx);
-		transition: opacity 360ms ease 320ms, transform 580ms cubic-bezier(0.16, 1, 0.3, 1) 320ms;
+		transition: opacity 260ms ease 150ms, transform 360ms cubic-bezier(0.22, 1, 0.36, 1) 150ms;
 	}
 
 	.is-open .publish-actions {
@@ -379,7 +427,7 @@
 		padding: 18rpx 24rpx 18rpx 18rpx;
 		border: 1rpx solid rgba(222, 229, 232, 0.94);
 		border-radius: 24rpx;
-		background: rgba(247, 250, 250, 0.96);
+		background: var(--publish-surface, #ffffff);
 		box-shadow: 0 16rpx 46rpx rgba(39, 59, 66, 0.13), inset 0 1rpx 0 rgba(255, 255, 255, 0.82);
 		box-sizing: border-box;
 		color: #354146;
@@ -406,13 +454,13 @@
 		border-radius: 20rpx;
 		background: rgba(222, 239, 255, 0.9);
 		font-size: 38rpx;
-		color: #168cf0;
+		color: #4c8fc5;
 	}
 
 	.publish-option-icon.question-icon {
 		border-color: rgba(116, 194, 164, 0.72);
 		background: rgba(221, 244, 235, 0.92);
-		color: #238267;
+		color: #2f9188;
 	}
 
 	.publish-option-label {
@@ -455,7 +503,16 @@
 	}
 
 	.publish-system.is-night .publish-curtain {
-		background: #15191b;
+		background: transparent;
+	}
+
+	.publish-system.is-night .publish-curtain-mask {
+		background: rgba(6, 9, 9, 0.58);
+	}
+
+	.publish-system.is-night .publish-sheet {
+		background: #202527;
+		box-shadow: 0 -18rpx 60rpx rgba(0, 0, 0, 0.3);
 	}
 
 	.publish-system.is-night .announcement-heading {
@@ -489,7 +546,8 @@
 	}
 
 	@media (max-height: 720px) {
-		.publish-curtain-content { padding-top: calc(76rpx + env(safe-area-inset-top)); }
+		.publish-sheet { height: 92vh; min-height: 0; }
+		.publish-curtain-content { padding-top: calc(58rpx + env(safe-area-inset-top)); }
 	}
 
 	/* Keep the independent trigger attached to the centered H5 dock on wide screens. */
@@ -505,6 +563,7 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.publish-curtain,
+		.publish-sheet,
 		.publish-announcement,
 		.publish-actions,
 		.global-publish-trigger {

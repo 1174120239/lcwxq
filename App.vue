@@ -13,8 +13,8 @@
 		'/pages/home/find',
 		'/pages/home/user'
 	]
-	let campusLastBackTime = 0
 	let campusBackButtonInstalled = false
+	let campusBackButtonReadyListenerAttached = false
 
 	function campusNormalizeRoute(route) {
 		if (!route) return ''
@@ -38,17 +38,6 @@
 		})
 	}
 
-	function campusQuitOnDoubleBack() {
-		const now = Date.now()
-		if (now - campusLastBackTime < 1600) {
-			if (typeof plus !== 'undefined' && plus.runtime) {
-				plus.runtime.quit()
-			}
-			return
-		}
-		campusLastBackTime = now
-	}
-
 	function campusHandleBackButton() {
 		const pages = getCurrentPages()
 		const currentRoute = campusCurrentRoute()
@@ -67,12 +56,24 @@
 			campusGoHome()
 			return
 		}
-		campusQuitOnDoubleBack()
+		// Consume the root back action so the native runtime cannot show its
+		// default "press again to exit" prompt or close the app accidentally.
+		return
 	}
 
 	function campusInstallBackButtonHandler() {
-		if (campusBackButtonInstalled || typeof plus === 'undefined' || !plus.key) return
+		if (campusBackButtonInstalled) return
+		if (typeof plus === 'undefined' || !plus.key) {
+			if (typeof document !== 'undefined' && !campusBackButtonReadyListenerAttached) {
+				campusBackButtonReadyListenerAttached = true
+				document.addEventListener('plusready', campusInstallBackButtonHandler, false)
+			}
+			return
+		}
 		campusBackButtonInstalled = true
+		if (typeof document !== 'undefined' && campusBackButtonReadyListenerAttached) {
+			document.removeEventListener('plusready', campusInstallBackButtonHandler, false)
+		}
 		plus.key.addEventListener('backbutton', campusHandleBackButton, false)
 	}
 	// #endif
@@ -122,23 +123,17 @@
 				}
 				if(payload=="finance"){
 					setTimeout(function() {
-						uni.navigateTo({
-							url: '/pages/user/inbox'
-						})
+						uni.switchTab({ url: '/pages/home/find' })
 					}, 1000)
 				}
 				if(payload=="system"){
 					setTimeout(function() {
-						uni.navigateTo({
-							url: '/pages/user/inbox'
-						})
+						uni.switchTab({ url: '/pages/home/find' })
 					}, 1000)
 				}
 				if (typeof payload === 'string' && payload.toLowerCase().indexOf("comment") !== -1){
 					setTimeout(function() {
-						uni.navigateTo({
-							url: '/pages/user/inbox'
-						})
+						uni.switchTab({ url: '/pages/home/find' })
 					}, 1000)
 				}
 				plus.push.clear();
@@ -288,9 +283,21 @@
 	@import '@/uni_modules/tuniao-ui/iconfont.css';
 	/* uview scss */
 	@import "@/uni_modules/uview-ui/index.scss";
+	:root {
+		--campus-bg: #f5f8f7;
+		--campus-surface: #ffffff;
+		--campus-surface-muted: #eef5f3;
+		--campus-primary: #237c74;
+		--campus-primary-strong: #2f9188;
+		--campus-primary-soft: #e6f3f1;
+		--campus-border: #dde8e5;
+		--campus-text: #243633;
+		--campus-muted: #738581;
+	}
+
 	page {
-		background-color: #f4f8f8;
-		color: #20312f;
+		background-color: var(--campus-bg, #f5f8f7);
+		color: var(--campus-text, #243633);
 	}
 
 	/* Keep the renderer shell on the selected theme while a new page is mounting. */
@@ -300,7 +307,7 @@
 	uni-app,
 	uni-page,
 	uni-page-body {
-		background-color: #f4f8f8;
+		background-color: var(--campus-bg, #f5f8f7);
 	}
 
 	html.campus-system-night,
@@ -318,6 +325,15 @@
 	body.campus-system-night,
 	html.campus-system-night page,
 	html.campus-system-night uni-page-body {
+		--campus-bg: #15191b;
+		--campus-surface: #202527;
+		--campus-surface-muted: #293032;
+		--campus-primary: #6ebaae;
+		--campus-primary-strong: #7bc4b7;
+		--campus-primary-soft: #293b38;
+		--campus-border: rgba(226, 234, 231, 0.1);
+		--campus-text: #edf3f0;
+		--campus-muted: #a9b5b0;
 		--campus-night-bg: #15191b;
 		--campus-night-surface: #202527;
 		--campus-night-input: #293032;
@@ -452,6 +468,15 @@
 
 	/* APP-PLUS pages receive the reactive class even before a WebView shell is available. */
 	.campus-night {
+		--campus-bg: #15191b;
+		--campus-surface: #202527;
+		--campus-surface-muted: #293032;
+		--campus-primary: #6ebaae;
+		--campus-primary-strong: #7bc4b7;
+		--campus-primary-soft: #293b38;
+		--campus-border: rgba(226, 234, 231, 0.1);
+		--campus-text: #edf3f0;
+		--campus-muted: #a9b5b0;
 		--campus-night-bg: #15191b;
 		--campus-night-surface: #202527;
 		--campus-night-input: #293032;
@@ -559,8 +584,8 @@
 		width: 42rpx;
 		height: 42rpx;
 		margin: 28rpx auto;
-		border: 5rpx solid rgba(22, 156, 146, 0.14);
-		border-top-color: #169c92;
+		border: 5rpx solid rgba(35, 124, 116, 0.14);
+		border-top-color: var(--campus-primary-strong, #2f9188);
 		border-right-color: #65bce8;
 		border-radius: 50%;
 		box-sizing: border-box;
@@ -691,13 +716,13 @@
 		border-radius: 5upx !important;
 	}
 	.uni-swiper-dot.uni-swiper-dot-active{
-		background-color: #3cc9a4 !important;
+		background-color: var(--campus-primary-strong, #2f9188) !important;
 		opacity: 0.8;
 		
 		
 	}
 	.uni-swiper-dot.uni-swiper-dot-active::after{
-		background-color: #3cc9a4 !important;
+		background-color: var(--campus-primary-strong, #2f9188) !important;
 		height: 8upx !important;
 	}
 	.uni-swiper-dots-horizontal{
