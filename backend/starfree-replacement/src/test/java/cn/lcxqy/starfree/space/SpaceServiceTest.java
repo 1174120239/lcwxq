@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -379,9 +381,8 @@ class SpaceServiceTest {
         LegacySpaceAbuseGuard.PostReservation reservation =
                 mock(LegacySpaceAbuseGuard.PostReservation.class);
         when(fixture.abuseGuard.reservePost(7L, false, 999, 0)).thenReturn(reservation);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("valid post text"), any(), eq(0), eq(0),
-                eq(0), eq(1), eq(0))).thenReturn(0);
+        when(fixture.jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class)))
+                .thenReturn(0);
 
         assertThatThrownBy(() -> fixture.service.add(addRequest("valid post text"), "127.0.0.1"))
                 .isInstanceOf(IllegalStateException.class)
@@ -1036,6 +1037,10 @@ class SpaceServiceTest {
         private Fixture() {
             when(abuseGuard.reservePost(anyLong(), anyBoolean(), anyInt(), anyInt()))
                     .thenReturn(LegacySpaceAbuseGuard.PostReservation.noop());
+            // SpaceService uses the generated-key overload so topics, polls and notifications
+            // can resolve the newly inserted dynamic id. Keep the fixture aligned with that API.
+            when(jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class)))
+                    .thenReturn(1);
         }
 
         private void login(long uid, String group) {
