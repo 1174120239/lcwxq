@@ -179,17 +179,18 @@
 							
 						</view>
 					</block>
-					<view class="presentation-controls" v-if="item.status==1&&item.onlyMe!=1&&item.type!=3">
-						<view class="presentation-control" :class="{'is-active is-featured':item.featured==1,'is-busy':presentationBusy[item.id]}" @tap.stop="toggleFeatured(item,index)">
+					<view class="presentation-controls">
+						<view class="presentation-control" :class="{'is-active is-featured':item.featured==1,'is-busy':presentationBusy[item.id],'is-disabled':!canManagePresentation(item)}" @tap.stop="toggleFeatured(item,index)">
 							<text class="cuIcon-favorfill"></text><text>{{item.featured==1 ? '取消精华' : '设为精华'}}</text>
 						</view>
-						<view class="presentation-control" :class="{'is-active is-list':configuredPinType(item)==1,'is-busy':presentationBusy[item.id]}" @tap.stop="togglePin(item,1,index)">
+						<view class="presentation-control" :class="{'is-active is-list':configuredPinType(item)==1,'is-busy':presentationBusy[item.id],'is-disabled':!canManagePresentation(item)}" @tap.stop="togglePin(item,1,index)">
 							<text class="cuIcon-list"></text><text>{{configuredPinType(item)==1 ? '取消列表置顶' : '列表置顶'}}</text>
 						</view>
-						<view class="presentation-control" :class="{'is-active is-banner':configuredPinType(item)==2,'is-busy':presentationBusy[item.id]}" @tap.stop="togglePin(item,2,index)">
+						<view class="presentation-control" :class="{'is-active is-banner':configuredPinType(item)==2,'is-busy':presentationBusy[item.id],'is-disabled':!canManagePresentation(item)}" @tap.stop="togglePin(item,2,index)">
 							<text class="cuIcon-picfill"></text><text>{{configuredPinType(item)==2 ? '取消横幅置顶' : '横幅置顶'}}</text>
 						</view>
 					</view>
+					<view class="presentation-unavailable" v-if="!canManagePresentation(item)">{{presentationUnavailableText(item)}}</view>
 					<view class="forum-list-operate padding-sm text-center bg-white">
 						<block v-if="item.status==0">
 							<text class="bg-green cu-btn xs radius" @tap="toReview(item.id,1,index)"> <text class="cuIcon-check"></text>通过</text>
@@ -297,6 +298,22 @@
 			
 		},
 		methods: {
+			canManagePresentation(item){
+				return !!item && Number(item.status) === 1 && Number(item.onlyMe) !== 1 && Number(item.type) !== 3;
+			},
+			presentationUnavailableText(item){
+				if(!item) return '当前动态不能设置展示状态';
+				if(Number(item.status) === 0) return '待审核动态通过后才能设置展示状态';
+				if(Number(item.status) === 2) return '已锁定动态解锁后才能设置展示状态';
+				if(Number(item.onlyMe) === 1) return '私密动态不能设置公开展示状态';
+				if(Number(item.type) === 3) return '评论回复不能设置精华或置顶';
+				return '当前动态不能设置展示状态';
+			},
+			ensurePresentationAvailable(item){
+				if(this.canManagePresentation(item)) return true;
+				uni.showToast({ title:this.presentationUnavailableText(item), icon:'none' });
+				return false;
+			},
 			configuredPinType(item){
 				if(!item) return 0;
 				return Number(item.pinConfiguredType != null ? item.pinConfiguredType : item.pinType) || 0;
@@ -500,14 +517,14 @@
 				})
 			},
 			toggleFeatured(item,index){
-				if(!item || this.presentationBusy[item.id]) return false;
+				if(!item || this.presentationBusy[item.id] || !this.ensurePresentationAvailable(item)) return false;
 				this.updatePresentation(item,index,{
 					featured:Number(item.featured) === 1 ? 0 : 1
 				});
 			},
 			togglePin(item,pinType,index){
 				var that = this;
-				if(!item || that.presentationBusy[item.id]) return false;
+				if(!item || that.presentationBusy[item.id] || !that.ensurePresentationAvailable(item)) return false;
 				var currentType = that.configuredPinType(item);
 				if(currentType === pinType){
 					uni.showModal({
@@ -949,6 +966,21 @@
 
 .presentation-control.is-busy {
 	opacity: .52;
+}
+
+.presentation-control.is-disabled,
+.presentation-control.is-active.is-disabled {
+	border-color: #e4e8e7;
+	background: #f5f7f7;
+	color: #98a2a2;
+	opacity: .7;
+}
+
+.presentation-unavailable {
+	margin: 9rpx 24rpx 2rpx;
+	font-size: 20rpx;
+	line-height: 1.4;
+	color: #8b9695;
 }
 
 @media screen and (min-width: 768px) {
