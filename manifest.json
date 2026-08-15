@@ -2,8 +2,8 @@
     "name" : "LCYZ",
     "appid" : "__UNI__850911F",
     "description" : "",
-    "versionName" : "2.0",
-    "versionCode" : 200,
+    "versionName" : "4.0",
+    "versionCode" : 400,
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -71,7 +71,7 @@
             "splashscreen" : {
                 "androidStyle" : "default",
                 "android" : {
-                    "hdpi" : "static/branding/generated/forum-splash-cinematic-hybrid-5s-vertical-v5-poster.png",
+                    "hdpi" : "static/branding/generated/forum-splash-magi2-5s-poster.png",
                     "xhdpi" : "static/branding/generated/forum-splash-emblem-portrait-v2-small-1024x1536.png",
                     "xxhdpi" : "static/branding/generated/forum-splash-rockstar-source-adapted-vertical-v2-top-small-poster.png"
                 }
