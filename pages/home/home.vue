@@ -6,7 +6,7 @@
 			<view class="home-ambient-sheen"></view>
 		</view>
 
-		<view class="home-hero" :style="{paddingTop: StatusBar + 20 + 'px'}">
+		<view class="home-hero" :style="homeHeroStyle">
 			<view class="hero-main">
 				<view class="hero-copy">
 					<text class="hero-greeting">{{greetingText}}</text>
@@ -492,6 +492,9 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import metas from '@/pages/contents/metas.vue'
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll, CAMPUS_CHROME_EVENT } from '@/utils/campusChrome.js'
+	import { shuffleQuestions } from '@/utils/questions.js'
+	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
 	// #endif
@@ -641,10 +644,19 @@
 				sy_appbox: false,
 				lastHomeRefresh: 0,
 				deferredHomeTimer: null,
+				chromeProgress: 0,
 
 			}
 		},
 		computed: {
+			homeHeroStyle() {
+				const progress = Math.max(0, Math.min(1, Number(this.chromeProgress) || 0))
+				return {
+					paddingTop: this.StatusBar + 20 + 'px',
+					opacity: String(1 - progress),
+					transform: `translate3d(0, ${-110 * progress}%, 0)`
+				}
+			},
 			dongchangfuHour() {
 				return (new Date(this.themeClock).getUTCHours() + 8) % 24
 			},
@@ -742,8 +754,13 @@
 		},
 
 
+		onPageScroll(event) {
+			handleCampusChromeScroll(this, event && event.scrollTop)
+		},
 		onShow() {
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
 			that.loadCampusThemeMode();
 			that.startThemeClock();
 			// #ifdef H5 || APP-PLUS
@@ -796,12 +813,15 @@
 			// #endif
 			//获取缓存
 			that.allCache();
+			// 首页问答推荐独立刷新，不受其他首页数据的短时节流影响。
+			that.getQuestionList();
 			// 每次重新显示首页都向服务端校准，后台删除后不再长期停留在旧缓存。
 			that.loading(false);
 			if (localStorage.getItem('token')) {
 
 				that.token = localStorage.getItem('token');
 			}
+			that.unreadNum();
 			that.userStatus();
 			// #ifdef APP-PLUS
 			// 已登录用户每次回到首页都向服务端校准推送 clientId，换设备或重装后也能继续收到通知。
@@ -878,13 +898,20 @@
 			}
 		},
 		mounted() {
+			uni.$on(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
 			this.getgg();
 			this.getAnnouncement();
 		},
 		onHide() {
+			resetCampusChromeScroll(this);
+			unbindCampusChromeScroll(this);
+			// Stop fixed navigation/publish layers while this tab is kept alive in the page stack.
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopThemeClock();
 		},
 		onUnload() {
+			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
 			clearTimeout(this.deferredHomeTimer);
 			this.deferredHomeTimer = null;
 			this.stopThemeClock();
@@ -894,6 +921,15 @@
 			this.themeTransitionTimer = null;
 		},
 		methods: {
+			unreadNum() {
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
+				})
+			},
+			handleChromeVisibility(state) {
+				const progress = state && typeof state === 'object' ? state.progress : (state ? 1 : 0)
+				this.chromeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
+			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
 				applyCampusThemeShell(this.campusThemeMode, this.themeClock)
@@ -1111,7 +1147,6 @@
 				// Discovery data waits until the route transition has settled.
 				that.deferredHomeTimer = setTimeout(function() {
 					that.getRecommend();
-					that.getQuestionList();
 					that.getTopList();
 					that.getMetaList();
 					that.getTagList();
@@ -1471,6 +1506,12 @@
 				}
 			},
 			// 公共缓存只负责首屏占位；网络成功后即使返回空数组，也必须覆盖这些旧数据。
+			filterRecommendedQuestions(list) {
+				const recommended = (Array.isArray(list) ? list : [])
+					.filter(function(item) { return item && Number(item.recommended) === 1 })
+				return shuffleQuestions(recommended)
+					.slice(0, 4)
+			},
 			allCache() {
 				var that = this;
 				var meta = that.TabCur;
@@ -1491,9 +1532,11 @@
 				if (localStorage.getItem('recommendList')) {
 					that.recommendList = that.readCache('recommendList', []);
 				}
-				if (localStorage.getItem('qaQuestionList')) {
-					that.questionList = that.readCache('qaQuestionList', []);
+				if (localStorage.getItem('qaRecommendedQuestionList')) {
+					that.questionList = that.filterRecommendedQuestions(that.readCache('qaRecommendedQuestionList', []));
 				}
+				// 旧键曾缓存全部问答，不能继续作为首页推荐数据源。
+				if (localStorage.getItem('qaQuestionList')) localStorage.removeItem('qaQuestionList');
 				if (localStorage.getItem('find_metaList')) {
 					that.metaList = that.readCache('find_metaList', []);
 				}
@@ -1982,15 +2025,16 @@
 				that.$Net.request({
 					url: that.$API.qaQuestionList(),
 					data: {
-						limit: 4,
-						page: 1
+						limit: 30,
+						page: 1,
+						recommended: 1
 					},
 					method: 'get',
 					dataType: 'json',
 					success: function(res) {
 						if (res.data && res.data.code == 1) {
-							that.questionList = Array.isArray(res.data.data) ? res.data.data : [];
-							localStorage.setItem('qaQuestionList', JSON.stringify(that.questionList));
+							that.questionList = that.filterRecommendedQuestions(res.data.data);
+							localStorage.setItem('qaRecommendedQuestionList', JSON.stringify(that.questionList));
 						}
 					}
 				})
@@ -3027,6 +3071,75 @@
 		border-radius: 28rpx !important;
 	}
 
+	/* Mobile polish: keep the first screen calm and leave room for the dock. */
+	@media (max-width: 759px) {
+		/* H5 does not provide the native status-bar inset used by App-plus. */
+		/* #ifdef H5 */
+		.campus-home .home-hero {
+			padding-top: 32px !important;
+			padding-bottom: 28rpx;
+		}
+		/* #endif */
+
+		.hero-greeting {
+			font-size: 52rpx;
+			line-height: 1.14;
+		}
+
+		.hero-subtitle {
+			margin-top: 14rpx;
+			font-size: 25rpx;
+		}
+
+		.home-stage {
+			padding-top: 20rpx;
+			padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+			border-radius: 48rpx 48rpx 0 0;
+		}
+
+		.campus-home .swiper-container {
+			aspect-ratio: 1.618 / 1;
+			margin-bottom: 18rpx;
+			border-radius: 28rpx !important;
+		}
+
+		.campus-home .swiper-box,
+		.campus-home .swiper-box image,
+		.campus-home .swiper-box video {
+			border-radius: 28rpx !important;
+		}
+
+		.campus-home .home-shortcuts {
+			margin-right: 10rpx;
+			margin-bottom: 18rpx;
+			margin-left: 10rpx;
+			padding: 18rpx 10rpx 16rpx;
+			border: 1rpx solid rgba(255, 255, 255, 0.9) !important;
+			border-radius: 28rpx !important;
+			background: rgba(232, 240, 239, 0.94) !important;
+			box-shadow: 0 8rpx 22rpx rgba(19, 42, 43, 0.14) !important;
+		}
+
+		.campus-home .home-shortcuts .index-sort-main {
+			padding: 14rpx 0 16rpx;
+		}
+
+		.campus-home .home-shortcuts .index-sort-i {
+			width: 84rpx;
+			height: 84rpx;
+			margin-bottom: 14rpx;
+			border-radius: 24rpx !important;
+			line-height: 84rpx;
+			font-size: 40rpx;
+		}
+
+		.campus-home .home-shortcuts .index-sort-text {
+			font-size: 28rpx;
+			font-weight: 600;
+			color: #35484a;
+		}
+	}
+
 	.home-shortcuts,
 	.home-notice,
 	.discovery-card {
@@ -3395,6 +3508,15 @@
 		box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.18) !important;
 	}
 
+	.campus-home.campus-night .home-shortcuts {
+		border-color: rgba(226, 232, 230, 0.14) !important;
+		background: #263334 !important;
+	}
+
+	.campus-home.campus-night .home-shortcuts .index-sort-text {
+		color: #dce8e3 !important;
+	}
+
 	.campus-home.campus-night .home-notice {
 		border-color: rgba(222, 232, 228, 0.14) !important;
 		background: #202729 !important;
@@ -3499,6 +3621,19 @@
 
 	.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .home-read-link {
 		color: #7fc4ff;
+	}
+
+	@media (max-width: 759px) {
+		.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .cu-card.article.no-card > .cu-item {
+			border-radius: 30rpx !important;
+			border-color: rgba(132, 177, 169, 0.22);
+			background: linear-gradient(135deg, #303d3e 0%, #263b3b 56%, #2b433c 100%);
+			box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.2) !important;
+		}
+
+		.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .home-article-card {
+			background: transparent;
+		}
 	}
 
 	@keyframes stageRise {

@@ -286,6 +286,8 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import CampusThemeToggle from '@/pages/components/CampusThemeToggle.vue'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll } from '@/utils/campusChrome.js'
+	import { clearUnreadBadge, refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	// #ifdef APP-PLUS
 	import Tabbar from '@/pages/components/tabBar.vue'
 	// #endif
@@ -340,8 +342,13 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		onPullDownRefresh(){
 			this.refreshProfile(true)
 		},
+		onPageScroll(event) {
+			handleCampusChromeScroll(this, event && event.scrollTop)
+		},
 		onShow(){
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
 			that.showProfileMenu = false;
 			that.loadCampusThemeMode();
 			that.startProfileThemeClock();
@@ -390,6 +397,10 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			
 		},
 		onHide() {
+			resetCampusChromeScroll(this);
+			unbindCampusChromeScroll(this);
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopProfileThemeClock();
 		},
 		onUnload() {
@@ -511,6 +522,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				}, 900)
 			},
 			resetProfileState() {
+				clearUnreadBadge()
 				this.userInfo = null
 				this.name = ''
 				this.uid = 0
@@ -1176,24 +1188,8 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			    }
 			},
 			unreadNum() {
-				var that = this;
-				that.$Net.request({
-					
-					url: that.$API.unreadNum(),
-					data:{
-						"token":that.token
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if(res.data.code==1){
-							that.noticeSum = res.data.data;
-						}
-					},
-					fail: function() {}
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
 				})
 			},
 			goFanList(uid){

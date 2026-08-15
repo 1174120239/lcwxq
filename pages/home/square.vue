@@ -1,7 +1,7 @@
 <template>
 	<view class="campus-page campus-square" :class="{'campus-night': campusNight}">
 		
-		<view class="header square-header" :style="{paddingTop: StatusBar + 'px'}">
+		<view class="header square-header" :style="squareHeaderStyle">
 			<view class="square-mainbar">
 				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toggleSquareMenu"><text class="cuIcon-sort"></text></view>
 				<text class="square-page-title">{{squarePageTitle}}</text>
@@ -127,6 +127,10 @@
 		<block v-if="squareid==0&&contentMode==='qa'">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
 			<view class="square-qa-list" @touchmove="collapseSquareMenu">
+				<view class="square-qa-overview" v-if="questionList.length>0">
+					<text class="square-qa-overview-title">最近讨论</text>
+					<text class="square-qa-overview-count">{{questionTotal}} 个问题</text>
+				</view>
 				<view class="square-qa-loading" v-if="questionLoading&&questionList.length===0">
 					<view class="campus-loader"></view>
 				</view>
@@ -135,7 +139,7 @@
 					暂时还没有已发布的问题
 				</view>
 				<qa-question-card v-for="item in questionList" :key="'square-question-'+item.id"
-					:question="item" :night="campusNight" @open="openQuestion"></qa-question-card>
+					:question="item" :night="campusNight" variant="feed" @open="openQuestion"></qa-question-card>
 				<view class="square-qa-more" v-if="questionList.length>0">{{questionMoreText}}</view>
 			</view>
 		</block>
@@ -407,6 +411,9 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import metas from '@/pages/contents/metas.vue'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll, CAMPUS_CHROME_EVENT } from '@/utils/campusChrome.js'
+	import { shuffleQuestions } from '@/utils/questions.js'
+	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	import featureFlags from '@/utils/featureFlags.js'
 	// #ifdef APP-PLUS
 	import Tabbar from '@/pages/components/tabBar.vue'
@@ -432,7 +439,8 @@
 				isLoading: 0,
 				left_tabbar: [],
 				scrollTop: 0, 
-				pageScrollTop: 0,
+			pageScrollTop: 0,
+			chromeProgress: 0,
 				showBackToTop: false,
 				spaceReturnScrollTop: 0,
 				spaceReturnPending: false,
@@ -597,6 +605,14 @@
 				const toolbarHeight = Math.round(toolbarRpx * viewportWidth / 750)
 				return { height: (this.StatusBar + toolbarHeight) + 'px' }
 			},
+			squareHeaderStyle() {
+				const progress = Math.max(0, Math.min(1, Number(this.chromeProgress) || 0))
+				return {
+					paddingTop: this.StatusBar + 'px',
+					opacity: String(1 - progress),
+					transform: `translate3d(0, ${-110 * progress}%, 0)`
+				}
+			},
 			officialTopicPreview() {
 				const topics = this.officialTopics || []
 				const recommended = topics.filter(topic => Number(topic.isrecommend) === 1)
@@ -665,18 +681,26 @@
 		onPageScroll(event) {
 			this.pageScrollTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
 			this.showBackToTop = this.pageScrollTop > 520
+			handleCampusChromeScroll(this, event && event.scrollTop)
 			this.collapseSquareMenu()
 		},
 		onHide() {
+			resetCampusChromeScroll(this)
+			unbindCampusChromeScroll(this)
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
 		},
 		onUnload() {
+			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility)
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
 		},
 		onShow() {
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
 			var restoreSpacePosition = that.spaceReturnPending;
 			that.spaceReturnPending = false;
 			if (!that.groupChatEnabled && that.squareid == 1) {
@@ -772,7 +796,7 @@
 				 // #endif
 				
 			}
-			if (that.squareid == 0 && that.contentMode === 'qa' && that.questionList.length === 0) {
+			if (that.squareid == 0 && that.contentMode === 'qa') {
 				that.loadQuestionList(false);
 			}
 			if (that.token != "" && that.squareid == 1) that.startChatPolling();
@@ -801,10 +825,15 @@
 		
 		mounted() {
 			var that = this;
+			uni.$on(CAMPUS_CHROME_EVENT, that.handleChromeVisibility)
 			that.getgg();
 			
 		},
 		methods: {
+			handleChromeVisibility(state) {
+				const progress = state && typeof state === 'object' ? state.progress : (state ? 1 : 0)
+				this.chromeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
+			},
 			backToTop() {
 				if (this.squareid !== 0) return
 				this.showBackToTop = false
@@ -852,7 +881,7 @@
 				this.contentMode = mode;
 				this.stopChatPolling();
 				uni.pageScrollTo({ scrollTop: 0, duration: 0 });
-				if (mode === 'qa' && this.questionList.length === 0) {
+				if (mode === 'qa') {
 					this.loadQuestionList(false);
 				} else if (mode === 'space' && this.spaceList.length === 0) {
 					this.page = 1;
@@ -878,7 +907,7 @@
 							if (!append) uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '问题加载失败', icon: 'none' });
 							return;
 						}
-						const list = Array.isArray(res.data.data) ? res.data.data : [];
+						const list = shuffleQuestions(res.data.data);
 						this.questionList = append ? this.questionList.concat(list) : list;
 						this.questionPage = targetPage;
 						this.questionTotal = Number(res.data.total || 0);
@@ -1841,29 +1870,8 @@
 							})
 						},
 			unreadNum() {
-				var that = this;
-				that.$Net.request({
-
-					url: that.$API.unreadNum(),
-					data: {
-						"token": that.token
-					},
-					header: {
-						'Content-Type': 'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if (res.data.code == 1) {
-							that.noticeSum = res.data.data;
-						}
-					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
 				})
 			},
 			getAppBoxInfo(){
@@ -2523,6 +2531,8 @@
 		border-bottom: 1rpx solid rgba(219, 226, 230, 0.9) !important;
 		box-shadow: 0 8rpx 28rpx rgba(42, 57, 68, 0.05) !important;
 		overflow: visible !important;
+		transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+		will-change: transform, opacity;
 	}
 
 	.square-back-top {
@@ -2648,14 +2658,29 @@
 	.square-filter-row:active { background: rgba(230, 243, 241, 0.86); }
 
 	.square-qa-list {
-		width: calc(100% - 24rpx);
+		width: calc(100% - 28rpx);
 		max-width: 760px;
-		margin: 12rpx auto 0;
-		border: 1rpx solid #e2e8e6;
-		border-radius: 8rpx;
-		background: #ffffff;
-		overflow: hidden;
+		margin: 16rpx auto 0;
+		background: transparent;
 		box-sizing: border-box;
+	}
+
+	.square-qa-overview {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding: 8rpx 8rpx 18rpx;
+	}
+
+	.square-qa-overview-title {
+		font-size: 29rpx;
+		font-weight: 700;
+		color: #2f403b;
+	}
+
+	.square-qa-overview-count {
+		font-size: 22rpx;
+		color: #899590;
 	}
 
 	.square-qa-loading {
@@ -2667,7 +2692,6 @@
 
 	.square-qa-more {
 		padding: 28rpx 20rpx;
-		border-top: 1rpx solid #edf0ef;
 		font-size: 23rpx;
 		color: #909a96;
 		text-align: center;
@@ -2936,10 +2960,71 @@
 	}
 
 	/* Desktop keeps the feed at a readable width and centered under the header. */
-	@media (min-width: 760px) {
+	@media (min-width: 760px) and (max-width: 1199px) {
+		.square-section-tabs {
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-filter-menu {
+			right: 0;
+			left: 0;
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-back-top {
+			right: max(16px, calc(50% - 420px));
+			bottom: calc(116px + env(safe-area-inset-bottom));
+			width: 52px;
+			height: 52px;
+			border-width: 1px;
+			font-size: 24px;
+			box-shadow: 0 5px 16px rgba(41, 67, 73, 0.16);
+		}
+
 		.campus-square .appcontent {
-			width: 560px;
-			max-width: calc(100vw - 48px);
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto !important;
+			margin-left: auto !important;
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.square-section-tabs {
+			width: calc(100vw - 80px);
+			max-width: 1080px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-filter-menu {
+			right: 0;
+			left: 0;
+			width: calc(100vw - 80px);
+			max-width: 1080px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-back-top {
+			right: max(20px, calc(50% - 520px));
+			bottom: calc(116px + env(safe-area-inset-bottom));
+			width: 52px;
+			height: 52px;
+			border-width: 1px;
+			font-size: 24px;
+			box-shadow: 0 5px 16px rgba(41, 67, 73, 0.16);
+		}
+
+		.campus-square .appcontent {
+			width: calc(100vw - 80px);
+			max-width: 1040px;
 			margin-right: auto !important;
 			margin-left: auto !important;
 		}
@@ -3804,10 +3889,19 @@
 		color: #909a9e;
 	}
 
-	@media (min-width: 760px) {
+	@media (min-width: 760px) and (max-width: 1199px) {
 		.topic-center {
-			width: 560px;
-			max-width: calc(100vw - 48px);
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.topic-center {
+			width: calc(100vw - 80px);
+			max-width: 1040px;
 			margin-right: auto;
 			margin-left: auto;
 		}
@@ -3926,8 +4020,15 @@
 	}
 
 	.campus-square.campus-night .square-qa-list {
-		border-color: #303b38;
-		background: #1d2523;
+		background: transparent;
+	}
+
+	.campus-square.campus-night .square-qa-overview-title {
+		color: #e7efeb;
+	}
+
+	.campus-square.campus-night .square-qa-overview-count {
+		color: #8f9c97;
 	}
 
 	.campus-square.campus-night .square-qa-more {

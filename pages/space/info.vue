@@ -51,7 +51,7 @@
 					
 					<view class="space-image-grid space-detail-media" :class="{'is-single': spaceInfo.picList.length === 1, 'is-double': spaceInfo.picList.length === 2}" v-if="spaceInfo.picList.length>0">
 						<view class="bg-img" v-for="(data,i) in spaceInfo.picList" :key="data+i" @tap="previewImage(spaceInfo.picList,data)">
-							<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
+							<image class="space-detail-image" :src="imageSource(data)" mode="aspectFit" @error="imageLoadFailed(data)"></image>
 							<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)">
 								<text class="cuIcon-refresh"></text><text>加载失败，点击重试</text>
 							</view>
@@ -66,7 +66,7 @@
 						</view>
 						<view class="space-image-grid space-detail-media forward-media" :class="{'is-single': spaceInfo.forwardJson.picList.length === 1, 'is-double': spaceInfo.forwardJson.picList.length === 2}" v-if="spaceInfo.forwardJson.picList && spaceInfo.forwardJson.picList.length">
 							<view class="bg-img" v-for="(data,i) in spaceInfo.forwardJson.picList" :key="'forward-'+data+i" @tap="previewImage(spaceInfo.forwardJson.picList,data)">
-								<image :src="imageSource(data)" mode="aspectFill" @error="imageLoadFailed(data)"></image>
+								<image class="space-detail-image" :src="imageSource(data)" mode="aspectFit" @error="imageLoadFailed(data)"></image>
 								<view class="image-load-error" v-if="imageFailures[data]" @tap.stop="retryImage(data)"><text class="cuIcon-refresh"></text><text>加载失败，点击重试</text></view>
 							</view>
 						</view>
@@ -100,7 +100,7 @@
 			</view>
 			<block v-if="infoType==0">
 				<view class="space-reply-list">
-					<view class="cu-list menu-avatar comment" v-for="(item,index) in replyList" :key="index">
+					<view class="cu-list menu-avatar comment" v-for="(item,index) in replyList" :key="index" :id="'space-comment-' + item.id" :class="{'is-comment-highlighted': targetCommentId && String(targetCommentId) === String(item.id)}">
 						<view class="cu-item">
 							<campus-avatar :key="'reply-avatar-' + item.id + '-' + item.userJson.uid + '-' + item.userJson.avatar" class="cu-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="toUserContents(item.userJson)"></campus-avatar>
 							<view class="content">
@@ -129,9 +129,12 @@
 								<view class="comment-thread-wrap" v-if="item._expanded">
 									<space-reply-thread
 										:items="item._children"
+										:depth="2"
+										:max-depth="3"
 										:night="campusNight"
 										:current-uid="uid"
 										:group="group"
+										:highlight-id="targetCommentId"
 										@reply="openReplyComposer"
 										@like="toggleReplyLike"
 										@delete="deleteThreadReply"
@@ -366,6 +369,10 @@
 				replyTarget:null,
 				replySubmitting:false,
 				replyListRefreshPending:false,
+				targetCommentId: 0,
+				commentLocatePending: 0,
+				commentLocating: false,
+				skipInitialShowRefresh: false,
 			}
 		},
 		computed: {
@@ -384,7 +391,11 @@
 			var that = this;
 			if(that.id!=0){
 				that.getSpaceInfo();
-				that.getReplyList(false)
+				if (that.targetCommentId) {
+					that.commentLocatePending = that.targetCommentId;
+					that.targetCommentId = 0;
+				}
+				that.getReplyList(false, function(){ that.locateCommentTarget(); })
 			}
 			var timer = setTimeout(function() {
 				
@@ -419,14 +430,19 @@
 			if(localStorage.getItem('getuid')){
 				that.toid = localStorage.getItem('getuid');
 			}
-			if(that.id!=0){
+			var skipRefresh = that.skipInitialShowRefresh;
+			that.skipInitialShowRefresh = false;
+			if(that.id!=0 && !skipRefresh){
+				if (that.targetCommentId) that.commentLocatePending = that.targetCommentId;
+				that.targetCommentId = 0;
 				that.getSpaceInfo();
-				that.getReplyList(false)
+				that.getReplyList(false, function(){ that.locateCommentTarget(); })
 			}
 			
 		},
 		onLoad(res) {
 			var that = this;
+			that.skipInitialShowRefresh = true;
 			if(localStorage.getItem('userinfo')){
 							
 				var userInfo = JSON.parse(localStorage.getItem('userinfo'));
@@ -448,10 +464,11 @@
 			if(res.replyType){
 				that.replyType = res.replyType;
 			}
+			that.commentLocatePending = Number(res.commentId || 0);
 			if(res.id){
 				that.id = res.id;
 				that.getSpaceInfo();
-				that.getReplyList(false)
+				that.getReplyList(false, function(){ that.locateCommentTarget(); })
 			}
 		},
 		mounted(){
@@ -810,7 +827,7 @@
 				    url: '/pages/space/post?type=2&id='+id
 				});
 			},
-			getReplyList(isPage){
+			getReplyList(isPage, done){
 				var that = this;
 				var page = that.page;
 				var token = "";
@@ -899,6 +916,7 @@
 							that.replyListRefreshPending = false;
 							that.getReplyList(false);
 						}
+						if (done) done();
 					}
 				})
 			},
@@ -913,7 +931,95 @@
 				item._loading = false;
 				item._childPage = Number(item._childPage || 0);
 				item._childMore = item._childMore === true;
+				item._highlighted = item._highlighted === true;
 				return item;
+			},
+			requestReplyById(id, done){
+				var that = this;
+				if (!id) { if (done) done(null); return; }
+				that.$Net.request({
+					url: that.$API.spaceList(),
+					data: {
+						searchParams: JSON.stringify({id: Number(id), type: 3}),
+						limit: 1,
+						page: 1,
+						order: 'id',
+						token: that.token
+					},
+					method: 'get',
+					dataType: 'json',
+					timeout: 15000,
+					success: function(res){
+						var list = res.data && res.data.code == 1 && Array.isArray(res.data.data) ? res.data.data : [];
+						if (done) done(list.length ? that.prepareReplyItem(list[0]) : null);
+					},
+					fail: function(){ if (done) done(null); }
+				});
+			},
+			locateCommentTarget(){
+				var that = this;
+				var targetId = Number(that.commentLocatePending || 0);
+				if (!targetId || that.commentLocating || that.targetCommentId) return;
+				that.commentLocating = true;
+				var chain = [];
+				var visited = {};
+				var walk = function(item){
+					if (!item || !item.id || item.type != 3) {
+						that.finishCommentLocation(chain, targetId);
+						return;
+					}
+					if (visited[item.id] || chain.length >= 32) {
+						that.finishCommentLocation(chain, targetId);
+						return;
+					}
+					visited[item.id] = true;
+					chain.unshift(item);
+					if (Number(item.toid || 0) > 0) {
+						that.requestReplyById(item.toid, walk);
+					} else {
+						that.finishCommentLocation(chain, targetId);
+					}
+				};
+			that.requestReplyById(targetId, walk);
+			},
+			finishCommentLocation(chain, targetId){
+				var that = this;
+				if (!chain.length) {
+					that.commentLocating = false;
+					that.commentLocatePending = 0;
+					uni.showToast({title: '评论已不存在或不可见', icon: 'none'});
+					return;
+				}
+				var root = that.findReplyById(that.replyList, chain[0].id);
+				if (!root) {
+					root = chain[0];
+					that.replyList = [root].concat(that.replyList || []);
+				}
+				var parent = root;
+				for (var index = 1; index < chain.length; index++) {
+					var child = chain[index];
+					that.$set(parent, '_children', [child]);
+					that.$set(parent, '_loaded', true);
+					that.$set(parent, '_expanded', true);
+					that.$set(parent, '_childMore', false);
+					parent = child;
+				}
+				that.$set(parent, '_highlighted', true);
+				that.targetCommentId = targetId;
+				that.commentLocatePending = 0;
+				that.commentLocating = false;
+				that.$nextTick(function(){ that.scrollToComment(targetId); });
+			},
+			scrollToComment(id){
+				var query = uni.createSelectorQuery();
+				query.selectViewport().scrollOffset();
+				query.select('#space-comment-' + id).boundingClientRect();
+				query.exec(function(result){
+					var viewport = result && result[0] ? result[0] : {};
+					var rect = result && result[1] ? result[1] : null;
+					if (!rect) return;
+					uni.pageScrollTo({scrollTop: Math.max(0, Number(viewport.scrollTop || 0) + rect.top - 150), duration: 320});
+				});
 			},
 			findReplyById(items,id){
 				for(var i=0;i<items.length;i++){
@@ -2084,5 +2190,16 @@
 
 .space-detail-page.campus-night .space-footer-box .text-blue {
 	color: #9dd9cd !important;
+}
+
+.space-detail-page .is-comment-highlighted > .cu-item {
+	border-radius: 14rpx;
+	background: rgba(73, 183, 164, .12) !important;
+	box-shadow: 0 0 0 2rpx rgba(73, 183, 164, .22);
+}
+
+.space-detail-page.campus-night .is-comment-highlighted > .cu-item {
+	background: rgba(111, 210, 192, .14) !important;
+	box-shadow: 0 0 0 2rpx rgba(111, 210, 192, .24);
 }
 </style>

@@ -288,7 +288,10 @@ public class QaService {
                         + "VALUES(?,?,?,?,?,1,?,?)",
                 answerId, actor.getUid(), parentId, rootId, text, now, now);
         long questionId = number(answer.get("questionId"));
-        writeNotice("qaComment", actor.getUid(), noticeUid, questionId, answerId,
+        // Keep the answer relationship in the response while using the notification cid
+        // for the exact comment that was created. Older rows are normalized by the inbox
+        // service so existing notifications remain usable.
+        writeNotice("qaComment", actor.getUid(), noticeUid, questionId, id,
                 parentId > 0 ? "回复了你的评论：" + preview(text) : "评论了你的回答：" + preview(text),
                 "问答收到新评论");
         return comment(id);
@@ -550,15 +553,15 @@ public class QaService {
         return "";
     }
 
-    private void writeNotice(String type, long fromUid, long toUid, long questionId, long answerId,
+    private void writeNotice(String type, long fromUid, long toUid, long questionId, long referenceId,
                              String message, String title) {
         if (toUid <= 0 || fromUid == toUid) {
             return;
         }
         try {
-            jdbc.update("INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
+                    jdbc.update("INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
                             + "VALUES(?,?,?,?,0,?,?,?)",
-                    type, fromUid, message, toUid, questionId, Instant.now().getEpochSecond(), answerId);
+                    type, fromUid, message, toUid, questionId, Instant.now().getEpochSecond(), referenceId);
             if (push != null) {
                 push.sendComment(toUid, title, message, "qa:" + questionId);
             }

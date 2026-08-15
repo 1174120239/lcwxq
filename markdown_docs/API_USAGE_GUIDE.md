@@ -184,7 +184,7 @@ form_post("SFreeUsers/userRegister", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；动态点赞不产生站内信。 |
+| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；问答通知额外返回 `answerId`，`qaComment` 返回 `commentId`，可从消息中心直接定位到回答和评论；动态点赞不产生站内信。 |
 | `SFreeUsers/unreadNum` | GET/POST / token | `token` | 公网新 | 不包括旧聊天未读数。 |
 | `SFreeUsers/setRead` | GET/POST / token | `type` | 公网新 | `all/comment/finance/system/fan`；`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
@@ -327,7 +327,7 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
-| `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；推荐、排序值和更新时间共同决定顺序。 |
+| `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；`recommended=1` 只返回首页推荐问答，主页不得回退混入普通问答；推荐、排序值和更新时间共同决定顺序。 |
 | `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；服务端固定 `status=0,recommended=0,sortOrder=0,createdBy=当前用户`，忽略客户端伪造的管理字段，20 秒内相同标题和说明拒绝重复提交。 |
 | `SFreeQa/questionInfo` | GET/POST / 可选 token | `id,token` | 代码新/公网旧 | 普通用户只能读取已发布问题；staff 可预览停用问题。 |
 | `SFreeQa/answerList` | GET/POST / 可选 token | `questionId,page,limit,sort,token` | 代码新/公网旧 | `sort=latest` 按时间，其他值按点赞和时间；登录时返回 `isLiked`。 |
@@ -335,14 +335,14 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeQa/answerEdit` | POST / owner/staff | `params={id,text}` | 代码新/公网旧 | 仅回答作者或 staff 可修改。 |
 | `SFreeQa/answerDelete` | POST / owner/staff | `id,token` | 代码新/公网旧 | 逻辑删除回答并清理点赞关系，不硬删历史正文。 |
 | `SFreeQa/answerLike` | POST / token | `answerId,token` | 代码新/公网旧 | uid+answer id 唯一，重复点击在点赞和取消之间切换并返回最新计数。 |
-| `SFreeQa/commentList` | GET/POST / 无 | `answerId,page,limit` | 代码新/公网旧 | 根评论分页，返回页内完整 `children` 回复树。 |
-| `SFreeQa/commentAdd` | POST / token | `params={answerId,parentId,text}` | 代码新/公网旧 | `parentId=0` 评论回答；非 0 回复评论；至少 1 字，20 秒内相同内容防重复。 |
+| `SFreeQa/commentList` | GET/POST / 无 | `answerId,page,limit` | 代码新/公网旧 | 根评论分页，返回页内完整 `children` 回复树；前端最多展示 3 层，后续回复按时间平铺。 |
+| `SFreeQa/commentAdd` | POST / token | `params={answerId,parentId,text}` | 代码新/公网旧 | `parentId=0` 评论回答；非 0 回复评论；至少 1 字，20 秒内相同内容防重复。问答通知响应同时提供 `answerId` 与 `commentId`，可直接定位回复。 |
 | `SFreeQa/commentDelete` | POST / owner/staff | `id,token` | 代码新/公网旧 | 作者或 staff 可删除；删除根评论时隐藏整条回复树。 |
 | `SFreeQa/questionManage` | GET/POST / staff | `token,page,limit,keyword,status` | 代码新/公网旧 | 后台读取发布和停用问题，支持关键词与状态筛选。 |
 | `SFreeQa/questionSave` | POST / staff | `params={id,title,description,topic,coverUrl,recommended,sortOrder,status}` | 代码新/公网旧 | id 为空新增，否则修改；问题标题至少 4 字。 |
 | `SFreeQa/questionStatus` | POST / staff | `id,status,token` | 代码新/公网旧 | `status=1` 发布，`0` 停用；不提供硬删除接口。 |
 
-问答通知写入 `starfree_inbox`：新回答使用 `qaAnswer`，回答评论或评论回复使用 `qaComment`，`value` 保存问题 id，消息中心和 UniPush 点击均可回到问题详情。数据库迁移为 `backend/database/migrations/007_campus_qa.sql`，未执行迁移前不能启用这些路由。
+问答通知写入 `starfree_inbox`：新回答使用 `qaAnswer`，回答评论或评论回复使用 `qaComment`，`value` 保存问题 id。新通知的 `qaComment.cid` 保存评论 id，接口同时返回 `answerId/commentId`；旧通知仍按原 `cid=answerId` 兼容读取。消息中心和 UniPush 点击可回到对应回答与评论。数据库迁移为 `backend/database/migrations/007_campus_qa.sql`，未执行迁移前不能启用这些路由。
 
 ### QQ 动态助手（NapCat 个人账号）
 

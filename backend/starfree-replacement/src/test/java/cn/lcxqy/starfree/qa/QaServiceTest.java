@@ -52,6 +52,22 @@ class QaServiceTest {
     }
 
     @Test
+    void recommendedQuestionListExcludesUnrecommendedRows() {
+        Fixture fixture = new Fixture();
+        Map<String, String> request = new HashMap<String, String>();
+        request.put("recommended", "1");
+        when(fixture.jdbc.queryForObject(contains("q.status=1 AND q.recommended=1"),
+                eq(Integer.class), any())).thenReturn(0);
+        when(fixture.jdbc.queryForList(contains("q.status=1 AND q.recommended=1"),
+                eq((Object) 0), eq((Object) 6))).thenReturn(Collections.<Map<String, Object>>emptyList());
+
+        QaService.Page page = fixture.service.questionList(request);
+
+        assertThat(page.getTotal()).isZero();
+        assertThat(page.getData()).isEmpty();
+    }
+
+    @Test
     void questionManagementRequiresStaff() {
         Fixture fixture = new Fixture();
         Map<String, String> request = new HashMap<String, String>();

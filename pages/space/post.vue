@@ -17,10 +17,10 @@
 				<view class="action">
 					<!--  #ifdef H5 || APP-PLUS -->
 					<block v-if="postType=='add'">
-						<button v-if="type==0||type==4" class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : '发布'}}</button>
+						<button v-if="type==0||type==4" class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : isSubmitting ? '提交中' : '发布'}}</button>
 					</block>
 					<block v-else>
-						<button class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : '保存'}}</button>
+						<button class="cu-btn round post-submit-button" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : isSubmitting ? '保存中' : '保存'}}</button>
 					</block>
 					<!--  #endif -->
 				</view>
@@ -30,7 +30,7 @@
 			<view class="post-compose">
 				<view class="post-editor-surface">
 					<textarea class="post-editor-input" :maxlength="maxTextLength" v-model="text" placeholder="分享校园里的新鲜事…" @input="limitTextInput"></textarea>
-					<view class="post-editor-status" :class="{'is-error': publishReason && !isUploading}">
+					<view class="post-editor-status" :class="{'is-error': publishReason && !isUploading && !isSubmitting}">
 						<text>{{textCount}}/{{maxTextLength}}</text>
 						<text>{{publishReason}}</text>
 					</view>
@@ -57,17 +57,31 @@
 				<!--  #endif -->
 
 				<view class="anonymous-tip" v-if="anonymousMode">
-					<text class="cuIcon-notice"></text>
-					<text>匿名发布：动态将以匿名账号展示，其他用户无法看到你的身份。</text>
+					<view class="anonymous-tip-icon"><text class="cuIcon-lock"></text></view>
+					<view class="anonymous-tip-copy">
+						<text class="anonymous-tip-title">匿名发布已开启</text>
+						<text class="anonymous-tip-desc">仅显示匿名身份</text>
+					</view>
+					<text class="anonymous-tip-state">已保护</text>
 				</view>
 
 				<view class="media-section" v-if="type==0||type==4">
+					<view class="media-section-heading">
+						<view class="media-section-heading-main">
+							<text class="media-section-title">图片和视频</text>
+						</view>
+						<text class="media-section-count" v-if="type==0">{{picList.length + pendingUploads.length}}/9</text>
+					</view>
 					<view class="media-grid">
-						<view class="media-image" :class="{'is-failed': item.failed}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path">
+						<view class="media-image" :class="{'is-failed': item.failed, 'is-uploading': item.uploading}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.uploading ? 'uploading-' : item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path">
+							<view class="media-uploading-mask" v-if="item.uploading">
+								<view class="media-uploading-spinner"></view>
+								<text>{{item.progress}}%</text>
+							</view>
 							<view class="media-failed-mask" v-if="item.failed" @tap.stop="retryFailedUpload(item.source)">
 								<text class="cuIcon-refresh"></text><text>上传失败，重试</text>
 							</view>
-							<text class="cuIcon-close media-remove" @tap.stop="item.failed ? removeFailedUpload(item.source) : picClose(item.path)"></text>
+							<text class="cuIcon-close media-remove" v-if="!item.uploading" @tap.stop="item.failed ? removeFailedUpload(item.source) : picClose(item.path)"></text>
 						</view>
 						<view class="media-video" v-if="type==4 && pic">
 							<video class="media-video-preview" :src="videoPreviewPath || pic" :controls="false" :show-center-play-btn="false" object-fit="cover"></video>
@@ -77,6 +91,20 @@
 						<view class="media-upload" v-if="canAddMedia" aria-label="添加图片或视频" @tap="chooseMedia">
 							<text class="cuIcon-add"></text>
 						</view>
+					</view>
+				</view>
+				<view class="upload-progress-card" v-if="isUploading">
+					<view class="upload-progress-head">
+						<view class="upload-progress-title-wrap">
+							<view class="upload-progress-icon"><view class="upload-progress-spinner"></view></view>
+							<view class="upload-progress-title">{{uploadCurrentLabel || '正在准备上传'}}</view>
+						</view>
+						<text class="upload-progress-value">{{uploadProgress}}%</text>
+					</view>
+					<view class="upload-progress-track"><view class="upload-progress-fill" :style="{width: uploadProgress + '%'}"></view></view>
+					<view class="upload-progress-foot">
+						<text>{{uploadTotal ? (uploadCompleted+'/'+uploadTotal) : '准备中'}}</text>
+						<text>完成后可发布</text>
 					</view>
 				</view>
 				<view class="component-editor" v-if="postType=='add' && !anonymousMode && type==0">
@@ -148,10 +176,10 @@
 			<view class="all-btn">
 				<view class="user-btn flex flex-direction">
 					<block v-if="postType=='add'">		
-						<button v-if="type==0||type==4" class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : '发布'}}</button>
+						<button v-if="type==0||type==4" class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="publishSpace">{{isUploading ? '上传中' : isSubmitting ? '提交中' : '发布'}}</button>
 					</block>
 					<block v-else>
-						<button class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : '保存'}}</button>
+						<button class="cu-btn post-submit-button post-submit-button-block margin-tb-sm lg" :disabled="!canPublish" @tap="editSpace()">{{isUploading ? '上传中' : isSubmitting ? '保存中' : '保存'}}</button>
 					</block>
 					
 					
@@ -260,6 +288,12 @@
 				picList:[],
 				videoPreviewPath:"",
 				isUploading:false,
+				isSubmitting:false,
+				pendingUploads:[],
+				uploadProgress:0,
+				uploadTotal:0,
+				uploadCompleted:0,
+				uploadCurrentLabel:'',
 				failedUploads:[],
 				imageOrder:{},
 				nextUploadOrder:0,
@@ -311,19 +345,29 @@
 			canAddMedia() {
 				if (this.isUploading) return false
 				if (this.type === 4 && this.pic) return false
-				return this.picList.length + this.failedUploads.length < 9
+				return this.picList.length + this.pendingUploads.length + this.failedUploads.length < 9
 			},
 			mediaItems() {
 				const items = this.picList.map((url, index) => ({
 					path: url,
 					order: Object.prototype.hasOwnProperty.call(this.imageOrder, url)
 						? Number(this.imageOrder[url]) : index,
-					failed: false
+					failed: false,
+					uploading: false
+				}))
+				this.pendingUploads.forEach(item => items.push({
+					path: item.path,
+					order: Number(item.order),
+					failed: false,
+					uploading: true,
+					progress: Number(item.progress) || 0,
+					source: item
 				}))
 				this.failedUploads.forEach((item, index) => items.push({
 					path: item.path,
 					order: Number(item.order == null ? this.picList.length + index : item.order),
 					failed: true,
+					uploading: false,
 					source: item
 				}))
 				return items.sort((left, right) => left.order - right.order)
@@ -332,7 +376,8 @@
 				return this.stripImageMarker(this.text).length
 			},
 			publishReason() {
-				if (this.isUploading) return '图片正在上传，请稍候'
+				if (this.isUploading) return '媒体正在上传，请稍候'
+				if (this.isSubmitting) return '正在提交，请稍候'
 				if (this.failedUploads.length) return '有图片上传失败，请重试或删除'
 				if (this.textCount > this.maxTextLength) return '动态正文不能超过' + this.maxTextLength + '字'
 				if (this.type === 4) {
@@ -345,7 +390,7 @@
 				return remaining > 0 ? '纯文字动态至少需要4个字，还需输入' + remaining + '个字' : ''
 			},
 			canPublish() {
-				if (this.isUploading || this.failedUploads.length) return false
+				if (this.isUploading || this.isSubmitting || this.pendingUploads.length || this.failedUploads.length) return false
 				if (this.textCount > this.maxTextLength) return false
 				const textLength = this.stripImageMarker(this.text).trim().length
 				const hasText = textLength > 0
@@ -699,6 +744,7 @@
 				})
 			},
 			publishSpace() {
+				if (this.isSubmitting) return
 				if (!this.canPublish && this.showPublishReason()) return
 				this.commitPendingTopic(() => {
 					if (this.type === 4) {
@@ -862,6 +908,7 @@
 			},
 			addSpace(){
 				var that = this;
+				if (that.isSubmitting) return false;
 				if(that.token==""){
 					uni.showToast({
 					    title:"请先登录",
@@ -923,6 +970,7 @@
 					poll:that.pollPayload(),
 					token:that.token
 				}
+				that.isSubmitting = true;
 				uni.showLoading({
 					title: "加载中"
 				});
@@ -945,9 +993,12 @@
 							setTimeout(function() {
 								that.back();
 							}, 900)
+						} else {
+							that.isSubmitting = false
 						}
-					},
+						},
 					fail: function(res) {
+						that.isSubmitting = false
 						setTimeout(function () {
 							uni.hideLoading();
 						}, 1000);
@@ -961,6 +1012,7 @@
 			},
 			addSpace2(){
 				var that = this;
+				if (that.isSubmitting) return false;
 				if(that.token==""){
 					uni.showToast({
 					    title:"请先登录",
@@ -1034,6 +1086,7 @@
 					poll:that.pollPayload(),
 					token:that.token
 				}
+				that.isSubmitting = true;
 				uni.showLoading({
 					title: "加载中"
 				});
@@ -1056,9 +1109,12 @@
 							setTimeout(function() {
 								that.back();
 							}, 900)
+						} else {
+							that.isSubmitting = false
 						}
 					},
 					fail: function(res) {
+						that.isSubmitting = false
 						setTimeout(function () {
 							uni.hideLoading();
 						}, 1000);
@@ -1072,6 +1128,7 @@
 			},
 			editSpace(){
 				var that = this;
+				if (that.isSubmitting) return false;
 				if (!that.canPublish && that.showPublishReason()) return false;
 				if(that.token==""){
 					uni.showToast({
@@ -1138,6 +1195,7 @@
 					topicIds:that.topicIdsPayload(),
 					token:that.token
 				}
+				that.isSubmitting = true;
 				uni.showLoading({
 					title: "加载中"
 				});
@@ -1162,10 +1220,12 @@
 							var timer = setTimeout(function() {
 								that.back();
 							}, 1000)
-							
+						} else {
+							that.isSubmitting = false
 						}
 					},
 					fail: function(res) {
+						that.isSubmitting = false
 						setTimeout(function () {
 							uni.hideLoading();
 						}, 1000);
@@ -1177,130 +1237,160 @@
 					}
 				})
 			},
+			uploadMediaFile(filePath, onProgress) {
+				return new Promise((resolve, reject) => {
+					let settled = false
+					const finish = (handler, value) => {
+						if (settled) return
+						settled = true
+						handler(value)
+					}
+					const task = uni.uploadFile({
+						url: this.$API.upload(),
+						filePath,
+						name: 'file',
+						formData: { token: this.token },
+						success: (response) => {
+							let body = response && response.data
+							try {
+								if (typeof body === 'string') body = JSON.parse(body)
+							} catch (error) {
+								finish(reject, { msg: '上传响应格式异常' })
+								return
+							}
+							if (body && body.code == 1 && body.data && body.data.url) {
+								finish(resolve, body.data)
+								return
+							}
+							finish(reject, { msg: (body && body.msg) || '上传失败' })
+						},
+						fail: (error) => finish(reject, { msg: '网络异常，上传失败', error })
+					})
+					if (task && task.onProgressUpdate) {
+						task.onProgressUpdate((event) => {
+							const progress = Math.max(0, Math.min(100, Number(event && event.progress) || 0))
+							if (onProgress) onProgress(progress)
+						})
+					}
+				})
+			},
+			updatePendingProgress(order, progress, index, total) {
+				const value = Math.max(0, Math.min(100, Number(progress) || 0))
+				const item = this.pendingUploads.find(upload => Number(upload.order) === Number(order))
+				if (item) this.$set(item, 'progress', value)
+				if (total) this.uploadProgress = Math.max(0, Math.min(100, Math.round(((index + value / 100) / total) * 100)))
+			},
+			resetUploadProgress() {
+				this.isUploading = false
+				this.uploadProgress = 0
+				this.uploadTotal = 0
+				this.uploadCompleted = 0
+				this.uploadCurrentLabel = ''
+			},
+			async processImageUploads(filePaths, orderBase) {
+				const total = filePaths.length
+				const failures = []
+				this.isUploading = true
+				this.uploadTotal = total
+				this.uploadCompleted = 0
+				this.uploadProgress = 0
+				for (let index = 0; index < total; index++) {
+					const order = orderBase + index
+					this.uploadCurrentLabel = `正在上传第 ${index + 1} 张图片`
+					this.updatePendingProgress(order, 0, index, total)
+					try {
+						const result = await this.uploadMediaFile(filePaths[index], progress => {
+							this.updatePendingProgress(order, progress, index, total)
+						})
+						this.removePendingUploadByOrder(order)
+						if (this.picList.length < 9) {
+							this.$set(this.imageOrder, result.url, order)
+							this.picList = this.picList.concat([result.url])
+						}
+					} catch (error) {
+						this.removePendingUploadByOrder(order)
+						failures.push({ path: filePaths[index], order, message: error && error.msg })
+					}
+					this.uploadCompleted = index + 1
+					this.uploadProgress = Math.round(((index + 1) / total) * 100)
+				}
+				this.sortPicList()
+				this.resetUploadProgress()
+				if (failures.length) {
+					this.failedUploads = this.failedUploads.concat(failures)
+					uni.showToast({ title: '部分图片上传失败，可重试或删除', icon: 'none' })
+				}
+			},
 			upload(){
-				const that = this
-				if(that.token===""){
+				if (this.token === "") {
 					uni.showToast({ title:"请先登录", icon:'none', duration: 1000 })
-					setTimeout(function() {
-						uni.navigateTo({ url: '/pages/user/login' })
-					}, 1000)
+					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 1000)
 					return false
 				}
-				const remaining = that.type === 0 ? 9 - that.picList.length - that.failedUploads.length : 9
+				const remaining = 9 - this.picList.length - this.pendingUploads.length - this.failedUploads.length
 				if (remaining <= 0) return false
 				uni.chooseImage({
 					count: remaining,
 					sizeType:['compressed'],
 					sourceType: ['album', 'camera'],
-						success: function (res) {
-							const tempFilePaths = res.tempFilePaths || []
-							if (!tempFilePaths.length) return
-							const orderBase = that.nextUploadOrder
-							that.nextUploadOrder += tempFilePaths.length
-							that.isUploading = true
-						uni.showLoading({ title: "上传中" })
-						let completed = 0
-						const results = new Array(tempFilePaths.length)
-						const finishUpload = () => {
-							completed += 1
-							if (completed !== tempFilePaths.length) return
-							for (let index = 0; index < results.length; index++) {
-								const result = results[index]
-									if (result && result.url && that.picList.length < 9) {
-										that.$set(that.imageOrder, result.url, result.order)
-										that.picList.push(result.url)
-									}
-									if (!result || !result.url) that.failedUploads.push({ path: tempFilePaths[index], order: orderBase + index })
-								}
-								that.sortPicList()
-							that.isUploading = false
-							uni.hideLoading()
-							if (that.failedUploads.length) uni.showToast({ title: '部分图片上传失败，可重试或删除', icon: 'none' })
+					success: (res) => {
+						const tempFilePaths = res.tempFilePaths || []
+						if (!tempFilePaths.length) return
+						if (this.type === 4) {
+							this.pic = ''
+							this.videoPreviewPath = ''
+							this.type = 0
 						}
-						for(let i = 0;i < tempFilePaths.length; i++) {
-							uni.uploadFile({
-							  url : that.$API.upload(),
-							  filePath: tempFilePaths[i],
-							  name: 'file',
-							  formData: { 'token': that.token },
-							  success: function (uploadFileRes) {
-									try {
-										const data = JSON.parse(uploadFileRes.data)
-										if(data.code==1 && data.data && data.data.url){
-											if (that.type === 4) {
-												that.pic = ''
-												that.videoPreviewPath = ''
-												that.picList = []
-												that.imageOrder = {}
-												that.failedUploads = []
-											}
-											that.type = 0
-											results[i] = { url: data.data.url, order: orderBase + i }
-										} else {
-											results[i] = null
-										}
-									} catch (error) {
-										results[i] = null
-									}
-								},
-								fail: function(){ results[i] = null },
-								complete: finishUpload
-							})
-						}
+						const orderBase = this.nextUploadOrder
+						this.nextUploadOrder += tempFilePaths.length
+						this.pendingUploads = this.pendingUploads.concat(tempFilePaths.map((path, index) => ({
+							path,
+							order: orderBase + index,
+							progress: 0,
+							uploading: true
+						})))
+						this.processImageUploads(tempFilePaths, orderBase)
 					}
 				})
 			},
 			uploadVideo(){
-				const that = this
-				if(that.token===""){
+				if (this.token === "") {
 					uni.showToast({ title:"请先登录", icon:'none', duration: 1000 })
-					setTimeout(function() {
-						uni.navigateTo({ url: '/pages/user/login' })
-					}, 1000)
+					setTimeout(() => uni.navigateTo({ url: '/pages/user/login' }), 1000)
 					return false
 				}
 				uni.chooseVideo({
 					sourceType: ['camera', 'album'],
 					compressed:true,
-					success: (response) => {
-					  const videoFile = response.tempFilePath
-					  const fileSize = response.size
-					  if (fileSize > 20 * 1024 * 1024) {
-					    uni.showToast({
-					      title: '视频不能超过 20MB',
-					      icon: 'none'
-					    })
-					    return false
-					  }
-						that.isUploading = true
-						uni.showLoading({ title: "上传中" })
-						uni.uploadFile({
-						  url : that.$API.upload(),
-						  filePath:videoFile,
-						  name: 'file',
-						  formData: { 'token': that.token },
-						  success: function (uploadFileRes) {
-								try {
-									const data = JSON.parse(uploadFileRes.data)
-									if(data.code==1 && data.data && data.data.url){
-										that.type = 4
-										that.picList = []
-										that.pic = data.data.url
-										that.videoPreviewPath = videoFile
-										return
-									}
-									uni.showToast({ title: data.msg || '视频上传失败', icon: 'none' })
-								} catch (error) {
-									uni.showToast({ title: '视频上传失败，请重试', icon: 'none' })
-								}
-							},fail:function(){
-								uni.showToast({ title: "网络异常，视频上传失败", icon: 'none' })
-							},
-							complete: function() {
-								that.isUploading = false
-								uni.hideLoading()
-							}
-						})
+					success: async (response) => {
+						const videoFile = response.tempFilePath
+						if (response.size > 20 * 1024 * 1024) {
+							uni.showToast({ title: '视频不能超过 20MB', icon: 'none' })
+							return false
+						}
+						this.isUploading = true
+						this.uploadTotal = 1
+						this.uploadCompleted = 0
+						this.uploadProgress = 0
+						this.uploadCurrentLabel = '正在上传视频'
+						try {
+							const result = await this.uploadMediaFile(videoFile, progress => {
+								this.uploadProgress = progress
+							})
+							this.type = 4
+							this.picList = []
+							this.imageOrder = {}
+							this.failedUploads = []
+							this.pendingUploads = []
+							this.pic = result.url
+							this.videoPreviewPath = videoFile
+							this.uploadCompleted = 1
+							this.uploadProgress = 100
+						} catch (error) {
+							uni.showToast({ title: (error && error.msg) || '视频上传失败，请重试', icon: 'none' })
+						} finally {
+							this.resetUploadProgress()
+						}
 					}
 				})
 			},
@@ -1318,28 +1408,37 @@
 				this.nextUploadOrder = this.picList.length
 			},
 			retryFailedUpload(item) {
-				if (this.isUploading) return
+				if (this.isUploading || !item) return
+				if (!this.token) {
+					uni.showToast({ title: '请先登录', icon: 'none' })
+					return
+				}
+				this.removeFailedUpload(item)
+				this.pendingUploads = this.pendingUploads.concat([{ path: item.path, order: item.order, progress: 0, uploading: true }])
 				this.isUploading = true
-				uni.showLoading({ title: '重新上传' })
-				uni.uploadFile({
-					url: this.$API.upload(), filePath: item.path, name: 'file',
-					formData: { token: this.token },
-					success: response => {
-						try {
-							const data = JSON.parse(response.data)
-							if (data.code === 1 && data.data && data.data.url) {
-								this.$set(this.imageOrder, data.data.url, item.order)
-								this.picList.push(data.data.url)
-								this.sortPicList()
-								this.removeFailedUpload(item)
-								return
-							}
-						} catch (error) {}
-						uni.showToast({ title: '图片上传失败，请重试', icon: 'none' })
-					},
-					fail: () => uni.showToast({ title: '图片上传失败，请重试', icon: 'none' }),
-					complete: () => { this.isUploading = false; uni.hideLoading() }
+				this.uploadTotal = 1
+				this.uploadCompleted = 0
+				this.uploadProgress = 0
+				this.uploadCurrentLabel = '正在重试图片上传'
+				this.uploadMediaFile(item.path, progress => {
+					this.updatePendingProgress(item.order, progress, 0, 1)
+				}).then(result => {
+					this.removePendingUploadByOrder(item.order)
+					this.$set(this.imageOrder, result.url, item.order)
+					this.picList = this.picList.concat([result.url])
+					this.sortPicList()
+				}).catch(error => {
+					this.removePendingUploadByOrder(item.order)
+					this.failedUploads = this.failedUploads.concat([{ path: item.path, order: item.order, message: error && error.msg }])
+					uni.showToast({ title: (error && error.msg) || '图片上传失败，请重试', icon: 'none' })
+				}).finally(() => {
+					this.uploadCompleted = 1
+					this.uploadProgress = 100
+					this.resetUploadProgress()
 				})
+			},
+			removePendingUploadByOrder(order) {
+				this.pendingUploads = this.pendingUploads.filter(item => Number(item.order) !== Number(order))
 			},
 			removeFailedUpload(item) {
 				this.failedUploads = this.failedUploads.filter(upload => upload !== item)
@@ -2804,5 +2903,881 @@
 		border-color: #303739;
 		background: #141819;
 		color: #e1e5e6;
+	}
+
+	/* Upload feedback stays in the compose surface so the user never loses context. */
+	.media-image {
+		animation: media-card-in 240ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.media-image.is-uploading {
+		border-color: #83bcae;
+		box-shadow: 0 0 0 2rpx rgba(35, 130, 103, .12);
+	}
+
+	.media-uploading-mask {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 10rpx;
+		background: rgba(24, 50, 44, .68);
+		color: #fff;
+		font-size: 24rpx;
+		font-weight: 650;
+	}
+
+	.media-uploading-spinner,
+	.upload-progress-spinner {
+		width: 34rpx;
+		height: 34rpx;
+		border: 4rpx solid rgba(255, 255, 255, .35);
+		border-top-color: #fff;
+		border-radius: 50%;
+		animation: media-upload-spin 800ms linear infinite;
+	}
+
+	.upload-progress-card {
+		width: calc(100% - 48rpx);
+		margin: 18rpx 24rpx 0;
+		padding: 18rpx 20rpx 16rpx;
+		border: 1rpx solid #d8e8e2;
+		border-radius: 14rpx;
+		background: #f5faf8;
+		box-sizing: border-box;
+		animation: upload-card-in 220ms ease both;
+	}
+
+	.upload-progress-head,
+	.upload-progress-title-wrap,
+	.upload-progress-foot {
+		display: flex;
+		align-items: center;
+	}
+
+	.upload-progress-head {
+		justify-content: space-between;
+		gap: 16rpx;
+	}
+
+	.upload-progress-title-wrap {
+		min-width: 0;
+		gap: 10rpx;
+	}
+
+	.upload-progress-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 42rpx;
+		height: 42rpx;
+		border-radius: 12rpx;
+		background: #dcefe8;
+	}
+
+	.upload-progress-icon .upload-progress-spinner {
+		width: 22rpx;
+		height: 22rpx;
+		border-width: 3rpx;
+		border-color: #a8cfc0;
+		border-top-color: #238267;
+	}
+
+	.upload-progress-title {
+		overflow: hidden;
+		color: #31594e;
+		font-size: 24rpx;
+		font-weight: 650;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.upload-progress-value {
+		flex: 0 0 auto;
+		color: #238267;
+		font-size: 25rpx;
+		font-weight: 700;
+	}
+
+	.upload-progress-track {
+		height: 10rpx;
+		margin-top: 16rpx;
+		border-radius: 999rpx;
+		background: #dce9e5;
+		overflow: hidden;
+	}
+
+	.upload-progress-fill {
+		height: 100%;
+		border-radius: inherit;
+		background: #238267;
+		transition: width 180ms ease;
+	}
+
+	.upload-progress-foot {
+		justify-content: space-between;
+		gap: 14rpx;
+		margin-top: 10rpx;
+		color: #82928c;
+		font-size: 20rpx;
+	}
+
+	.anonymous-tip {
+		gap: 14rpx;
+		border: 1rpx solid #cfe8df;
+		background: #f1faf6;
+		color: #386b5c;
+		animation: upload-card-in 240ms ease both;
+	}
+
+	.anonymous-tip-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 46rpx;
+		height: 46rpx;
+		border-radius: 14rpx;
+		background: #dcefe8;
+		color: #238267;
+		font-size: 25rpx;
+	}
+
+	.anonymous-tip-copy {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		flex-direction: column;
+		gap: 3rpx;
+	}
+
+	.anonymous-tip-title {
+		font-size: 24rpx;
+		font-weight: 700;
+	}
+
+	.anonymous-tip-desc {
+		color: #68847a;
+		font-size: 20rpx;
+		line-height: 1.45;
+	}
+
+	.anonymous-tip-state {
+		flex: 0 0 auto;
+		padding: 6rpx 10rpx;
+		border-radius: 999rpx;
+		background: #dcefe8;
+		color: #238267;
+		font-size: 19rpx;
+	}
+
+	.campus-editor-page.campus-night .media-image.is-uploading {
+		border-color: #589b87;
+		box-shadow: 0 0 0 2rpx rgba(98, 168, 148, .15);
+	}
+
+	.campus-editor-page.campus-night .upload-progress-card {
+		border-color: #2f4840;
+		background: #1d2a26;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-icon,
+	.campus-editor-page.campus-night .anonymous-tip-icon,
+	.campus-editor-page.campus-night .anonymous-tip-state {
+		background: #29453b;
+		color: #9dd2be;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-title,
+	.campus-editor-page.campus-night .anonymous-tip-title {
+		color: #d7ebe2;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-value {
+		color: #9dd2be;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-track {
+		background: #2b4039;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-fill {
+		background: #63a993;
+	}
+
+	.campus-editor-page.campus-night .upload-progress-foot,
+	.campus-editor-page.campus-night .anonymous-tip-desc {
+		color: #8ea99f;
+	}
+
+	.campus-editor-page.campus-night .anonymous-tip {
+		border-color: #315347;
+		background: #1d2d28;
+		color: #b9d9cb;
+	}
+
+	@keyframes media-card-in {
+		from { opacity: 0; transform: scale(.96) translateY(8rpx); }
+		to { opacity: 1; transform: scale(1) translateY(0); }
+	}
+
+	@keyframes upload-card-in {
+		from { opacity: 0; transform: translateY(8rpx); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@keyframes media-upload-spin {
+		to { transform: rotate(360deg); }
+	}
+
+	/* Final editor rhythm: one primary surface, then compact supporting sections. */
+	.campus-editor-page {
+		background: #f3f7f5;
+		color: #263a35;
+		animation: editor-page-in 260ms ease both;
+	}
+
+	.campus-editor-page .header {
+		border-bottom-color: rgba(37, 83, 74, .1);
+		background: rgba(250, 252, 251, .92);
+		box-shadow: 0 4rpx 20rpx rgba(36, 75, 67, .05);
+	}
+
+	.campus-editor-page .header .cu-bar {
+		min-height: 100%;
+	}
+
+	.campus-editor-page .header .content {
+		font-size: 32rpx;
+		font-weight: 700;
+		color: #25423b;
+	}
+
+	.campus-editor-page .header .action:first-child text {
+		font-size: 40rpx;
+		color: #59706a;
+		transition: transform 180ms ease, color 180ms ease;
+	}
+
+	.campus-editor-page .header .action:first-child:active text {
+		transform: scale(.9);
+		color: #238267;
+	}
+
+	.post-submit-button {
+		min-width: 124rpx;
+		height: 64rpx;
+		padding: 0 30rpx;
+		border-radius: 999rpx !important;
+		background: #238267 !important;
+		box-shadow: 0 8rpx 18rpx rgba(35, 130, 103, .2);
+		font-size: 25rpx;
+		line-height: 64rpx;
+		transition: transform 180ms ease, box-shadow 220ms ease, opacity 180ms ease;
+	}
+
+	.post-submit-button:active {
+		transform: scale(.95);
+		box-shadow: 0 4rpx 10rpx rgba(35, 130, 103, .16);
+	}
+
+	.post-compose {
+		width: calc(100% - 48rpx);
+		max-width: 760px;
+		padding: 14rpx 24rpx 38rpx;
+		box-sizing: border-box;
+	}
+
+	.post-editor-surface {
+		width: 100%;
+		max-width: none;
+		margin: 0;
+		padding: 24rpx 24rpx 18rpx;
+		border: 1rpx solid #dfeae6;
+		border-radius: 20rpx;
+		background: #ffffff;
+		box-shadow: 0 12rpx 30rpx rgba(37, 78, 70, .07);
+		box-sizing: border-box;
+		animation: editor-section-in 300ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.post-editor-input {
+		min-height: clamp(280rpx, 34vh, 520rpx) !important;
+		padding: 0;
+		font-size: 31rpx;
+		line-height: 1.68;
+		color: #263c36;
+	}
+
+	.post-editor-input::placeholder {
+		color: #a1afaa;
+	}
+
+	.post-editor-status {
+		margin-top: 14rpx;
+		padding: 14rpx 2rpx 0;
+		border-top: 1rpx solid #edf2f0;
+		color: #84948d;
+		font-size: 22rpx;
+		line-height: 1.4;
+	}
+
+	.space-owo {
+		width: 100%;
+		min-height: 64rpx;
+		margin: 14rpx 0 0;
+		padding: 0 12rpx;
+		border: 1rpx solid #dfeae6;
+		border-radius: 16rpx;
+		background: #fbfdfc;
+		box-shadow: 0 8rpx 18rpx rgba(37, 78, 70, .04);
+		box-sizing: border-box;
+		animation: editor-section-in 300ms 30ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.space-owo .cuIcon-emoji {
+		width: 64rpx;
+		height: 64rpx;
+		font-size: 35rpx;
+		color: #71837c;
+		transition: color 180ms ease, transform 180ms ease;
+	}
+
+	.space-owo .cuIcon-emoji.is-active {
+		color: #238267;
+	}
+
+	.space-owo .cuIcon-emoji:active {
+		transform: scale(.88);
+	}
+
+	.space-owo .owo {
+		border-top-color: #e3ece8;
+		border-radius: 12rpx;
+		background: #f6faf8;
+		animation: editor-section-in 220ms ease both;
+	}
+
+	.media-section {
+		width: 100%;
+		margin: 22rpx 0 0;
+		padding: 18rpx;
+		border: 1rpx solid #dfeae6;
+		border-radius: 20rpx;
+		background: #ffffff;
+		box-shadow: 0 10rpx 24rpx rgba(37, 78, 70, .05);
+		box-sizing: border-box;
+		animation: editor-section-in 300ms 70ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.media-section-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16rpx;
+		margin: 0 4rpx 16rpx;
+	}
+
+	.media-section-heading-main {
+		display: flex;
+		align-items: baseline;
+		min-width: 0;
+		gap: 12rpx;
+	}
+
+	.media-section-title {
+		color: #304b43;
+		font-size: 26rpx;
+		font-weight: 700;
+	}
+
+	.media-section-subtitle {
+		overflow: hidden;
+		color: #91a09a;
+		font-size: 20rpx;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.media-section-count {
+		flex: 0 0 auto;
+		color: #7d9188;
+		font-size: 21rpx;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.media-grid {
+		gap: 12rpx;
+	}
+
+	.media-image,
+	.media-video,
+	.media-upload {
+		border-radius: 16rpx;
+	}
+
+	.media-image,
+	.media-video {
+		border-color: #e0eae6;
+	}
+
+	.media-upload {
+		border: 1rpx dashed #b8d5ca;
+		background: #f2f9f6 !important;
+		color: #238267;
+		transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+	}
+
+	.media-upload:active {
+		transform: scale(.96);
+		border-color: #238267;
+		background: #e8f4ef !important;
+	}
+
+	.media-upload > text:first-child {
+		font-size: 50rpx !important;
+		font-weight: 300;
+	}
+
+	.media-remove {
+		width: 46rpx;
+		height: 46rpx;
+		top: 10rpx;
+		right: 10rpx;
+		background: rgba(27, 46, 41, .72);
+		transition: transform 160ms ease, background-color 160ms ease;
+	}
+
+	.media-remove:active {
+		transform: scale(.88);
+		background: rgba(27, 46, 41, .9);
+	}
+
+	.component-editor,
+	.topic-editor {
+		width: 100%;
+		margin: 18rpx 0 0;
+		box-sizing: border-box;
+		animation: editor-section-in 300ms 100ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.component-add {
+		min-height: 76rpx;
+		padding: 10rpx 6rpx;
+		border: 1rpx solid #dfeae6;
+		border-radius: 16rpx;
+		background: #fbfdfc;
+		transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+	}
+
+	.component-add:active {
+		transform: scale(.985);
+		border-color: #acd0c1;
+		background: #f1faf6;
+	}
+
+	.topic-editor {
+		padding: 18rpx 0 0;
+		border-top: 1rpx solid #e4ece9;
+	}
+
+	.anonymous-tip,
+	.upload-progress-card,
+	.poll-summary {
+		border-radius: 16rpx;
+	}
+
+	.component-sheet-layer,
+	.poll-modal-mask {
+		animation: editor-mask-in 220ms ease both;
+	}
+
+	.component-sheet,
+	.poll-modal {
+		animation: editor-sheet-up 320ms cubic-bezier(.2,.8,.2,1) both;
+	}
+
+	.campus-editor-page.campus-night {
+		background: #111a17;
+		color: #e5eeea;
+	}
+
+	.campus-editor-page.campus-night .header {
+		border-bottom-color: #293b35;
+		background: rgba(20, 32, 28, .94);
+		box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, .18);
+	}
+
+	.campus-editor-page.campus-night .header .content {
+		color: #e3eee9;
+	}
+
+	.campus-editor-page.campus-night .post-editor-surface,
+	.campus-editor-page.campus-night .media-section {
+		border-color: #2d4039;
+		background: #18231f;
+		box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, .16);
+	}
+
+	.campus-editor-page.campus-night .post-editor-input {
+		color: #e5eeea;
+	}
+
+	.campus-editor-page.campus-night .post-editor-input::placeholder {
+		color: #71847b;
+	}
+
+	.campus-editor-page.campus-night .post-editor-status,
+	.campus-editor-page.campus-night .topic-editor {
+		border-top-color: #2b3c36;
+	}
+
+	.campus-editor-page.campus-night .space-owo,
+	.campus-editor-page.campus-night .component-add {
+		border-color: #2d4039;
+		background: #1a2823;
+	}
+
+	.campus-editor-page.campus-night .media-section-title {
+		color: #d1e2da;
+	}
+
+	.campus-editor-page.campus-night .media-section-subtitle,
+	.campus-editor-page.campus-night .media-section-count {
+		color: #879d92;
+	}
+
+	.campus-editor-page.campus-night .media-image,
+	.campus-editor-page.campus-night .media-video {
+		border-color: #30423c;
+	}
+
+	.campus-editor-page.campus-night .media-upload {
+		border-color: #477967;
+		background: #1d322a !important;
+		color: #9bd0bb;
+	}
+
+	@keyframes editor-page-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes editor-section-in {
+		from { opacity: 0; transform: translateY(10rpx); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@keyframes editor-mask-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes editor-sheet-up {
+		from { opacity: .7; transform: translateY(36rpx); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.campus-editor-page,
+		.campus-editor-page * {
+			animation-duration: .01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: .01ms !important;
+		}
+	}
+
+	/* Keep the editor open and editorial: dividers and rhythm instead of stacked cards. */
+	.campus-editor-page {
+		background: #f7f9f8;
+	}
+
+	.campus-editor-page .header {
+		background: rgba(247, 249, 248, .96);
+		box-shadow: none;
+	}
+
+	.post-submit-button {
+		min-width: 112rpx;
+		height: 58rpx;
+		padding: 0 24rpx;
+		border-radius: 12rpx !important;
+		box-shadow: none;
+		font-size: 25rpx;
+		line-height: 58rpx;
+	}
+
+	.post-submit-button:active {
+		box-shadow: none;
+	}
+
+	.post-compose {
+		padding: 0 24rpx 36rpx;
+	}
+
+	.post-editor-surface {
+		margin: 0;
+		padding: 26rpx 0 16rpx;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		animation: editor-section-in 260ms ease both;
+	}
+
+	.post-editor-input {
+		min-height: clamp(300rpx, 36vh, 540rpx) !important;
+		font-size: 31rpx;
+		line-height: 1.72;
+	}
+
+	.post-editor-status {
+		margin-top: 16rpx;
+		padding: 12rpx 0 0;
+		border-top-color: #e5ece9;
+	}
+
+	.space-owo {
+		min-height: 62rpx;
+		margin: 0;
+		padding: 0;
+		border-right: 0;
+		border-left: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		animation: editor-section-in 240ms 20ms ease both;
+	}
+
+	.space-owo .owo {
+		border-radius: 0;
+		background: #f2f6f4;
+		box-shadow: none;
+	}
+
+	.media-section {
+		margin: 0;
+		padding: 18rpx 0 0;
+		border: 0;
+		border-top: 1rpx solid #e5ece9;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		animation: editor-section-in 260ms 40ms ease both;
+	}
+
+	.media-section-heading {
+		margin: 0 0 14rpx;
+	}
+
+	.media-section-title {
+		color: #3d514b;
+		font-size: 24rpx;
+		font-weight: 600;
+	}
+
+	.media-section-count {
+		color: #8b9993;
+		font-size: 21rpx;
+	}
+
+	.media-grid {
+		gap: 10rpx;
+	}
+
+	.media-image,
+	.media-video,
+	.media-upload {
+		border-radius: 10rpx;
+	}
+
+	.media-image,
+	.media-video {
+		border-color: #e2e9e6;
+		box-shadow: none;
+		animation: editor-section-in 220ms ease both;
+	}
+
+	.media-upload {
+		border-color: #c4d9d1;
+		background: #f2f6f4 !important;
+		box-shadow: none;
+	}
+
+	.media-upload > text:first-child {
+		font-size: 46rpx !important;
+	}
+
+	.media-remove {
+		width: 42rpx;
+		height: 42rpx;
+		background: rgba(29, 43, 39, .66);
+	}
+
+	.anonymous-tip {
+		margin: 14rpx 0;
+		padding: 10rpx 0 10rpx 14rpx;
+		border: 0;
+		border-left: 4rpx solid #7bb9a5;
+		border-radius: 0;
+		background: transparent;
+		color: #477568;
+		box-shadow: none;
+	}
+
+	.anonymous-tip-icon {
+		width: auto;
+		height: auto;
+		border-radius: 0;
+		background: transparent;
+		font-size: 24rpx;
+	}
+
+	.anonymous-tip-copy {
+		gap: 2rpx;
+	}
+
+	.anonymous-tip-title {
+		font-size: 23rpx;
+		font-weight: 600;
+	}
+
+	.anonymous-tip-desc {
+		font-size: 20rpx;
+	}
+
+	.anonymous-tip-state {
+		padding: 0;
+		border-radius: 0;
+		background: transparent;
+		font-size: 19rpx;
+	}
+
+	.upload-progress-card {
+		width: 100%;
+		margin: 14rpx 0 0;
+		padding: 14rpx 0;
+		border: 0;
+		border-top: 1rpx solid #e5ece9;
+		border-bottom: 1rpx solid #e5ece9;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.upload-progress-icon {
+		width: 36rpx;
+		height: 36rpx;
+		border-radius: 50%;
+		background: transparent;
+	}
+
+	.upload-progress-title {
+		color: #526760;
+		font-size: 23rpx;
+		font-weight: 500;
+	}
+
+	.upload-progress-value {
+		color: #36866f;
+		font-size: 23rpx;
+	}
+
+	.upload-progress-track {
+		height: 6rpx;
+		margin-top: 12rpx;
+		background: #e2ebe7;
+	}
+
+	.upload-progress-fill {
+		background: #3b967a;
+	}
+
+	.upload-progress-foot {
+		margin-top: 8rpx;
+		font-size: 19rpx;
+	}
+
+	.component-editor,
+	.topic-editor {
+		margin-top: 0;
+		animation: editor-section-in 260ms 70ms ease both;
+	}
+
+	.component-add {
+		min-height: 70rpx;
+		padding: 12rpx 0;
+		border: 0;
+		border-top: 1rpx solid #e5ece9;
+		border-bottom: 1rpx solid #e5ece9;
+		border-radius: 0;
+		background: transparent;
+	}
+
+	.component-add:active {
+		transform: translateX(2rpx);
+		border-color: #c8ddd4;
+		background: transparent;
+	}
+
+	.poll-summary {
+		border: 1rpx solid #dfe8e4;
+		border-radius: 10rpx;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.topic-editor {
+		padding-top: 16rpx;
+		border-top-color: #e5ece9;
+	}
+
+	.component-sheet-layer,
+	.poll-modal-mask {
+		background: rgba(22, 34, 31, .42);
+	}
+
+	.campus-editor-page.campus-night {
+		background: #131b18;
+	}
+
+	.campus-editor-page.campus-night .header {
+		background: rgba(19, 27, 24, .96);
+		box-shadow: none;
+	}
+
+	.campus-editor-page.campus-night .post-editor-surface,
+	.campus-editor-page.campus-night .media-section {
+		border-color: #2c3b35;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	.campus-editor-page.campus-night .post-editor-status,
+	.campus-editor-page.campus-night .media-section,
+	.campus-editor-page.campus-night .upload-progress-card,
+	.campus-editor-page.campus-night .component-add,
+	.campus-editor-page.campus-night .topic-editor {
+		border-color: #2c3b35;
+	}
+
+	.campus-editor-page.campus-night .space-owo .owo {
+		background: #1a2521;
+	}
+
+	.campus-editor-page.campus-night .media-upload {
+		background: #192520 !important;
+	}
+
+	.campus-editor-page.campus-night .anonymous-tip {
+		background: transparent;
+		border-left-color: #5d9e88;
+	}
+
+	@keyframes editor-section-in {
+		from { opacity: 0; transform: translateY(6rpx); }
+		to { opacity: 1; transform: translateY(0); }
 	}
 </style>

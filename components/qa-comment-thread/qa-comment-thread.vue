@@ -1,6 +1,6 @@
 <template>
-	<view class="qa-thread" :class="{'is-night': night}">
-		<view class="qa-thread-item" v-for="item in items" :key="item.id">
+	<view class="qa-thread" :class="{'is-night': night, 'is-flat': flatMode}">
+		<view class="qa-thread-item" v-for="item in items" :key="item.id" :id="'qa-comment-' + item.id" :class="{'is-highlighted': isHighlighted(item)}">
 			<view class="qa-thread-node">
 				<campus-avatar class="qa-thread-avatar round" :src="item.userJson && item.userJson.avatar" :name="item.userJson && item.userJson.name" @tap.stop="$emit('user', item.userJson)"></campus-avatar>
 				<view class="qa-thread-body">
@@ -14,7 +14,11 @@
 						<text class="qa-thread-action" @tap="$emit('reply', item)">回复</text>
 						<text v-if="canDelete(item)" class="qa-thread-delete" @tap="$emit('delete', item)">删除</text>
 					</view>
-					<qa-comment-thread v-if="item.children && item.children.length" :items="item.children" :night="night" :current-uid="currentUid" :group="group" @reply="$emit('reply', $event)" @delete="$emit('delete', $event)" @user="$emit('user', $event)"></qa-comment-thread>
+					<qa-comment-thread v-if="!flatMode && depth < maxDepth && item.children && item.children.length" :items="item.children" :depth="depth + 1" :max-depth="maxDepth" :night="night" :current-uid="currentUid" :group="group" :highlight-id="highlightId" @reply="$emit('reply', $event)" @delete="$emit('delete', $event)" @user="$emit('user', $event)"></qa-comment-thread>
+					<view v-if="!flatMode && depth >= maxDepth && flatItems(item).length" class="qa-thread-tail">
+						<view class="qa-thread-tail-title">后续回复</view>
+						<qa-comment-thread :items="flatItems(item)" :depth="maxDepth" :max-depth="maxDepth" :flat-mode="true" :night="night" :current-uid="currentUid" :group="group" :highlight-id="highlightId" @reply="$emit('reply', $event)" @delete="$emit('delete', $event)" @user="$emit('user', $event)"></qa-comment-thread>
+					</view>
 				</view>
 			</view>
 		</view>
@@ -28,11 +32,32 @@
 		name: 'qaCommentThread',
 		props: {
 			items: { type: Array, default: () => [] },
+			depth: { type: Number, default: 1 },
+			maxDepth: { type: Number, default: 3 },
+			flatMode: { type: Boolean, default: false },
+			highlightId: { type: [Number, String], default: 0 },
 			night: { type: Boolean, default: false },
 			currentUid: { type: [Number, String], default: 0 },
 			group: { type: String, default: '' }
 		},
 		methods: {
+			isHighlighted(item) {
+				return item && this.highlightId && String(item.id) === String(this.highlightId);
+			},
+			flatItems(item) {
+				var result = [];
+				var visit = function(children) {
+					(children || []).forEach(function(child) {
+						result.push(child);
+						visit(child.children);
+					});
+				};
+				visit(item && item.children);
+				return result.sort(function(a, b) {
+					var createdDiff = Number(a.created || 0) - Number(b.created || 0);
+					return createdDiff || Number(a.id || 0) - Number(b.id || 0);
+				});
+			},
 			copyComment(text) {
 				copyText(text, '评论已复制');
 			},
@@ -73,6 +98,14 @@
 	.qa-thread-item {
 		position: relative;
 		padding: 4rpx 0 20rpx;
+	}
+
+	.qa-thread-item.is-highlighted {
+		padding-left: 12rpx;
+		margin-left: -12rpx;
+		border-radius: 12rpx;
+		background: rgba(73, 183, 164, .14);
+		box-shadow: 0 0 0 2rpx rgba(73, 183, 164, .24);
 	}
 
 	.qa-thread-item::before {
@@ -140,6 +173,12 @@
 	.qa-thread-action { color: #61716c; }
 	.qa-thread-mention { color: #168c80; }
 	.qa-thread-delete { color: #b26b6b; }
+	.qa-thread-tail { margin-top: 4rpx; }
+	.qa-thread-tail-title { margin: 4rpx 0 4rpx; color: #71807a; font-size: 22rpx; }
+	.qa-thread.is-flat { margin-top: 0; padding-left: 0; }
+	.qa-thread.is-flat::before,
+	.qa-thread.is-flat .qa-thread-item::before { display: none; }
+	.qa-thread.is-flat .qa-thread-item { padding: 8rpx 0 14rpx; }
 	.qa-thread.is-night::before { background: #3a4542; }
 	.qa-thread.is-night .qa-thread-item::before { border-color: #3a4542; }
 	.qa-thread.is-night .qa-thread-author { color: #d7e0dd; }
@@ -148,4 +187,6 @@
 	.qa-thread.is-night .qa-thread-campus { color: #8f9d98; }
 	.qa-thread.is-night .qa-thread-action { color: #b0bcb8; }
 	.qa-thread.is-night .qa-thread-mention { color: #8dd0c2; }
+	.qa-thread.is-night .qa-thread-item.is-highlighted { background: rgba(111, 210, 192, .16); box-shadow: 0 0 0 2rpx rgba(111, 210, 192, .26); }
+	.qa-thread.is-night .qa-thread-tail-title { color: #9aa9a3; }
 </style>

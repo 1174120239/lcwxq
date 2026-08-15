@@ -3237,17 +3237,40 @@ button.cu-btn:active {
 	box-sizing: border-box;
 }
 
-@media (min-width: 760px) {
+@media (min-width: 760px) and (max-width: 1199px) {
 	.campus-home .hero-main,
 	.campus-home .home-stage,
 	.campus-square .square-mainbar,
+	.campus-square .square-section-tabs,
 	.campus-square .square-filter-row,
 	.campus-square .appcontent,
 	.campus-messages .header .cu-bar,
 	.campus-messages .data-inbox,
 	.campus-profile .immersive-profile {
-		width: 560px;
-		max-width: calc(100vw - 48px);
+		width: calc(100vw - 48px);
+		max-width: 840px;
+		margin-right: auto !important;
+		margin-left: auto !important;
+	}
+
+	.campus-home .home-stage,
+	.campus-profile .immersive-profile {
+		box-shadow: 0 18px 54px rgba(39, 59, 66, 0.12);
+	}
+}
+
+@media (min-width: 1200px) {
+	.campus-home .hero-main,
+	.campus-home .home-stage,
+	.campus-square .square-mainbar,
+	.campus-square .square-section-tabs,
+	.campus-square .square-filter-row,
+	.campus-square .appcontent,
+	.campus-messages .header .cu-bar,
+	.campus-messages .data-inbox,
+	.campus-profile .immersive-profile {
+		width: calc(100vw - 80px);
+		max-width: 1080px;
 		margin-right: auto !important;
 		margin-left: auto !important;
 	}
@@ -3271,11 +3294,20 @@ button.cu-btn:active {
 }
 
 /* #ifdef H5 */
+:root {
+	--campus-chrome-progress: 0;
+	--campus-chrome-opacity: 1;
+	--campus-chrome-header-shift: 0%;
+	--campus-chrome-dock-shift: 0px;
+	--campus-chrome-trigger-shift: 0px;
+	--campus-chrome-trigger-scale: 1;
+}
+
 uni-tabbar .uni-tabbar {
 	left: 50% !important;
 	right: auto !important;
 	bottom: calc(12px + env(safe-area-inset-bottom)) !important;
-	width: calc(100% - 85px) !important;
+	width: calc(100% - 32px) !important;
 	height: 60px !important;
 	padding: 4px 8px !important;
 	border: 1px solid rgba(255, 255, 255, 0.82) !important;
@@ -3284,14 +3316,16 @@ uni-tabbar .uni-tabbar {
 	box-shadow: 0 8px 24px rgba(39, 59, 66, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
 	box-sizing: border-box !important;
 	overflow: hidden !important;
-	transform: translate3d(-50%, 0, 0) !important;
-	transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1) !important;
-	will-change: transform;
+	transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) !important;
+	transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1), transform 560ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease, height 420ms ease, border-radius 420ms ease !important;
+	will-change: width, transform, opacity;
 }
 
 html.publish-tabbar-enabled uni-tabbar .uni-tabbar,
 body.publish-tabbar-enabled uni-tabbar .uni-tabbar {
-	transform: translate3d(-50%, 0, 0) translate3d(26.5px, 0, 0) !important;
+	/* Keep the publish trigger and dock as one right-shifted control group. */
+	width: calc(100% - 108px) !important;
+	transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) translate3d(52px, 0, 0) !important;
 }
 
 uni-tabbar .uni-tabbar-border {
@@ -3326,14 +3360,61 @@ uni-tabbar .uni-tabbar__label {
 		left: 50% !important;
 		right: auto !important;
 		width: 506px !important;
-		transform: translate3d(-50%, 0, 0) !important;
+		transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) !important;
 	}
 
 	html.publish-tabbar-enabled uni-tabbar .uni-tabbar,
 	body.publish-tabbar-enabled uni-tabbar .uni-tabbar {
 		left: 50% !important;
+		width: 460px !important;
+		transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) translate3d(96px, 0, 0) !important;
+	}
+}
+
+/* Hold the previous dock shape for one frame while the next tab mounts. */
+html.campus-tabbar-from-plain uni-tabbar .uni-tabbar,
+body.campus-tabbar-from-plain uni-tabbar .uni-tabbar {
+	width: calc(100% - 32px) !important;
+	transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) !important;
+}
+
+html.campus-tabbar-from-publish uni-tabbar .uni-tabbar,
+body.campus-tabbar-from-publish uni-tabbar .uni-tabbar {
+	width: calc(100% - 108px) !important;
+	transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) translate3d(52px, 0, 0) !important;
+}
+
+@media (min-width: 760px) {
+	html.campus-tabbar-from-plain uni-tabbar .uni-tabbar,
+	body.campus-tabbar-from-plain uni-tabbar .uni-tabbar {
 		width: 506px !important;
-		transform: translate3d(-50%, 0, 0) translate3d(27px, 0, 0) !important;
+	}
+
+	html.campus-tabbar-from-publish uni-tabbar .uni-tabbar,
+	body.campus-tabbar-from-publish uni-tabbar .uni-tabbar {
+		width: 460px !important;
+		transform: translate3d(-50%, var(--campus-chrome-dock-shift, 0px), 0) translate3d(96px, 0, 0) !important;
+	}
+}
+
+/* A deliberate downward gesture pulls the bottom chrome away with the header. */
+@media (max-width: 759px) {
+	html.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar,
+	body.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar {
+		opacity: 0 !important;
+		transform: translate3d(-50%, calc(100% + 36px), 0) !important;
+		pointer-events: none !important;
+	}
+
+	html.campus-scroll-chrome-hidden.publish-tabbar-enabled uni-tabbar .uni-tabbar,
+	body.campus-scroll-chrome-hidden.publish-tabbar-enabled uni-tabbar .uni-tabbar {
+		transform: translate3d(-50%, calc(100% + 36px), 0) !important;
+	}
+
+	html.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar__item,
+	body.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar__item {
+		/* Keep the return animation stable while the dock is off-screen. */
+		transition: transform 180ms ease, background-color 220ms ease !important;
 	}
 }
 
@@ -3352,6 +3433,11 @@ body.campus-system-night uni-tabbar .uni-tabbar {
 	border-color: rgba(226, 232, 230, 0.1) !important;
 	background: #1c2123 !important;
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24) !important;
+}
+
+html.campus-editor-open uni-tabbar,
+body.campus-editor-open uni-tabbar {
+	display: none !important;
 }
 /* #endif */
 
@@ -4287,6 +4373,57 @@ body.campus-system-night uni-tabbar .uni-tabbar {
 	text-align: center;
 }
 
+/* Keep the notification stream readable on wider viewports without changing the phone layout. */
+@media (min-width: 760px) and (max-width: 1199px) {
+	.campus-messages .data-inbox.message-stream-card {
+		width: calc(100vw - 48px) !important;
+		max-width: 960px;
+		margin-right: auto !important;
+		margin-left: auto !important;
+	}
+
+	.campus-messages .message-overview,
+	.campus-messages .message-category-strip,
+	.campus-messages .message-list-shell {
+		width: calc(100% - 32rpx);
+		max-width: 840px;
+		margin-right: auto;
+		margin-left: auto;
+	}
+
+	.campus-messages .message-category-track {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		width: 100%;
+		min-width: 0;
+	}
+}
+
+@media (min-width: 1200px) {
+	.campus-messages .data-inbox.message-stream-card {
+		width: calc(100vw - 80px) !important;
+		max-width: 1080px;
+		margin-right: auto !important;
+		margin-left: auto !important;
+	}
+
+	.campus-messages .message-overview,
+	.campus-messages .message-category-strip,
+	.campus-messages .message-list-shell {
+		width: calc(100% - 64rpx);
+		max-width: 900px;
+		margin-right: auto;
+		margin-left: auto;
+	}
+
+	.campus-messages .message-category-track {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		width: 100%;
+		min-width: 0;
+	}
+}
+
 .campus-messages.campus-night {
 	background: #15191b !important;
 	color: #edf2f0;
@@ -4353,6 +4490,86 @@ body.campus-system-night uni-tabbar .uni-tabbar {
 .campus-messages.campus-night .message-stream-card .message-meta .text-gray,
 .campus-messages.campus-night .message-stream-card .load-more {
 	color: #98a5a1 !important;
+}
+
+/* Dynamic images stay fully visible inside their existing grid proportions. */
+.space-image-grid > .bg-img {
+	background-size: contain !important;
+	background-position: center;
+	background-repeat: no-repeat;
+	background-color: transparent;
+}
+
+.space-feed .space-image-grid > .bg-img,
+.square-list .space-image-grid > .bg-img,
+.space-detail-media > .bg-img {
+	padding-bottom: 61.8%;
+}
+
+/* Detail view gives each image a full-width row, especially for landscape photos. */
+.space-detail-page .space-detail-media {
+	grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.space-detail-media > .bg-img > image.space-detail-image {
+	object-fit: contain;
+	background-color: transparent;
+}
+
+.campus-night .space-image-grid > .bg-img,
+.space-detail-page.campus-night .space-detail-media > .bg-img > image.space-detail-image {
+	background-color: transparent;
+}
+
+/* Scroll-aware chrome: hide only after a deliberate downward gesture. */
+.campus-home .home-hero,
+.campus-square .square-header,
+.campus-messages .header,
+.campus-profile .profile-top-tools {
+	transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+	will-change: transform, opacity;
+}
+
+/* The chrome follows the gesture continuously before the full-hide class engages. */
+.campus-home .home-hero,
+.campus-square .square-header,
+.campus-messages .header,
+.campus-profile .profile-top-tools {
+	opacity: var(--campus-chrome-opacity, 1);
+	transform: translate3d(0, var(--campus-chrome-header-shift, 0%), 0);
+}
+
+html.campus-scroll-chrome-hidden .campus-home .home-hero,
+body.campus-scroll-chrome-hidden .campus-home .home-hero,
+html.campus-scroll-chrome-hidden .campus-square .square-header,
+body.campus-scroll-chrome-hidden .campus-square .square-header,
+html.campus-scroll-chrome-hidden .campus-messages .header,
+body.campus-scroll-chrome-hidden .campus-messages .header,
+html.campus-scroll-chrome-hidden .campus-profile .profile-top-tools,
+body.campus-scroll-chrome-hidden .campus-profile .profile-top-tools {
+	opacity: 0;
+	transform: translate3d(0, -110%, 0);
+	pointer-events: none;
+}
+
+uni-tabbar .uni-tabbar {
+	transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1), transform 560ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease !important;
+}
+
+html.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar,
+body.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar {
+	opacity: 0 !important;
+	transform: translate3d(-50%, calc(100% + 36px), 0) !important;
+	pointer-events: none !important;
+}
+
+/* The floating publish trigger is part of the bottom chrome on H5 and App. */
+html.campus-scroll-chrome-hidden .global-publish-trigger,
+body.campus-scroll-chrome-hidden .global-publish-trigger,
+.tabbar-system.is-scroll-hidden .global-publish-trigger {
+	opacity: 0 !important;
+	transform: translateY(110px) scale(0.58) translateZ(0) !important;
+	pointer-events: none !important;
 }
 
 @media (max-width: 360px) {
