@@ -649,6 +649,12 @@ module.exports = {
 	spaceLock:function(){
 		return API_URL + 'SFreeSpace/spaceLock';
 	},
+	spacePresentation:function(){
+		return API_URL + 'SFreeSpace/spacePresentation';
+	},
+	spacePresentationList:function(){
+		return API_URL + 'SFreeSpace/spacePresentationList';
+	},
 	topicList:function(){
 		return API_URL + 'SFreeSpace/topicList';
 	},

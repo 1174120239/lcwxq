@@ -28,6 +28,9 @@
 						<view class="content flex-sub">
 							<view @tap.stop="toUserContents(spaceInfo.userJson)">{{spaceInfo.userJson.name}}
 							<text class="space-detail-campus" v-if="spaceInfo.userJson.campus">{{spaceInfo.userJson.campus}}</text>
+							<text class="space-detail-presentation is-featured" v-if="spaceInfo.featured==1">精华</text>
+							<text class="space-detail-presentation is-pinned" v-if="spaceInfo.pinType==1">置顶</text>
+							<text class="space-detail-presentation is-banner" v-if="spaceInfo.pinType==2">横幅置顶</text>
 							<text class="userlv" v-if="spaceInfo.userJson.isvip>0" style="background: linear-gradient(to bottom right, #f2ad5c, #e6216d,#901ccb);color:white;padding: 2px 5px;border-radius: 10px;">VIP</text>
 							<text class="userlv" :style="getLvStyle(spaceInfo.userJson.experience)">{{getLv(spaceInfo.userJson.experience)}}</text>
 							
@@ -1754,6 +1757,31 @@
 	font-size: 21rpx;
 	font-weight: 500;
 	color: #819190;
+}
+
+.space-detail-presentation {
+	display: inline-flex;
+	margin-left: 8rpx;
+	padding: 2rpx 9rpx;
+	border-radius: 5rpx;
+	font-size: 18rpx;
+	font-weight: 700;
+	line-height: 28rpx;
+}
+
+.space-detail-presentation.is-featured {
+	background: #fff0d9;
+	color: #a15a13;
+}
+
+.space-detail-presentation.is-pinned {
+	background: #e4f3ef;
+	color: #26766b;
+}
+
+.space-detail-presentation.is-banner {
+	background: #fbe8df;
+	color: #9b4a30;
 }
 
 .space-detail-page .cu-card.dynamic.space-info > .cu-item > .text-content.space-detail-text,

@@ -29,6 +29,7 @@ $requiredFiles = @(
     'admin/starfree-admin/source/admin/aiModeration.php',
     'admin/starfree-admin/source/admin/aiModerationPost.php',
     'backend/database/migrations/011_dynamic_core_extensions.sql',
+    'backend/database/migrations/012_space_presentation.sql',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiModerationService.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpacePollService.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserProfileService.java',
@@ -43,6 +44,7 @@ foreach ($file in $requiredFiles) { Require-File $file }
 Require-Marker 'admin/starfree-admin/source/admin/Menu.php' 'dynamicAnalytics.php'
 Require-Marker 'admin/starfree-admin/source/admin/Menu.php' 'aiModeration.php'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceController.java' '/pollVote'
+Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceController.java' '/spacePresentationList'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceReportService.java' 'reviewAi'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceReportService.java' 'normalizeAi'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserController.java' 'profiles.attach'
@@ -51,6 +53,8 @@ Require-Marker 'pages/contents/userinfo.vue' 'gender'
 Require-Marker 'pages/user/useredit.vue' 'showBirthday'
 Require-Marker 'pages/space/info.vue' 'space-poll'
 Require-Marker 'pages/space/post.vue' 'pollPayload'
+Require-Marker 'pages/home/square.vue' 'spacePresentationList'
+Require-Marker 'pages/manage/space.vue' 'spacePresentation'
 
 $migrationNames = Get-ChildItem (Join-Path $RepoRoot 'backend/database/migrations') -File -Filter '*.sql' |
     ForEach-Object { if ($_.BaseName -match '^([0-9]+)_') { $Matches[1] } }
@@ -61,5 +65,5 @@ if ($duplicateMigrations) {
 }
 
 Write-Output 'feature-baseline=ok'
-Write-Output 'checked=dynamic-analytics,user-details,ai-moderation,polls'
+Write-Output 'checked=dynamic-analytics,user-details,ai-moderation,polls,dynamic-presentation'
 Write-Output 'production-connection=false'

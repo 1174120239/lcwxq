@@ -87,6 +87,19 @@ public class SpaceController {
         return ApiResponse.success("\u64cd\u4f5c\u6210\u529f", changed);
     }
 
+    /** ANY /SFreeSpace/spacePresentation: staff update featured or pin state. */
+    @RequestMapping("/spacePresentation")
+    public ApiResponse presentation(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("\u5c55\u793a\u72b6\u6001\u5df2\u66f4\u65b0", spaces.presentation(params));
+    }
+
+    /** ANY /SFreeSpace/spacePresentationList: public active banners and list pins. */
+    @RequestMapping("/spacePresentationList")
+    public ApiResponse presentationList(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("", spaces.activePresentation(
+                RequestValues.text(params, "token")));
+    }
+
     /**
      * ANY {@code /SFreeSpace/spaceInfo}：读取单条动态详情。
      *

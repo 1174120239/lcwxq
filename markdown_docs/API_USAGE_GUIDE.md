@@ -300,14 +300,16 @@ article = form_post("SFreeContents/contentsAdd", {
 |---|---|---|---|---|
 | `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds,poll` | 公网新 | type 仅 0..5；type=0 无图片时正文去除首尾空白后至少 4 字，有图片时正文可为空或不足 4 字；可带 JSON `poll` 创建 2--6 个不重复选项的单选或限项多选，投票可作为无正文动态的主体；type=3 是评论/回复，正文至少 1 字且 `toid` 指向被回复的动态或评论，同一用户 20 秒内对同一目标提交相同正文按重复请求处理而不重复落库；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
 | `SFreeSpace/editSpace` | GET/POST / 作者或 staff | `id,text` 和可选字段，含 `topicIds` | 公网新 | 类型不可变；staff 编辑保留作者，不重复发经验；传 `topicIds=0` 表示清空该动态的话题。 |
-| `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象新增 `topics` 数组；成功读取会增加浏览量。 |
-| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。 |
+| `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象含 `topics`、`featured`、当前有效的 `pinType`、配置值 `pinConfiguredType` 及置顶顺序/时间；成功读取会增加浏览量。 |
+| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。`searchParams.featured=0/1` 可筛选精华，`excludePresented=1` 排除当前有效的列表/横幅置顶，用于首页去重。 |
 | `SFreeSpace/followSpace` | GET/POST / token | `page,limit` | 公网新 | 只读已关注用户的公开、非回复动态。前端别名见下一行。 |
 | `SFreeSpace/myFollowSpace` | GET/POST / token | `page,limit` | 公网新 | `followSpace` 的前端别名；仅当前页 count。 |
 | `SFreeSpace/spaceDelete` | GET/POST / 作者或 staff | `id` | 公网新 | 只删主行，不级联历史回复、转发、spaceLike，不扣经验。 |
 | `SFreeSpace/spaceLikes` | GET/POST / token | `id` | 公网新 | uid+space id 持久切换点赞状态；返回 data=1 表示已点赞，data=0 表示已取消点赞。 |
 | `SFreeSpace/spaceReview` | GET/POST / staff | `id,type` | 公网新 | `type=1` 通过，`0` 拒绝并删主行，写系统通知。 |
-| `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发。 |
+| `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发，并清除精华和置顶展示状态。 |
+| `SFreeSpace/spacePresentation` | POST / staff | `token,id,featured,pinType,pinOrder,pinStartTime,pinEndTime` | 代码新/公网旧 | `featured` 为 0/1；`pinType=0/1/2` 分别表示普通、列表置顶、横幅置顶。仅公开、已发布、非回复动态可启用；开始/结束时间为 Unix 秒，0 表示不限制，结束必须晚于开始和当前时间。字段独立于文章推荐/置顶。 |
+| `SFreeSpace/spacePresentationList` | GET/POST / 可选 token | `token` | 代码新/公网旧 | 返回 `data.banner` 和 `data.list`，各最多 3 条，仅含仍在有效期内的公开已发布主动态，按 `pinOrder`、修改时间和 id 稳定倒序。 |
 | `SFreeSpace/topicList` | GET/POST / 可选 token | `token,searchKey` | 公网新 | 按名称/描述关键词模糊搜索，返回 `data.all/hot/official/followed`；每项含动态数、关注数和当前用户关注状态。关注列表只在登录后返回。 |
 | `SFreeSpace/topicCreate` | GET/POST / token | `token,name` | 公网新 | 用户自建话题；名称自动去掉首尾 `#` 和空白，只允许中英文、数字、下划线、短横线，1-24 字；创建后自动关注。 |
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
@@ -320,6 +322,8 @@ article = form_post("SFreeContents/contentsAdd", {
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
 动态举报表由 `backend/database/migrations/009_space_reports.sql` 创建。未执行迁移前不能启用上述三个举报路由；发布默认不执行该迁移。
+
+动态精华、列表置顶和横幅置顶字段由 `backend/database/migrations/012_space_presentation.sql` 添加。该迁移是幂等的增量迁移，不改变旧 API 已使用字段；未执行迁移前不能部署包含上述展示字段查询的新后端，通用发布流程不会自动执行迁移。
 
 ### 校园问答
 
