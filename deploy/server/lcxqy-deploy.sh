@@ -144,10 +144,12 @@ migration_014_valid() {
 }
 
 backup_migration_014() {
+    MIGRATION_014_EXISTING=()
     mapfile -t MIGRATION_014_EXISTING < <(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
         "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_lost_found_items','starfree_lost_found_actions','starfree_lost_found_comments','starfree_lost_found_contact_grants','starfree_lost_found_config') ORDER BY table_name")
-    printf '%s\n' "${MIGRATION_014_EXISTING[@]}" > "$backup_dir/migration-014-preexisting-tables.txt"
     if (( ${#MIGRATION_014_EXISTING[@]} > 0 )); then
+        printf '%s\n' "${MIGRATION_014_EXISTING[@]}" \
+            > "$backup_dir/migration-014-preexisting-tables.txt"
         mysqldump "${MYSQL_BASE_ARGS_014[@]}" --single-transaction --skip-lock-tables \
             "$DB_NAME_014" "${MIGRATION_014_EXISTING[@]}" \
             > "$backup_dir/migration-014-existing-tables.sql"
@@ -158,6 +160,7 @@ backup_migration_014() {
         sha256sum "$backup_dir/migration-014-existing-tables.sql" \
             > "$backup_dir/migration-014-existing-tables.sql.sha256"
     else
+        : > "$backup_dir/migration-014-preexisting-tables.txt"
         touch "$backup_dir/migration-014.no-existing-tables"
     fi
 }
