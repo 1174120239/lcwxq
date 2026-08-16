@@ -31,6 +31,9 @@ $requiredFiles = @(
     'backend/database/migrations/011_dynamic_core_extensions.sql',
     'backend/database/migrations/012_space_presentation.sql',
     'backend/database/migrations/013_ai_moderation_complete.sql',
+    'backend/database/migrations/014_lost_and_found.sql',
+    'backend/deploy/production/promote-mutual-aid-routes.sh',
+    'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/lostfound/LostFoundController.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiModerationService.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiCommentModerationScheduler.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpacePollService.java',
@@ -53,6 +56,8 @@ Require-Marker 'admin/starfree-admin/source/admin/aiModeration.php' 'starfree_ai
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceReportService.java' 'normalizeAi'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserController.java' 'profiles.attach'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserController.java' 'containsProfileFields'
+Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/lostfound/LostFoundController.java' '/configSave'
+Require-Marker 'backend/deploy/production/promote-mutual-aid-routes.sh' 'replacement-campus-mutual-aid'
 Require-Marker 'pages/contents/userinfo.vue' 'gender'
 Require-Marker 'pages/user/useredit.vue' 'showBirthday'
 Require-Marker 'pages/space/info.vue' 'space-poll'
@@ -69,5 +74,5 @@ if ($duplicateMigrations) {
 }
 
 Write-Output 'feature-baseline=ok'
-Write-Output 'checked=dynamic-analytics,user-details,ai-moderation,polls,dynamic-presentation'
+Write-Output 'checked=dynamic-analytics,user-details,ai-moderation,polls,dynamic-presentation,campus-mutual-aid'
 Write-Output 'production-connection=false'

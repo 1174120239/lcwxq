@@ -58,7 +58,16 @@
 
 专用用户初始化脚本为 `deploy/server/bootstrap-deploy-user.sh`，它只接受 Ed25519 公钥文件，并在 `/etc/sudoers.d/lcxqy-deploy` 中写入受限规则。必须先在第二个终端验证新账号可登录，再考虑关闭旧的 root 密码登录；不要在同一个操作里同时改账号、防火墙和服务部署。
 
-通用发布入口不执行数据库迁移，也不修改 Nginx。传入 `-RunMigrations` 会在任何生产变更前中止；迁移继续按本手册的对应章节单独审查、备份和执行。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+通用发布入口默认不执行数据库迁移，也不修改 Nginx。当前唯一例外是经过明确授权的校园互助迁移 014：只允许 `-Component replacement-backend -RunMigrations`，入口校验固定 SQL SHA-256、定向备份已有 `starfree_lost_found_%` 表、执行或识别已完成迁移，并核对五张 InnoDB 表、配置行、联系方式唯一键和列表/接收者索引。其他组件或其他迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+
+~~~powershell
+.\deploy\publish-to-server.ps1 `
+  -Component replacement-backend `
+  -ConfirmProduction `
+  -RunMigrations
+~~~
+
+`-UseExistingArtifact` 只用于已经在同一维护任务中完成测试和构建、且 SHA-256 与发布脚本固定值一致的互助 JAR。入口同时确认 `8f60799892cd5568dce98504a14246d3183300cf` 之后没有后端源码变化；它不能作为日常跳过构建的通用参数。
 
 ## 3. 从 GitHub 全新部署
 
@@ -312,6 +321,8 @@ PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空�
 匹配的 replacement JAR 与 App。先在本机 18082 验证公开列表、Lv 门槛、审核、评论删除撤销授权和
 接收者专属 QQ 投影，最后运行 `promote-mutual-aid-routes.sh` 切换 16 条精确路由。回滚 JAR 或 Nginx
 时保留新增表以及上线后产生的互助、评论和审计数据；普通开发或组件发布不得顺带执行 014。
+受控入口只在迁移执行或结构验收本身失败时删除这五张隔离表并恢复本次定向备份；迁移成功后若 JAR
+健康检查失败，只回滚 JAR 并保留 014 表。发布输出中的 `migration_014_backup` 是数据库定向备份路径。
 
 001 可使用：
 
