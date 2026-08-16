@@ -133,6 +133,12 @@ curl -fsS http://127.0.0.1:8081/
 
 安装脚本会再次校验 JAR、备份旧 JAR、安装 systemd unit、拒绝 `CHANGE_ME` 配置，并确保旧 API 只监听 `127.0.0.1:8081`。首次运行若配置文件不存在，会只创建模板并退出，填完配置后再次运行即可。
 
+若生产已运行仓库核验哈希对应的 `/opt/StarFreeApi.jar`，但仍是从 `/opt` 以
+`java -jar StarFreeApi.jar` 手工启动，可使用 `deploy/server/adopt-legacy-service.sh` 接管。
+该脚本只接受仓库内已审查的 start/unit 文件，不覆盖 JAR 或配置；它先备份 JAR、已有服务文件和
+原进程信息，再向唯一精确匹配进程发送 SIGTERM。systemd 启动或健康检查失败时会恢复原文件并按
+原工作目录重新启动旧 JAR。
+
 ### 3.5 部署 PHP admin
 
 先填写模板：

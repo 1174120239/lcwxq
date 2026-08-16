@@ -33,6 +33,7 @@ $requiredFiles = @(
     'backend/database/migrations/013_ai_moderation_complete.sql',
     'backend/database/migrations/014_lost_and_found.sql',
     'backend/deploy/production/promote-mutual-aid-routes.sh',
+    'deploy/server/adopt-legacy-service.sh',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/lostfound/LostFoundController.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiModerationService.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiCommentModerationScheduler.java',
