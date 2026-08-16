@@ -44,7 +44,7 @@ export function isDongchangfuNight(time) {
 export function applyCampusThemeShell(mode, time) {
 	const nextMode = normalizeCampusThemeMode(mode)
 	const night = resolveCampusNight(nextMode, isDongchangfuNight(time))
-	const backgroundColor = night ? '#15191b' : '#f4f8f8'
+	const backgroundColor = night ? '#15191b' : '#f5f8f7'
 
 	if (typeof document !== 'undefined') {
 		const targets = [document.documentElement, document.body]
@@ -69,7 +69,7 @@ export function applyCampusThemeShell(mode, time) {
 	try {
 		uni.setTabBarStyle({
 			color: night ? '#929c99' : '#71817f',
-			selectedColor: night ? '#45aa7c' : '#168cf0',
+			selectedColor: night ? '#6ebaae' : '#237c74',
 			backgroundColor: night ? '#1c2123' : '#fcfefe',
 			borderStyle: night ? 'black' : 'white',
 			fail() {}

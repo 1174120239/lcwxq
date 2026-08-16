@@ -1,6 +1,6 @@
 # 生产部署与回滚手册
 
-> 更新日期：2026-08-04
+> 更新日期：2026-08-15
 >
 > 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
@@ -249,6 +249,9 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 008 | 008_simple_invitation.sql | 轻量邀请配置、邀请码和奖励记录表 |
 | 009 | 009_space_reports.sql | 动态举报、审核状态和审核审计表 |
 | 010 | 010_admin_password_hash.sql | 将 `starfree_admin_login.pw` 扩为 255 位，支持 PHP `password_hash()` |
+| 011 | 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
+| 012 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和展示时效字段及索引 |
+| 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
 
 规则：
 
@@ -288,6 +291,20 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 `starfree_admin_login` 并确认目标列当前定义；普通开发或组件发布不得顺带执行。未执行 010 时，
 后台仍可验证原 MD5 密码，但会跳过自动升级，避免将 `password_hash()` 结果截断后锁死管理员。
 只有用户明确要求迁移并通过带 `-RunMigrations` 的受控发布入口时才能执行。
+
+011 只新增用户资料、动态投票、AI 审核和分析事件表，并写入一行默认 AI 配置；执行前按表备份，
+确认 001-010 已完成，执行后再部署依赖这些表的 replacement JAR。普通开发和组件发布不会执行 011。
+
+012 以幂等方式扩展 `starfree_space`，新增动态精华、列表置顶、横幅置顶、展示顺序和起止时间字段，
+并添加公开展示查询索引。它不修改文章推荐或文章置顶语义。生产上线必须在独立迁移会话中先定向备份
+`starfree_space`、核对 001-011 已完成并执行 012；随后部署匹配的 replacement JAR，验证本机 18082
+上的展示读取和管理员写接口，最后运行 `promote-space-presentation-routes.sh` 切换两个精确路由。
+回滚 JAR 或 Nginx 时保留新增列及其中的管理配置，避免覆盖上线后写入的展示状态。
+
+013 依赖 011 和 007：它以幂等方式扩展 AI 配置，新增统一审核记录、人工操作日志和每日评论总结，
+并把旧动态 AI 记录复制到统一历史。上线顺序必须是定向备份 `starfree_ai_moderation_config`、
+`starfree_space_ai_reviews`、`starfree_space` 和三张问答表，执行 013，再同时发布 replacement JAR、
+PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空上线后产生的审核历史。
 
 001 可使用：
 
@@ -347,7 +364,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 安全版本切流
 
@@ -362,7 +379,9 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 安全切流脚本读取现有精确 location 时兼容 LF 和 CRLF，不需要为匹配脚本预先改写生产 Nginx include 的整份换行格式。
 
 安全切流会强制拒绝所有旧格式 token，所有用户需要重新登录。新 token 为 `sf2_` 加 60 位
-小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。客户端优先使用 Bearer Header，历史
+小写十六进制随机串，总长度 64 字符以兼容共享用户表；Redis TTL 是生产会话有效期权威。普通
+会话默认 90 天无操作过期，并在活跃请求中滑动续期；退出、改密、敏感资料修改和封禁仍立即撤销。
+客户端优先使用 Bearer Header，历史
 `token` 参数只作为兼容通道。切流脚本还必须验证公开资料不含 IP、local、logged 或 clientId。
 
 聊天、上传、社会化绑定、支付创建和卡密等业务实现仍留在 8081，但公网请求先进入 18082，

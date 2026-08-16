@@ -231,6 +231,7 @@
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import featureFlags from '@/utils/featureFlags.js'
 	import { normalizeUser } from '@/utils/avatar.js'
+	import { clearUnreadBadge } from '@/utils/unreadBadge.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -319,6 +320,9 @@
 					that.getInboxList(false);
 				}
 				that.setRead();
+			}else{
+				that.token = ''
+				clearUnreadBadge()
 			}
 			if(localStorage.getItem('chatList')){
 				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
@@ -333,6 +337,7 @@
 				if (that.type == "inbox" && that.token) {
 					that.page = 1;
 					that.getInboxList(false);
+					that.setRead();
 				}
 			};
 			uni.$on('campus:push', that.pushRefreshHandler);
@@ -419,14 +424,18 @@
 				if((data.type=="spaceComment" || data.type=="spaceLike") && data.spaceState=="visible"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
+					var spaceUrl = '/pages/space/info?id=' + data.value;
+					if(data.type === 'spaceComment' && Number(data.cid || 0) > 0) spaceUrl += '&commentId=' + data.cid;
 					uni.navigateTo({
-						url: '/pages/space/info?id='+data.value
+						url: spaceUrl
 					});
 				}
 				if((data.type=="qaAnswer" || data.type=="qaComment") && data.questionState=="visible"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
-					uni.navigateTo({ url: '/pages/qa/info?id=' + data.value });
+					var qaUrl = '/pages/qa/info?id=' + data.value + '&answerId=' + (data.answerId || data.cid || 0);
+					if(data.type === 'qaComment' && Number(data.commentId || 0) > 0) qaUrl += '&commentId=' + data.commentId;
+					uni.navigateTo({ url: qaUrl });
 				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);
@@ -804,7 +813,7 @@
 					timeout: 15000,
 					success: function(res) {
 						if(res.data.code==1){
-							
+							clearUnreadBadge()
 						}
 					},
 					fail: function(res) {

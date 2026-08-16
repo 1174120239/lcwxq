@@ -10,6 +10,7 @@
 					<CampusThemeToggle class="profile-theme-toggle" :night="profileNight" :value="campusThemeMode" :compact="true" @change="handleCampusThemeMode"></CampusThemeToggle>
 					<view class="profile-tool" @tap="toSetup"><text class="cuIcon-light"></text></view>
 				</view>
+				<view class="profile-menu-backdrop" v-if="showProfileMenu" @tap="showProfileMenu=false"></view>
 				<view class="profile-menu" :class="{'is-open':showProfileMenu}">
 					<view @tap="toLink('/pages/user/useredit');showProfileMenu=false"><text class="cuIcon-edit"></text><text>编辑资料</text></view>
 					<view @tap="toSetUp();showProfileMenu=false"><text class="cuIcon-settings"></text><text>账户设置</text></view>
@@ -52,7 +53,6 @@
 					</view>
 					<view @tap="toLink('/pages/user/usermark')"><view><text class="cuIcon-favor"></text><text>浏览记录</text></view><text>查看内容</text></view>
 					<view @tap="toLink('/pages/user/assets')"><view><text class="cuIcon-card"></text><text>钱包</text></view><text>点击查看</text></view>
-					<view class="profile-share-action" @tap="toLink('/pages/user/invitation')"><view><text class="cuIcon-share"></text><text>分享</text></view><text>邀请好友</text></view>
 					<view class="profile-clock-action" :class="{'is-clocked': isClock==1}" @tap="toClock"><view><text class="cuIcon-calendar"></text><text>{{isClock==1?'已签到':'签到'}}</text></view><text>{{isClock==1?'今日已签':'每日签到'}}</text></view>
 				</view>
 			</view>
@@ -65,9 +65,13 @@
 					<spaceItem :spaceList="profileSpaceList" :compact="true"></spaceItem>
 				</view>
 				<view class="profile-dynamic-loading" v-else-if="profileSpaceLoading"><view class="campus-loader"></view></view>
+				<view class="profile-empty-state" v-else-if="profileSpaceError">
+					<text class="cuIcon-warn"></text><text>动态加载失败</text>
+					<view @tap="refreshProfile(false)">重新加载</view>
+				</view>
 				<view class="profile-empty-state" v-else>
-					<text class="cuIcon-community"></text><text>动态会记录在这里</text>
-					<view @tap="toLink('/pages/space/post')">发布第一条动态</view>
+					<text class="cuIcon-community"></text><text>{{userInfo ? '动态会记录在这里' : '登录后查看你的动态'}}</text>
+					<view @tap="userInfo ? toLink('/pages/space/post') : toLogin()">{{userInfo ? '发布第一条动态' : '去登录'}}</view>
 				</view>
 			</view>
 		</view>
@@ -282,6 +286,8 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import CampusThemeToggle from '@/pages/components/CampusThemeToggle.vue'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll } from '@/utils/campusChrome.js'
+	import { clearUnreadBadge, refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	// #ifdef APP-PLUS
 	import Tabbar from '@/pages/components/tabBar.vue'
 	// #endif
@@ -293,6 +299,9 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				profileTab: 1,
 				profileSpaceList: [],
 				profileSpaceLoading: false,
+				profileSpaceError: false,
+				profileRefreshPending: false,
+				profileRequestGeneration: 0,
 				showProfileMenu: false,
 				StatusBar: this.StatusBar,
 				CustomBar: this.CustomBar,
@@ -331,11 +340,16 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			}
 		},
 		onPullDownRefresh(){
-			var that = this;
-			
+			this.refreshProfile(true)
+		},
+		onPageScroll(event) {
+			handleCampusChromeScroll(this, event && event.scrollTop)
 		},
 		onShow(){
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
+			that.showProfileMenu = false;
 			that.loadCampusThemeMode();
 			that.startProfileThemeClock();
 			that.$nextTick(function() {
@@ -353,22 +367,25 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			
 			plus.navigator.setStatusBarStyle(that.profileNight ? "light" : "dark")
 			// #endif
-			if(localStorage.getItem('userinfo')){
-				
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url("+that.userInfo.avatar+");"
-				that.avatar = that.userInfo.avatar;
-				that.uid = that.userInfo.uid;
-				that.group = that.userInfo.group;
-				if(that.userInfo.screenName){
-					that.name = that.userInfo.screenName;
-				}else{
-					that.name = that.userInfo.name;
+			var cachedUser = localStorage.getItem('userinfo')
+			if(cachedUser){
+				try {
+					that.userInfo = JSON.parse(cachedUser);
+				} catch (error) {
+					localStorage.removeItem('userinfo')
+					that.userInfo = null
+				}
+					if (that.userInfo) {
+					that.userInfo.style = "background-image:url("+that.userInfo.avatar+");"
+					that.avatar = that.userInfo.avatar;
+					that.uid = that.userInfo.uid;
+					that.group = that.userInfo.group;
+					that.name = that.userInfo.screenName || that.userInfo.name || '';
+				} else {
+					that.resetProfileState()
 				}
 			}else{
-				that.userInfo =null;
-				that.uid = 0;
-				that.avatar = '';
+				that.resetProfileState()
 			}
 			if(localStorage.getItem('token')){
 				
@@ -376,13 +393,14 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			}else{
 				that.token = "";
 			}
-			that.getUserData();
-			that.userStatus();
-			that.unreadNum();
-			that.getProfileSpaceList();
+			that.refreshProfile(false)
 			
 		},
 		onHide() {
+			resetCampusChromeScroll(this);
+			unbindCampusChromeScroll(this);
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopProfileThemeClock();
 		},
 		onUnload() {
@@ -440,12 +458,16 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			},
 			getProfileSpaceList() {
 				const that = this
+				const requestGeneration = ++that.profileRequestGeneration
+				const requestUid = that.uid
 				if (!that.uid) {
 					that.profileSpaceList = []
 					that.profileSpaceLoading = false
+					that.profileSpaceError = false
 					return
 				}
 				that.profileSpaceLoading = true
+				that.profileSpaceError = false
 				const searchParams = { uid: that.uid }
 				that.$Net.request({
 					url: that.$API.spaceList(),
@@ -459,8 +481,9 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 					method: 'get',
 					dataType: 'json',
 					success(res) {
+						if (requestGeneration !== that.profileRequestGeneration || requestUid !== that.uid) return
 						if (res.data.code === 1) {
-							const list = res.data.data || []
+							const list = Array.isArray(res.data.data) ? res.data.data : []
 							list.forEach((item) => {
 								if (item.type === 0) item.picList = item.pic ? item.pic.split('||') : []
 							})
@@ -471,10 +494,52 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 						that.profileSpaceLoading = false
 					},
 					fail() {
-						that.profileSpaceList = []
+						if (requestGeneration !== that.profileRequestGeneration || requestUid !== that.uid) return
+						that.profileSpaceError = true
 						that.profileSpaceLoading = false
 					}
 				})
+			},
+			refreshProfile(fromPullDown) {
+				if (this.profileRefreshPending) {
+					if (fromPullDown) uni.stopPullDownRefresh()
+					return
+				}
+				if (!this.token) {
+					this.resetProfileState()
+					if (fromPullDown) uni.stopPullDownRefresh()
+					return
+				}
+				this.profileRefreshPending = true
+				this.profileSpaceError = false
+				this.getUserData()
+				this.userStatus()
+				this.unreadNum()
+				this.getProfileSpaceList()
+				setTimeout(() => {
+					this.profileRefreshPending = false
+					if (fromPullDown) uni.stopPullDownRefresh()
+				}, 900)
+			},
+			resetProfileState() {
+				clearUnreadBadge()
+				this.userInfo = null
+				this.name = ''
+				this.uid = 0
+				this.token = ''
+				this.userData = {}
+				this.group = ''
+				this.avatar = ''
+				this.fancount = 0
+				this.isClock = 0
+				this.isvip = 0
+				this.vip = 0
+				this.noticeSum = 0
+				this.profileRefreshPending = false
+				this.profileRequestGeneration += 1
+				this.profileSpaceList = []
+				this.profileSpaceLoading = false
+				this.profileSpaceError = false
 			},
 			getfsgz() {
 			  var that = this;
@@ -785,12 +850,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 							that.isClock = profileData.isClock;
 						}
 					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+					fail: function() {}
 				})
 			},
 			syncDynamicCommentCount() {
@@ -945,15 +1005,10 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 							}
 							localStorage.removeItem('userinfo');
 							localStorage.removeItem('token');
-							that.userInfo = null;
+							that.resetProfileState();
 						}
 					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦",
-							icon: 'none'
-						})
-					}
+					fail: function() {}
 				})
 			},
 			getVipInfo(){
@@ -1133,29 +1188,8 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			    }
 			},
 			unreadNum() {
-				var that = this;
-				that.$Net.request({
-					
-					url: that.$API.unreadNum(),
-					data:{
-						"token":that.token
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if(res.data.code==1){
-							that.noticeSum = res.data.data;
-						}
-					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
 				})
 			},
 			goFanList(uid){
@@ -1659,6 +1693,13 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		background: rgba(255, 255, 255, 0.16);
 	}
 
+	.profile-menu-backdrop {
+		position: absolute;
+		z-index: 7;
+		inset: 0;
+		background: transparent;
+	}
+
 	.profile-menu {
 		position: absolute;
 		z-index: 8;
@@ -1854,7 +1895,7 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 		position: relative;
 		z-index: 2;
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 14rpx;
 		margin-top: 30rpx;
 	}

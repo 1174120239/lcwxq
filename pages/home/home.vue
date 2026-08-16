@@ -6,7 +6,7 @@
 			<view class="home-ambient-sheen"></view>
 		</view>
 
-		<view class="home-hero" :style="{paddingTop: StatusBar + 20 + 'px'}">
+		<view class="home-hero" :style="homeHeroStyle">
 			<view class="hero-main">
 				<view class="hero-copy">
 					<text class="hero-greeting">{{greetingText}}</text>
@@ -61,7 +61,7 @@
 				<view class="all-box home-feed" :style="TabCur!=0?'margin-top:0;':''">
 					<view v-if="hometop==1"><block v-for="(item,index) in topContents" :key="'top-new'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view>
 					<view v-if="act_of==1">
-						<block v-for="(item,index) in contentsList" :key="item.cid || ('feed'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
+						<block v-for="(item,index) in contentsList" :key="item.cid || ('feed'+index)"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
 						<view class="qa-home-section" v-if="questionList.length>0">
 							<view class="qa-home-heading"><text>校园问答</text><text class="qa-home-subtitle">一起把问题说清楚</text></view>
 							<view class="qa-home-list">
@@ -96,7 +96,7 @@
 					<qa-question-card :question="questionList[0]" :night="weatherTheme.isDark" @open="openQuestion"></qa-question-card>
 				</view>
 				<view class="section-heading"><text>推荐帖子</text><view class="more" @tap="toRecommend"><text>查看更多</text><text class="cuIcon-right"></text></view></view>
-				<block v-for="(item,index) in recommendList" :key="item.cid || ('recommend'+index)" v-if="dataLoad"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
+				<block v-for="(item,index) in recommendList" :key="item.cid || ('recommend'+index)"><articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem></block>
 				<view class="dataLoad" v-if="!dataLoad"><view class="campus-loader"></view></view>
 			</view>
 		</view>
@@ -442,7 +442,7 @@
 		</view>
 
 		<!--加载遮罩-->
-		<view class="loading" v-if="isLoading==0">
+		<view class="loading" v-if="isLoading==0 && contentsList.length===0 && topContents.length===0 && recommendList.length===0 && swiperList.length===0">
 			<view class="loading-main">
 				<view class="campus-loader"></view>
 			</view>
@@ -450,13 +450,13 @@
 		<!--加载遮罩结束-->
 		<!--弹窗公告-->
 		<view class="announcement" v-if="isAnnouncement&&Update!=1">
-			<view class="announcement-bg" @tap="isAnnouncement=false">
+			<view class="announcement-bg" @tap="readAnnouncement">
 
 			</view>
 			<view class="announcement-main">
 				<view class="announcement-title">
 					公告
-					<text class="cuIcon-close text-red" @tap="isAnnouncement=false"></text>
+					<text class="cuIcon-close text-red" @tap.stop="readAnnouncement"></text>
 				</view>
 				<view class="announcement-concent" style="background-color: white;">
 					<rich-text :nodes="announcement"></rich-text>
@@ -492,6 +492,9 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import metas from '@/pages/contents/metas.vue'
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll, CAMPUS_CHROME_EVENT } from '@/utils/campusChrome.js'
+	import { shuffleQuestions } from '@/utils/questions.js'
+	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
 	// #endif
@@ -641,10 +644,19 @@
 				sy_appbox: false,
 				lastHomeRefresh: 0,
 				deferredHomeTimer: null,
+				chromeProgress: 0,
 
 			}
 		},
 		computed: {
+			homeHeroStyle() {
+				const progress = Math.max(0, Math.min(1, Number(this.chromeProgress) || 0))
+				return {
+					paddingTop: this.StatusBar + 20 + 'px',
+					opacity: String(1 - progress),
+					transform: `translate3d(0, ${-110 * progress}%, 0)`
+				}
+			},
 			dongchangfuHour() {
 				return (new Date(this.themeClock).getUTCHours() + 8) % 24
 			},
@@ -742,8 +754,13 @@
 		},
 
 
+		onPageScroll(event) {
+			handleCampusChromeScroll(this, event && event.scrollTop)
+		},
 		onShow() {
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
 			that.loadCampusThemeMode();
 			that.startThemeClock();
 			// #ifdef H5 || APP-PLUS
@@ -757,11 +774,16 @@
 				if (that.$refs.publishPanel) that.$refs.publishPanel.activatePage()
 				// #endif
 			})
-			if (localStorage.getItem('userinfo')) {
-
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");"
-				that.group = that.userInfo.group;
+			var cachedUser = localStorage.getItem('userinfo');
+			if (cachedUser) {
+				try {
+					that.userInfo = JSON.parse(cachedUser);
+					that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");"
+					that.group = that.userInfo.group;
+				} catch (error) {
+					localStorage.removeItem('userinfo');
+					that.userInfo = null;
+				}
 			} else {
 				that.userInfo = null;
 			}
@@ -791,12 +813,15 @@
 			// #endif
 			//获取缓存
 			that.allCache();
+			// 首页问答推荐独立刷新，不受其他首页数据的短时节流影响。
+			that.getQuestionList();
 			// 每次重新显示首页都向服务端校准，后台删除后不再长期停留在旧缓存。
 			that.loading(false);
 			if (localStorage.getItem('token')) {
 
 				that.token = localStorage.getItem('token');
 			}
+			that.unreadNum();
 			that.userStatus();
 			// #ifdef APP-PLUS
 			// 已登录用户每次回到首页都向服务端校准推送 clientId，换设备或重装后也能继续收到通知。
@@ -858,7 +883,8 @@
 			//插件检测
 			var cachedPlugins = localStorage.getItem('getPlugins');
 			if (cachedPlugins) {
-				const pluginList = JSON.parse(cachedPlugins);
+				let pluginList = [];
+				try { pluginList = JSON.parse(cachedPlugins); } catch (error) { localStorage.removeItem('getPlugins'); }
 				// 检查插件是否存在于插件列表中
 				that.sy_appbox = pluginList.includes('sy_appbox'); 
 			}
@@ -872,13 +898,20 @@
 			}
 		},
 		mounted() {
+			uni.$on(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
 			this.getgg();
 			this.getAnnouncement();
 		},
 		onHide() {
+			resetCampusChromeScroll(this);
+			unbindCampusChromeScroll(this);
+			// Stop fixed navigation/publish layers while this tab is kept alive in the page stack.
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopThemeClock();
 		},
 		onUnload() {
+			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
 			clearTimeout(this.deferredHomeTimer);
 			this.deferredHomeTimer = null;
 			this.stopThemeClock();
@@ -888,6 +921,15 @@
 			this.themeTransitionTimer = null;
 		},
 		methods: {
+			unreadNum() {
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
+				})
+			},
+			handleChromeVisibility(state) {
+				const progress = state && typeof state === 'object' ? state.progress : (state ? 1 : 0)
+				this.chromeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
+			},
 			loadCampusThemeMode() {
 				this.campusThemeMode = getCampusThemeMode()
 				applyCampusThemeShell(this.campusThemeMode, this.themeClock)
@@ -1105,7 +1147,6 @@
 				// Discovery data waits until the route transition has settled.
 				that.deferredHomeTimer = setTimeout(function() {
 					that.getRecommend();
-					that.getQuestionList();
 					that.getTopList();
 					that.getMetaList();
 					that.getTagList();
@@ -1161,8 +1202,12 @@
 				}
 				var token = "";
 				if (localStorage.getItem('userinfo')) {
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token = userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token = userInfo && userInfo.token ? userInfo.token : '';
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				that.$Net.request({
 					url: that.$API.getContentsList(),
@@ -1461,6 +1506,12 @@
 				}
 			},
 			// 公共缓存只负责首屏占位；网络成功后即使返回空数组，也必须覆盖这些旧数据。
+			filterRecommendedQuestions(list) {
+				const recommended = (Array.isArray(list) ? list : [])
+					.filter(function(item) { return item && Number(item.recommended) === 1 })
+				return shuffleQuestions(recommended)
+					.slice(0, 4)
+			},
 			allCache() {
 				var that = this;
 				var meta = that.TabCur;
@@ -1481,9 +1532,11 @@
 				if (localStorage.getItem('recommendList')) {
 					that.recommendList = that.readCache('recommendList', []);
 				}
-				if (localStorage.getItem('qaQuestionList')) {
-					that.questionList = that.readCache('qaQuestionList', []);
+				if (localStorage.getItem('qaRecommendedQuestionList')) {
+					that.questionList = that.filterRecommendedQuestions(that.readCache('qaRecommendedQuestionList', []));
 				}
+				// 旧键曾缓存全部问答，不能继续作为首页推荐数据源。
+				if (localStorage.getItem('qaQuestionList')) localStorage.removeItem('qaQuestionList');
 				if (localStorage.getItem('find_metaList')) {
 					that.metaList = that.readCache('find_metaList', []);
 				}
@@ -1732,8 +1785,12 @@
 				}
 				var token = "";
 				if (localStorage.getItem('userinfo')) {
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token = userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token = userInfo && userInfo.token ? userInfo.token : '';
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				that.$Net.request({
 					url: that.$API.getContentsList(),
@@ -1968,15 +2025,16 @@
 				that.$Net.request({
 					url: that.$API.qaQuestionList(),
 					data: {
-						limit: 4,
-						page: 1
+						limit: 30,
+						page: 1,
+						recommended: 1
 					},
 					method: 'get',
 					dataType: 'json',
 					success: function(res) {
 						if (res.data && res.data.code == 1) {
-							that.questionList = Array.isArray(res.data.data) ? res.data.data : [];
-							localStorage.setItem('qaQuestionList', JSON.stringify(that.questionList));
+							that.questionList = that.filterRecommendedQuestions(res.data.data);
+							localStorage.setItem('qaRecommendedQuestionList', JSON.stringify(that.questionList));
 						}
 					}
 				})
@@ -2140,8 +2198,7 @@
 			readAnnouncement() {
 				var that = this;
 				that.isAnnouncement = false;
-				var timestamp = new Date().getTime();
-				localStorage.setItem('isAnnouncement', timestamp);
+				if (that.announcement) localStorage.setItem('isAnnouncement', that.announcement);
 
 			},
 			toAllContents() {
@@ -2194,20 +2251,10 @@
 					},
 					method: 'get',
 					success: function(res) {
-						that.announcement = res.data.announcement;
-						if (that.announcement != "" || res.data.announcement) {
-							if (localStorage.getItem('isAnnouncement')) {
-								var oldTime = Number(localStorage.getItem('isAnnouncement'));
-								var curTime = new Date().getTime();
-								var difference = curTime - oldTime;
-								if (difference > that.gonggaotime) {
-									that.isAnnouncement = true;
-								}
-							} else {
-								that.isAnnouncement = true;
-							}
-			
-						}
+						that.announcement = res.data && typeof res.data.announcement === 'string'
+							? res.data.announcement.trim() : '';
+						that.isAnnouncement = Boolean(that.announcement &&
+							localStorage.getItem('isAnnouncement') !== that.announcement);
 			
 					},
 					fail: function(res) {
@@ -2982,7 +3029,7 @@
 	}
 
 	.home-mode-item.is-active {
-		color: #167f77;
+		color: var(--campus-primary, #237c74);
 		background: rgba(255, 255, 255, 0.78);
 		box-shadow: 0 6rpx 18rpx rgba(34, 76, 73, 0.1);
 	}
@@ -3022,6 +3069,75 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 28rpx !important;
+	}
+
+	/* Mobile polish: keep the first screen calm and leave room for the dock. */
+	@media (max-width: 759px) {
+		/* H5 does not provide the native status-bar inset used by App-plus. */
+		/* #ifdef H5 */
+		.campus-home .home-hero {
+			padding-top: 32px !important;
+			padding-bottom: 28rpx;
+		}
+		/* #endif */
+
+		.hero-greeting {
+			font-size: 52rpx;
+			line-height: 1.14;
+		}
+
+		.hero-subtitle {
+			margin-top: 14rpx;
+			font-size: 25rpx;
+		}
+
+		.home-stage {
+			padding-top: 20rpx;
+			padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+			border-radius: 48rpx 48rpx 0 0;
+		}
+
+		.campus-home .swiper-container {
+			aspect-ratio: 1.618 / 1;
+			margin-bottom: 18rpx;
+			border-radius: 28rpx !important;
+		}
+
+		.campus-home .swiper-box,
+		.campus-home .swiper-box image,
+		.campus-home .swiper-box video {
+			border-radius: 28rpx !important;
+		}
+
+		.campus-home .home-shortcuts {
+			margin-right: 10rpx;
+			margin-bottom: 18rpx;
+			margin-left: 10rpx;
+			padding: 18rpx 10rpx 16rpx;
+			border: 1rpx solid rgba(255, 255, 255, 0.9) !important;
+			border-radius: 28rpx !important;
+			background: rgba(232, 240, 239, 0.94) !important;
+			box-shadow: 0 8rpx 22rpx rgba(19, 42, 43, 0.14) !important;
+		}
+
+		.campus-home .home-shortcuts .index-sort-main {
+			padding: 14rpx 0 16rpx;
+		}
+
+		.campus-home .home-shortcuts .index-sort-i {
+			width: 84rpx;
+			height: 84rpx;
+			margin-bottom: 14rpx;
+			border-radius: 24rpx !important;
+			line-height: 84rpx;
+			font-size: 40rpx;
+		}
+
+		.campus-home .home-shortcuts .index-sort-text {
+			font-size: 28rpx;
+			font-weight: 600;
+			color: #35484a;
+		}
 	}
 
 	.home-shortcuts,
@@ -3064,10 +3180,10 @@
 		transform: translateY(2rpx) scale(0.92);
 	}
 
-	.shortcut-green { background: #36a978 !important; }
-	.shortcut-blue { background: #438fd2 !important; }
-	.shortcut-violet { background: #7f75c7 !important; }
-	.shortcut-coral { background: linear-gradient(145deg, #ffac86, #e77a5f) !important; }
+	.shortcut-green { background: #4a9b85 !important; }
+	.shortcut-blue { background: #5c93bf !important; }
+	.shortcut-violet { background: #8079ad !important; }
+	.shortcut-coral { background: #c88778 !important; }
 
 	.home-notice {
 		display: flex;
@@ -3084,7 +3200,7 @@
 		gap: 8rpx;
 		padding: 7rpx 13rpx;
 		border-radius: 15rpx;
-		background: linear-gradient(135deg, #ff6450, #ff8870);
+		background: #c9853a;
 		font-size: 22rpx;
 		font-weight: 600;
 		color: #fff;
@@ -3392,6 +3508,15 @@
 		box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.18) !important;
 	}
 
+	.campus-home.campus-night .home-shortcuts {
+		border-color: rgba(226, 232, 230, 0.14) !important;
+		background: #263334 !important;
+	}
+
+	.campus-home.campus-night .home-shortcuts .index-sort-text {
+		color: #dce8e3 !important;
+	}
+
 	.campus-home.campus-night .home-notice {
 		border-color: rgba(222, 232, 228, 0.14) !important;
 		background: #202729 !important;
@@ -3496,6 +3621,19 @@
 
 	.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .home-read-link {
 		color: #7fc4ff;
+	}
+
+	@media (max-width: 759px) {
+		.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .cu-card.article.no-card > .cu-item {
+			border-radius: 30rpx !important;
+			border-color: rgba(132, 177, 169, 0.22);
+			background: linear-gradient(135deg, #303d3e 0%, #263b3b 56%, #2b433c 100%);
+			box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.2) !important;
+		}
+
+		.campus-home.campus-night ::v-deep .home-feed .article-item-shell.is-home-feed .home-article-card {
+			background: transparent;
+		}
 	}
 
 	@keyframes stageRise {

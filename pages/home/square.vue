@@ -1,7 +1,7 @@
 <template>
 	<view class="campus-page campus-square" :class="{'campus-night': campusNight}">
 		
-		<view class="header square-header" :style="{paddingTop: StatusBar + 'px'}">
+		<view class="header square-header" :style="squareHeaderStyle">
 			<view class="square-mainbar">
 				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toggleSquareMenu"><text class="cuIcon-sort"></text></view>
 				<text class="square-page-title">{{squarePageTitle}}</text>
@@ -24,6 +24,7 @@
 				<view class="filter-menu-title">动态筛选</view>
 				<view class="filter-menu-options">
 					<view :class="{'is-active':follow==1&&squareid==0&&selectedTopics.length===0}" @tap="setFollow(1);showSquareMenu=false">全部</view>
+					<view :class="{'is-active':follow==4&&squareid==0}" @tap="setFollow(4);showSquareMenu=false">精华</view>
 					<view :class="{'is-active':follow==0&&squareid==0}" @tap="setFollow(0);showSquareMenu=false">关注</view>
 					<view :class="{'is-active':follow==2&&squareid==0}" @tap="setFollow(2);showSquareMenu=false">视频</view>
 					<view :class="{'is-active':follow==3&&squareid==0}" @tap="setFollow(3);showSquareMenu=false">图集</view>
@@ -59,13 +60,27 @@
 			
 		<block v-if="squareid==0&&contentMode==='space'">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
-			<scroll-view v-if="topContents.length>0" scroll-x class="square-pinned-strip" :show-scrollbar="false">
-				<view class="pinned-track">
-					<view class="pinned-item" v-for="(item,index) in topContents.slice(0,2)" :key="'pinned'+index" @tap="toInfo(item)">
-						<text class="pinned-badge">置顶</text><text class="pinned-title">{{item.title}}</text>
+			<view class="space-presentation" v-if="showSpacePresentation && (presentationBanners.length>0 || presentationPins.length>0)">
+				<swiper class="space-banner" v-if="presentationBanners.length>0" :indicator-dots="presentationBanners.length>1" :autoplay="presentationBanners.length>1" :interval="5000" :duration="420" circular>
+					<swiper-item v-for="item in presentationBanners" :key="'space-banner-'+item.id">
+						<view class="space-banner-item" :class="{'is-text-only':!presentationImage(item)}" @tap="openPresentationSpace(item.id)">
+							<image class="space-banner-image" v-if="presentationImage(item)" :src="presentationImage(item)" mode="aspectFill"></image>
+							<view class="space-banner-copy">
+								<view class="space-banner-label"><text class="cuIcon-picfill"></text><text>精选置顶</text></view>
+								<text class="space-banner-title">{{presentationTitle(item)}}</text>
+								<text class="space-banner-author" v-if="item.userJson">{{item.userJson.name}}</text>
+							</view>
+						</view>
+					</swiper-item>
+				</swiper>
+				<view class="space-pin-list" v-if="presentationPins.length>0">
+					<view class="space-pin-row" v-for="item in presentationPins" :key="'space-pin-'+item.id" @tap="openPresentationSpace(item.id)">
+						<text class="space-pin-badge">置顶</text>
+						<text class="space-pin-title">{{presentationTitle(item)}}</text>
+						<text class="cuIcon-right space-pin-arrow"></text>
 					</view>
 				</view>
-			</scroll-view>
+			</view>
 			<view class="appcontent margin-top-xl" @tap="collapseSquareMenu" @touchmove="collapseSquareMenu">
 			
 			<block v-if="follow==0">
@@ -84,19 +99,19 @@
 				暂时还没有关注的人哦~
 			</view>
 			<followItem :spaceList="spaceList" :followList="spaceList.isFollow" @before-navigate="rememberSpaceReturn"></followItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
+			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
 				<text>{{moreText}}</text>
 			</view>
 			</view>
 			</block>
-			<block v-if="follow==1">
+			<block v-if="follow==1||follow==4">
 			<view class="no-data square-empty" v-if="spaceList.length==0">
 				<text class="cuIcon-text"></text>
-				{{selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
+				{{follow==4 ? '暂时还没有精华动态' : selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
 			</view>
 			
 			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
+			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
 				<text>{{moreText}}</text>
 			</view>
 			</block>
@@ -107,7 +122,7 @@
 			</view>
 			
 			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
+			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
 				<text>{{moreText}}</text>
 			</view>
 			</block>
@@ -118,7 +133,7 @@
 			</view>
 			
 			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&chatList.length>0">
+			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
 				<text>{{moreText}}</text>
 			</view>
 			</block>
@@ -127,6 +142,10 @@
 		<block v-if="squareid==0&&contentMode==='qa'">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
 			<view class="square-qa-list" @touchmove="collapseSquareMenu">
+				<view class="square-qa-overview" v-if="questionList.length>0">
+					<text class="square-qa-overview-title">最近讨论</text>
+					<text class="square-qa-overview-count">{{questionTotal}} 个问题</text>
+				</view>
 				<view class="square-qa-loading" v-if="questionLoading&&questionList.length===0">
 					<view class="campus-loader"></view>
 				</view>
@@ -135,7 +154,7 @@
 					暂时还没有已发布的问题
 				</view>
 				<qa-question-card v-for="item in questionList" :key="'square-question-'+item.id"
-					:question="item" :night="campusNight" @open="openQuestion"></qa-question-card>
+					:question="item" :night="campusNight" variant="feed" @open="openQuestion"></qa-question-card>
 				<view class="square-qa-more" v-if="questionList.length>0">{{questionMoreText}}</view>
 			</view>
 		</block>
@@ -389,6 +408,9 @@
 				<view class="campus-loader"></view>
 			</view>
 		</view>
+		<view v-if="showBackToTop && squareid === 0" class="square-back-top" title="回到顶部" aria-label="回到顶部" @tap.stop="backToTop">
+			<text class="cuIcon-top"></text>
+		</view>
 		<!--  #ifdef APP-PLUS -->
 		<view style="height: 100upx;"></view>
 		<Tabbar ref="tabbar" :current="1" :night="campusNight"></Tabbar>
@@ -404,6 +426,9 @@
 	import waves from '@/components/xxley-waves/waves.vue';
 	import metas from '@/pages/contents/metas.vue'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll, CAMPUS_CHROME_EVENT } from '@/utils/campusChrome.js'
+	import { shuffleQuestions } from '@/utils/questions.js'
+	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	import featureFlags from '@/utils/featureFlags.js'
 	// #ifdef APP-PLUS
 	import Tabbar from '@/pages/components/tabBar.vue'
@@ -429,7 +454,9 @@
 				isLoading: 0,
 				left_tabbar: [],
 				scrollTop: 0, 
-				pageScrollTop: 0,
+			pageScrollTop: 0,
+			chromeProgress: 0,
+				showBackToTop: false,
 				spaceReturnScrollTop: 0,
 				spaceReturnPending: false,
 				current: 0,
@@ -449,7 +476,9 @@
 				oldChatList: [],
 				metaList: [],
 				spaceList: [],
-				topContents: [],
+				presentationBanners: [],
+				presentationPins: [],
+				presentationRequestId: 0,
 				showSquareMenu: false,
 				contentMode: 'space',
 				questionList: [],
@@ -576,7 +605,7 @@
 				if (this.squareid == 0) {
 					if (this.selectedTopics.length === 1) return '#' + this.selectedTopics[0].name
 					if (this.selectedTopics.length > 1) return '已选' + this.selectedTopics.length + '个话题'
-					return this.follow == 0 ? '关注' : this.follow == 1 ? '全部' : this.follow == 2 ? '视频' : '图集'
+					return this.follow == 0 ? '关注' : this.follow == 1 ? '全部' : this.follow == 2 ? '视频' : this.follow == 3 ? '图集' : '精华'
 				}
 				if (this.squareid == 1 && this.groupChatEnabled) return '群聊'
 				return this.squareid == 2 ? '话题' : '校园应用'
@@ -593,16 +622,31 @@
 				const toolbarHeight = Math.round(toolbarRpx * viewportWidth / 750)
 				return { height: (this.StatusBar + toolbarHeight) + 'px' }
 			},
+			squareHeaderStyle() {
+				const progress = Math.max(0, Math.min(1, Number(this.chromeProgress) || 0))
+				return {
+					paddingTop: this.StatusBar + 'px',
+					opacity: String(1 - progress),
+					transform: `translate3d(0, ${-110 * progress}%, 0)`
+				}
+			},
 			officialTopicPreview() {
 				const topics = this.officialTopics || []
 				const recommended = topics.filter(topic => Number(topic.isrecommend) === 1)
 				return (recommended.length > 0 ? recommended : topics).slice(0, 12)
+			},
+			showSpacePresentation() {
+				return this.squareid == 0 && this.contentMode === 'space'
+					&& this.follow == 1 && this.selectedTopics.length === 0
 			}
 		},
 		onPullDownRefresh() {
 			var that = this;
+			var stopRefresh = function() {
+				uni.stopPullDownRefresh();
+			};
 				if (that.squareid == 0 && that.contentMode === 'qa') {
-					that.loadQuestionList(false, function() { uni.stopPullDownRefresh(); });
+					that.loadQuestionList(false, stopRefresh);
 					return;
 				}
 				if (that.follow == 2 && that.squareid == 0) {
@@ -622,14 +666,12 @@
 					}
 					
 				}
-				if (that.squareid == 0 && (that.follow == 0 || that.follow == 1)) {
+				if (that.squareid == 0 && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
 					
 					that.getSpaceList(false);
 				}
 			
-			var timer = setTimeout(function() {
-				uni.stopPullDownRefresh();
-			}, 1000)
+			setTimeout(stopRefresh, 1200)
 		},
 		onReachBottom() {
 			//触底后执行的方法，比如无限加载之类的
@@ -648,7 +690,7 @@
 				that.getSpaceList3();
 				
 			}
-			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1)) {
+			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
 				
 				that.getSpaceList(true);
 				
@@ -659,18 +701,27 @@
 		},
 		onPageScroll(event) {
 			this.pageScrollTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
+			this.showBackToTop = this.pageScrollTop > 520
+			handleCampusChromeScroll(this, event && event.scrollTop)
 			this.collapseSquareMenu()
 		},
 		onHide() {
+			resetCampusChromeScroll(this)
+			unbindCampusChromeScroll(this)
+			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
+			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
 		},
 		onUnload() {
+			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility)
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
 		},
 		onShow() {
 			var that = this;
+			resetCampusChromeScroll(that);
+			bindCampusChromeScroll(that);
 			var restoreSpacePosition = that.spaceReturnPending;
 			that.spaceReturnPending = false;
 			if (!that.groupChatEnabled && that.squareid == 1) {
@@ -697,10 +748,15 @@
 			plus.navigator.setStatusBarStyle(that.campusNight ? "light" : "dark")
 			// #endif
 			if (localStorage.getItem('userinfo')) {
-
-				that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
-				that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");";
-				that.uid = that.userInfo.uid;
+				try {
+					that.userInfo = JSON.parse(localStorage.getItem('userinfo'));
+					that.userInfo.style = "background-image:url(" + that.userInfo.avatar + ");";
+					that.uid = that.userInfo.uid;
+				} catch (error) {
+					localStorage.removeItem('userinfo');
+					that.userInfo = null;
+					that.uid = 0;
+				}
 			}
 			if (localStorage.getItem('token')) {
 
@@ -710,7 +766,13 @@
 			}
 			if (!restoreSpacePosition) that.getTopicCenter();
 			if (localStorage.getItem('chatList')) {
-				that.oldChatList = JSON.parse(localStorage.getItem('chatList'));
+				try {
+					var cachedChatList = JSON.parse(localStorage.getItem('chatList'));
+					that.oldChatList = Array.isArray(cachedChatList) ? cachedChatList : [];
+				} catch (error) {
+					localStorage.removeItem('chatList');
+					that.oldChatList = [];
+				}
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
 			}
 			that.userStatus();
@@ -725,7 +787,7 @@
 				if (that.token != "" && that.squareid == 1) that.startChatPolling();
 				return;
 			}
-			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1)) {
+			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
 				that.getSpaceList(false);
 			}
 			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 2) {
@@ -755,7 +817,7 @@
 				 // #endif
 				
 			}
-			if (that.squareid == 0 && that.contentMode === 'qa' && that.questionList.length === 0) {
+			if (that.squareid == 0 && that.contentMode === 'qa') {
 				that.loadQuestionList(false);
 			}
 			if (that.token != "" && that.squareid == 1) that.startChatPolling();
@@ -784,10 +846,40 @@
 		
 		mounted() {
 			var that = this;
+			uni.$on(CAMPUS_CHROME_EVENT, that.handleChromeVisibility)
 			that.getgg();
 			
 		},
 		methods: {
+			handleChromeVisibility(state) {
+				const progress = state && typeof state === 'object' ? state.progress : (state ? 1 : 0)
+				this.chromeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
+			},
+			backToTop() {
+				if (this.squareid !== 0) return
+				this.showBackToTop = false
+				uni.pageScrollTo({
+					scrollTop: 0,
+					duration: 260
+				})
+				setTimeout(() => {
+					this.pageScrollTop = 0
+					if (this.contentMode === 'qa') {
+						this.loadQuestionList(false)
+						return
+					}
+					this.page = 1
+					if (this.follow === 2) {
+						this.changeLoading = 0
+						this.getSpaceList2(false)
+					} else if (this.follow === 3) {
+						this.changeLoading = 0
+						this.getSpaceList3(false)
+					} else {
+						this.getSpaceList(false)
+					}
+				}, 280)
+			},
 			rememberSpaceReturn() {
 				this.spaceReturnScrollTop = Number(this.pageScrollTop) || 0;
 				this.spaceReturnPending = true;
@@ -810,7 +902,7 @@
 				this.contentMode = mode;
 				this.stopChatPolling();
 				uni.pageScrollTo({ scrollTop: 0, duration: 0 });
-				if (mode === 'qa' && this.questionList.length === 0) {
+				if (mode === 'qa') {
 					this.loadQuestionList(false);
 				} else if (mode === 'space' && this.spaceList.length === 0) {
 					this.page = 1;
@@ -836,7 +928,7 @@
 							if (!append) uni.showToast({ title: res.data && res.data.msg ? res.data.msg : '问题加载失败', icon: 'none' });
 							return;
 						}
-						const list = Array.isArray(res.data.data) ? res.data.data : [];
+						const list = shuffleQuestions(res.data.data);
 						this.questionList = append ? this.questionList.concat(list) : list;
 						this.questionPage = targetPage;
 						this.questionTotal = Number(res.data.total || 0);
@@ -1156,7 +1248,7 @@
 					
 					
 				}
-				if (that.follow == 0||that.follow == 1) {
+				if (that.follow == 0||that.follow == 1||that.follow == 4) {
 					
 					this.getSpaceList(true);
 					
@@ -1180,10 +1272,6 @@
 				if (localStorage.getItem('contentsList_' + meta)) {
 					that.contentsList = JSON.parse(localStorage.getItem('contentsList_' + meta));
 				}
-				if (localStorage.getItem('topContents')) {
-					that.topContents = JSON.parse(localStorage.getItem('topContents'));
-				}
-
 				if (localStorage.getItem('Topic')) {
 					that.Topic = JSON.parse(localStorage.getItem('Topic'));
 				}
@@ -1497,7 +1585,7 @@
 					that.getSpaceList3();
 					
 				}
-				if (type == 1||type == 0) {
+				if (type == 1||type == 0||type == 4) {
 					that.getSpaceList(false);
 				}
 			},
@@ -1799,29 +1887,8 @@
 							})
 						},
 			unreadNum() {
-				var that = this;
-				that.$Net.request({
-
-					url: that.$API.unreadNum(),
-					data: {
-						"token": that.token
-					},
-					header: {
-						'Content-Type': 'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if (res.data.code == 1) {
-							that.noticeSum = res.data.data;
-						}
-					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦~",
-							icon: 'none'
-						})
-					}
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
 				})
 			},
 			getAppBoxInfo(){
@@ -1954,15 +2021,16 @@
 				if (a == null || b == null) return false;
 				if (a.length != b.length) return false;
 				for (var c in a) {
+					var match = false;
 					for (var d in b) {
-						if (b[d].id == a[c].id) {
-							if (b[d].lastTime != a[c].lastTime) {
-								return false;
-							}
+						if (String(b[d].id) === String(a[c].id)) {
+							match = b[d].lastTime == a[c].lastTime;
+							break;
 						}
-
 					}
+					if (!match) return false;
 				}
+				return true;
 			},
 			chatFormatDate(datetime) {
 				var datetime = new Date(parseInt(datetime * 1000));
@@ -2043,8 +2111,12 @@
 				var page = that.page;
 				var token = "";
 				if(localStorage.getItem('userinfo')){
-					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token=userInfo.token;
+					try {
+						var userInfo = JSON.parse(localStorage.getItem('userinfo'));
+						token=userInfo && userInfo.token ? userInfo.token : that.token;
+					} catch (error) {
+						localStorage.removeItem('userinfo');
+					}
 				}
 				
 				if(isPage){
@@ -2125,7 +2197,7 @@
 				
 				if(localStorage.getItem('userinfo')){
 					var userInfo = JSON.parse(localStorage.getItem('userinfo'));
-					token=userInfo.token;
+					token=userInfo && userInfo.token ? userInfo.token : that.token;
 				}
 				if(isPage){
 					page++;
@@ -2198,11 +2270,78 @@
 					})
 				
 			},
+			presentationImage(item){
+				if(!item || Number(item.type) !== 0 || !item.pic) return '';
+				return String(item.pic).split('||').filter(function(url){ return !!url; })[0] || '';
+			},
+			presentationTitle(item){
+				var text = item && item.text ? String(item.text) : '';
+				text = text.replace(/<[^>]+>/g,' ').replace(/\|\|rn\|\|/g,' ').replace(/\s+/g,' ').trim();
+				if(text) return text;
+				return this.presentationImage(item) ? '分享了一组图片' : '查看这条动态';
+			},
+			preparePresentationRows(rows){
+				return (Array.isArray(rows) ? rows : []).map(function(item){
+					if(item && item.type == 0){
+						item.picList = item.pic ? String(item.pic).split('||').filter(function(url){ return !!url; }) : [];
+					}
+					return item;
+				});
+			},
+			presentationIds(){
+				return this.presentationBanners.concat(this.presentationPins).map(function(item){ return String(item.id); });
+			},
+			excludePresentedSpaces(rows){
+				if(!this.showSpacePresentation) return rows;
+				var ids = this.presentationIds();
+				if(ids.length === 0) return rows;
+				return rows.filter(function(item){ return ids.indexOf(String(item.id)) === -1; });
+			},
+			loadSpacePresentation(){
+				var that = this;
+				if(!that.showSpacePresentation){
+					that.presentationBanners = [];
+					that.presentationPins = [];
+					return;
+				}
+				var requestId = ++that.presentationRequestId;
+				that.$Net.request({
+					url:that.$API.spacePresentationList(),
+					data:{ token:that.token },
+					method:'get',
+					dataType:'json',
+					success:function(res){
+						if(requestId !== that.presentationRequestId || !that.showSpacePresentation) return;
+						if(res.data.code==1){
+							var data = res.data.data || {};
+							that.presentationBanners = that.preparePresentationRows(data.banner);
+							that.presentationPins = that.preparePresentationRows(data.list);
+							that.spaceList = that.excludePresentedSpaces(that.spaceList);
+						}
+					},
+					fail:function(){
+						if(requestId !== that.presentationRequestId) return;
+						that.presentationBanners = [];
+						that.presentationPins = [];
+					}
+				});
+			},
+			openPresentationSpace(id){
+				if(!id) return false;
+				this.rememberSpaceReturn();
+				uni.navigateTo({ url:'/pages/space/info?id=' + id });
+			},
 			getSpaceList(isPage) {
 				var that = this;
 				var page = that.page;
 				var topicIds = that.selectedTopics.map(item => Number(item.mid));
 				var topicFilterKey = topicIds.join(',');
+				var feedModeKey = String(that.follow) + ':' + topicFilterKey;
+				var searchFilters = {};
+				if(topicIds.length > 0) searchFilters.topicIds = topicIds;
+				if(that.follow == 4) searchFilters.featured = 1;
+				if(that.showSpacePresentation) searchFilters.excludePresented = 1;
+				if(!isPage) that.loadSpacePresentation();
 				if (isPage) {
 					page++;
 				}
@@ -2213,13 +2352,13 @@
 						"page": page,
 						"order": "created",
 						"token": that.token,
-						"searchParams": topicIds.length > 0
-							? JSON.stringify({ topicIds: topicIds }) : ""
+						"searchParams": Object.keys(searchFilters).length > 0
+							? JSON.stringify(searchFilters) : ""
 					},
 					method: "get",
 					dataType: 'json',
 					success: function(res) {
-						if (that.selectedTopics.map(item => Number(item.mid)).join(',') !== topicFilterKey) return;
+						if (String(that.follow) + ':' + that.selectedTopics.map(item => Number(item.mid)).join(',') !== feedModeKey) return;
 						that.isLoading = 1;
 						that.isLoad = 0;
 						that.moreText = "加载更多";
@@ -2249,7 +2388,7 @@
 
 								}
 							}
-							spaceList = list;
+							spaceList = that.excludePresentedSpaces(list);
 							if (list.length > 0) {
 								if (isPage) {
 									that.page++;
@@ -2264,7 +2403,7 @@
 						}
 					},
 					fail: function(res) {
-						if (that.selectedTopics.map(item => Number(item.mid)).join(',') !== topicFilterKey) return;
+						if (String(that.follow) + ':' + that.selectedTopics.map(item => Number(item.mid)).join(',') !== feedModeKey) return;
 						that.isLoading = 1;
 						that.moreText = "加载更多";
 						that.isLoad = 0;
@@ -2476,6 +2615,32 @@
 		border-bottom: 1rpx solid rgba(219, 226, 230, 0.9) !important;
 		box-shadow: 0 8rpx 28rpx rgba(42, 57, 68, 0.05) !important;
 		overflow: visible !important;
+		transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+		will-change: transform, opacity;
+	}
+
+	.square-back-top {
+		position: fixed;
+		right: 24rpx;
+		bottom: calc(172rpx + env(safe-area-inset-bottom));
+		z-index: 980;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 76rpx;
+		height: 76rpx;
+		border: 1rpx solid rgba(35, 124, 116, 0.16);
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.96);
+		color: #237c74;
+		font-size: 34rpx;
+		box-shadow: 0 10rpx 26rpx rgba(41, 67, 73, 0.16);
+		transition: transform 180ms ease, background-color 180ms ease, color 180ms ease;
+	}
+
+	.square-back-top:active {
+		transform: scale(0.9);
+		background: #e6f3f1;
 	}
 
 	.square-mainbar {
@@ -2554,7 +2719,7 @@
 	.square-section-item.is-active {
 		background: #e6f4f2;
 		font-weight: 700;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.square-section-item:active {
@@ -2571,17 +2736,35 @@
 		border-top: 1rpx solid #edf1f3;
 		background: rgba(255, 255, 255, 0.58);
 		box-sizing: border-box;
+		transition: background-color 180ms ease;
 	}
 
+	.square-filter-row:active { background: rgba(230, 243, 241, 0.86); }
+
 	.square-qa-list {
-		width: calc(100% - 24rpx);
+		width: calc(100% - 28rpx);
 		max-width: 760px;
-		margin: 12rpx auto 0;
-		border: 1rpx solid #e2e8e6;
-		border-radius: 8rpx;
-		background: #ffffff;
-		overflow: hidden;
+		margin: 16rpx auto 0;
+		background: transparent;
 		box-sizing: border-box;
+	}
+
+	.square-qa-overview {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding: 8rpx 8rpx 18rpx;
+	}
+
+	.square-qa-overview-title {
+		font-size: 29rpx;
+		font-weight: 700;
+		color: #2f403b;
+	}
+
+	.square-qa-overview-count {
+		font-size: 22rpx;
+		color: #899590;
 	}
 
 	.square-qa-loading {
@@ -2593,7 +2776,6 @@
 
 	.square-qa-more {
 		padding: 28rpx 20rpx;
-		border-top: 1rpx solid #edf0ef;
 		font-size: 23rpx;
 		color: #909a96;
 		text-align: center;
@@ -2659,9 +2841,9 @@
 	}
 
 	.filter-menu-options view.is-active {
-		background: #e0f2ef;
+		background: #e6f3f1;
 		font-weight: 600;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.service-title {
@@ -2673,7 +2855,7 @@
 
 	.filter-topic-count {
 		font-weight: 600;
-		color: #16847c;
+		color: #237c74;
 	}
 
 	.filter-menu-services {
@@ -2781,47 +2963,130 @@
 		margin-top: 14rpx;
 	}
 
-	.square-pinned-strip {
+	.space-presentation {
+		margin: 0 12rpx 18rpx;
+	}
+
+	.space-banner {
 		width: 100%;
-		height: 80rpx;
-		border-bottom: 1rpx solid rgba(230, 207, 170, 0.7);
-		background: #fff7e7;
-		white-space: nowrap;
+		height: 310rpx;
+		max-height: 240px;
+		border-radius: 8px;
+		background: #dfe9e5;
+		overflow: hidden;
 	}
 
-	.pinned-track {
-		display: inline-flex;
-		align-items: center;
-		gap: 30rpx;
-		height: 80rpx;
-		padding: 0 30rpx;
+	.space-banner-item {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		background: #294b43;
+		overflow: hidden;
 	}
 
-	.pinned-item {
-		display: inline-flex;
-		align-items: center;
-		gap: 14rpx;
-		max-width: 61.8vw;
+	.space-banner-item.is-text-only {
+		background: #2e6258;
 	}
 
-	.pinned-badge {
-		flex: 0 0 auto;
-		padding: 5rpx 12rpx;
-		border-radius: 9rpx;
-		background: #258ddf;
-		box-shadow: 0 5rpx 13rpx rgba(37, 141, 223, 0.2);
-		font-size: 21rpx;
-		font-weight: 700;
+	.space-banner-image {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.space-banner-copy {
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		display: flex;
+		min-height: 112rpx;
+		padding: 18rpx 24rpx 20rpx;
+		box-sizing: border-box;
+		flex-direction: column;
+		justify-content: center;
+		background: rgba(25, 32, 32, .78);
 		color: #fff;
 	}
 
-	.pinned-title {
-		font-size: 25rpx;
-		font-weight: 600;
-		color: #374956;
+	.space-banner-item.is-text-only .space-banner-copy {
+		top: 0;
+		justify-content: flex-end;
+		background: transparent;
+	}
+
+	.space-banner-label {
+		display: flex;
+		align-items: center;
+		gap: 8rpx;
+		margin-bottom: 7rpx;
+		font-size: 20rpx;
+		color: #dcebe5;
+	}
+
+	.space-banner-title {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		font-size: 29rpx;
+		font-weight: 700;
+		line-height: 1.38;
+		letter-spacing: 0;
+	}
+
+	.space-banner-author {
+		margin-top: 7rpx;
+		font-size: 20rpx;
+		color: rgba(255, 255, 255, .76);
+	}
+
+	.space-pin-list {
+		margin-top: 12rpx;
+		border-top: 1rpx solid #e1e8e5;
+		border-bottom: 1rpx solid #e1e8e5;
+		background: #fff;
+	}
+
+	.space-pin-row {
+		display: flex;
+		align-items: center;
+		gap: 14rpx;
+		min-height: 72rpx;
+		padding: 0 18rpx;
+		border-bottom: 1rpx solid #edf1ef;
+	}
+
+	.space-pin-row:last-child {
+		border-bottom: 0;
+	}
+
+	.space-pin-badge {
+		flex: 0 0 auto;
+		padding: 3rpx 10rpx;
+		border-radius: 5rpx;
+		background: #e4f3ef;
+		font-size: 20rpx;
+		font-weight: 700;
+		color: #26766b;
+	}
+
+	.space-pin-title {
+		min-width: 0;
+		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-size: 25rpx;
+		font-weight: 600;
+		color: #35454b;
+	}
+
+	.space-pin-arrow {
+		flex: 0 0 auto;
+		font-size: 24rpx;
+		color: #99a5a5;
 	}
 
 	.square-filter-label {
@@ -2862,12 +3127,85 @@
 	}
 
 	/* Desktop keeps the feed at a readable width and centered under the header. */
-	@media (min-width: 760px) {
+	@media (min-width: 760px) and (max-width: 1199px) {
+		.square-section-tabs {
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-filter-menu {
+			right: 0;
+			left: 0;
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-back-top {
+			right: max(16px, calc(50% - 420px));
+			bottom: calc(116px + env(safe-area-inset-bottom));
+			width: 52px;
+			height: 52px;
+			border-width: 1px;
+			font-size: 24px;
+			box-shadow: 0 5px 16px rgba(41, 67, 73, 0.16);
+		}
+
 		.campus-square .appcontent {
-			width: 560px;
-			max-width: calc(100vw - 48px);
+			width: calc(100vw - 48px);
+			max-width: 840px;
 			margin-right: auto !important;
 			margin-left: auto !important;
+		}
+
+		.space-presentation {
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin: 0 auto 20px;
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.square-section-tabs {
+			width: calc(100vw - 80px);
+			max-width: 1080px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-filter-menu {
+			right: 0;
+			left: 0;
+			width: calc(100vw - 80px);
+			max-width: 1080px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-back-top {
+			right: max(20px, calc(50% - 520px));
+			bottom: calc(116px + env(safe-area-inset-bottom));
+			width: 52px;
+			height: 52px;
+			border-width: 1px;
+			font-size: 24px;
+			box-shadow: 0 5px 16px rgba(41, 67, 73, 0.16);
+		}
+
+		.campus-square .appcontent {
+			width: calc(100vw - 80px);
+			max-width: 1040px;
+			margin-right: auto !important;
+			margin-left: auto !important;
+		}
+
+		.space-presentation {
+			width: calc(100vw - 80px);
+			max-width: 1040px;
+			margin: 0 auto 20px;
 		}
 	}
 
@@ -3730,10 +4068,19 @@
 		color: #909a9e;
 	}
 
-	@media (min-width: 760px) {
+	@media (min-width: 760px) and (max-width: 1199px) {
 		.topic-center {
-			width: 560px;
-			max-width: calc(100vw - 48px);
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+	}
+
+	@media (min-width: 1200px) {
+		.topic-center {
+			width: calc(100vw - 80px);
+			max-width: 1040px;
 			margin-right: auto;
 			margin-left: auto;
 		}
@@ -3818,6 +4165,13 @@
 		color: #edf0ef;
 	}
 
+	.campus-square.campus-night .square-back-top {
+		border-color: rgba(110, 186, 174, 0.24);
+		background: rgba(32, 37, 39, 0.96);
+		color: #6ebaae;
+		box-shadow: 0 10rpx 26rpx rgba(0, 0, 0, 0.28);
+	}
+
 	.campus-square.campus-night .square-header {
 		border-bottom-color: rgba(226, 232, 230, 0.09) !important;
 		background: #191e20 !important;
@@ -3845,8 +4199,15 @@
 	}
 
 	.campus-square.campus-night .square-qa-list {
-		border-color: #303b38;
-		background: #1d2523;
+		background: transparent;
+	}
+
+	.campus-square.campus-night .square-qa-overview-title {
+		color: #e7efeb;
+	}
+
+	.campus-square.campus-night .square-qa-overview-count {
+		color: #8f9c97;
 	}
 
 	.campus-square.campus-night .square-qa-more {
@@ -3857,7 +4218,7 @@
 	.campus-square.campus-night .square-tool-button,
 	.campus-square.campus-night .square-filter-row,
 	.campus-square.campus-night .square-filter-menu,
-	.campus-square.campus-night .pinned-item,
+	.campus-square.campus-night .space-pin-list,
 	.campus-square.campus-night .cu-list.menu-avatar > .cu-item,
 	.campus-square.campus-night .topic-card,
 	.campus-square.campus-night .topic-cards-container {
@@ -3865,6 +4226,19 @@
 		background: #212628 !important;
 		color: #edf0ef !important;
 		box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.18);
+	}
+
+	.campus-square.campus-night .space-pin-row {
+		border-color: rgba(226, 232, 230, 0.09);
+	}
+
+	.campus-square.campus-night .space-pin-title {
+		color: #e7eeeb;
+	}
+
+	.campus-square.campus-night .space-pin-badge {
+		background: rgba(78, 159, 133, .2);
+		color: #80cfb5;
 	}
 
 	.campus-square.campus-night .filter-menu-options > view.is-active,

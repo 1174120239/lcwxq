@@ -53,7 +53,11 @@ public class LegacyTokenService {
             return null;
         }
         if (sessions.available()) {
-            return sessions.userId(normalizedToken);
+            Long uid = sessions.userId(normalizedToken);
+            if (uid != null) {
+                sessions.refreshIfNeeded(normalizedToken);
+            }
+            return uid;
         }
         List<Long> ids = jdbc.query(
                 "SELECT uid FROM starfree_users WHERE authCode = ? LIMIT 1",

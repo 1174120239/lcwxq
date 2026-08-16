@@ -149,14 +149,14 @@ const requestId = API.createRequestId('shop');
 | `SFreeUsers/campusIdentityManage` | GET/POST / staff | `token` | 公网新 | 返回启用和停用选项及 `userCount`，用于校区/年级管理。 |
 | `SFreeUsers/campusIdentitySave` | GET/POST / staff | `token,params.id,type,name,sortOrder,enabled` | 公网新 | 新增或修改名称、排序和启用状态；不提供硬删除。改名会同步影响所有引用该 id 的用户显示。 |
 | `SFreeUsers/userRegister` | GET/POST / 注册策略 | `params.name,password,mail,phone,code,inviteCode,campusId,gradeId` | 公网新 | 密码为 8-128 位且必须同时含字母和数字，并拒绝常见弱密码；`campusId/gradeId` 必填且必须当前启用；服务端决定角色和初始数值；成功后不自动登录。 |
-| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，不能用 MySQL `authCode` 恢复过期会话。 |
+| `SFreeUsers/userLogin` | POST / 账号密码 | `params.name,password` | 代码新/公网旧 | 安全切流后签发 `sf2_` 随机 token；Redis 启用时 TTL 是登录态权威，普通会话 90 天无操作过期并滑动续期，不能用 MySQL `authCode` 恢复过期会话。 |
 | `SFreeUsers/phoneLogin` | GET/POST / 短信码 | `phone,code` | 旧端 | 验证码发送仍在旧端；登录成功兼容写 MySQL 和 Redis。 |
 | `SFreeUsers/userFoget` | GET/POST / 邮箱验证码 | `params.name,code,password` | 公网新 | 路径拼写为历史 `Foget`；新密码执行统一强度策略；成功后撤销关联会话。 |
-| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
+| `SFreeUsers/userEdit` | GET/POST / token | `params.uid` 和资料白名单 | 公网新 | 只能编辑自己。设置新密码时必须同时提交 `currentPassword` 并验证原密码；空 `password` 表示不改密。简介最多 255 字并保留换行；可选 `gender,birthday,showGender,showBirthday` 保存用户资料及公开开关；不得传资产、VIP 或角色字段；改密码、邮箱会撤销会话。 |
 | `SFreeUsers/setClientId` | GET/POST / token | `clientId` | 公网新 | 推送标识；空字符串表示清除。 |
 | `SFreeUsers/signOut` | GET/POST / token | `token` | 旧端 | 只退出当前 token，不是全设备登出。 |
-| `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`；失效为 `code=0`。 |
-| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`。 |
+| `SFreeUsers/userStatus` | GET/POST / token | `token` | 公网新 | 成功返回用户和原 token，并包含 `campusId/campus/gradeId/grade`，同时按阈值续期活跃会话；失效为 `code=0`。 |
+| `SFreeUsers/userInfo` | GET/POST / 可匿名 | `uid` 或 `token` | 公网新 | 本人 token 读取本人时可返回完整资料；匿名或跨账号读取仅返回公开字段，不含邮箱、手机号、地址、余额、积分、IP、登录时间、clientId 和内部标识。公开投影包含 `campusId/campus/gradeId/grade`，以及按 `showGender/showBirthday` 控制的性别和生日。 |
 | `SFreeUsers/userData` | GET/POST / 可匿名 | `uid` 或 `token` | 旧端 | 本人不传 `uid` 时评论计数包含已发布和待审核动态评论（space type=3），查看他人仅统计已发布评论；不再统计文章评论。旧字段为 `contentsNum/commentsNum/fanNum/followNum`，同时返回简写字段。 |
 | `SFreeUsers/RegSendCode` | GET/POST / 注册策略 | `params.mail` | 代码新/公网旧 | 注册和修改邮箱共用；校验邮箱格式及是否已注册，发送六位验证码并写共享 Redis `starfree_sendCode<mail>`，有效期 30 分钟、同收件人 60 秒冷却。切流后为公网新。 |
 | `SFreeUsers/sendSMS` | GET/POST / 手机号策略 | 旧端参数待抓包确认 | 旧端 | 短信验证码发送，不能伪造供应商请求。 |
@@ -184,7 +184,7 @@ form_post("SFreeUsers/userRegister", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；动态点赞不产生站内信。 |
+| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；问答通知额外返回 `answerId`，`qaComment` 返回 `commentId`，可从消息中心直接定位到回答和评论；动态点赞不产生站内信。 |
 | `SFreeUsers/unreadNum` | GET/POST / token | `token` | 公网新 | 不包括旧聊天未读数。 |
 | `SFreeUsers/setRead` | GET/POST / token | `type` | 公网新 | `all/comment/finance/system/fan`；`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
@@ -300,26 +300,32 @@ article = form_post("SFreeContents/contentsAdd", {
 |---|---|---|---|---|
 | `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds,poll` | 公网新 | type 仅 0..5；type=0 无图片时正文去除首尾空白后至少 4 字，有图片时正文可为空或不足 4 字；可带 JSON `poll` 创建 2--6 个不重复选项的单选或限项多选，投票可作为无正文动态的主体；type=3 是评论/回复，正文至少 1 字且 `toid` 指向被回复的动态或评论，同一用户 20 秒内对同一目标提交相同正文按重复请求处理而不重复落库；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
 | `SFreeSpace/editSpace` | GET/POST / 作者或 staff | `id,text` 和可选字段，含 `topicIds` | 公网新 | 类型不可变；staff 编辑保留作者，不重复发经验；传 `topicIds=0` 表示清空该动态的话题。 |
-| `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象新增 `topics` 数组；成功读取会增加浏览量。 |
-| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。 |
+| `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象含 `topics`、`featured`、当前有效的 `pinType`、配置值 `pinConfiguredType` 及置顶顺序/时间；成功读取会增加浏览量。 |
+| `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。`searchParams.featured=0/1` 可筛选精华，`excludePresented=1` 排除当前有效的列表/横幅置顶，用于首页去重。 |
 | `SFreeSpace/followSpace` | GET/POST / token | `page,limit` | 公网新 | 只读已关注用户的公开、非回复动态。前端别名见下一行。 |
 | `SFreeSpace/myFollowSpace` | GET/POST / token | `page,limit` | 公网新 | `followSpace` 的前端别名；仅当前页 count。 |
 | `SFreeSpace/spaceDelete` | GET/POST / 作者或 staff | `id` | 公网新 | 只删主行，不级联历史回复、转发、spaceLike，不扣经验。 |
 | `SFreeSpace/spaceLikes` | GET/POST / token | `id` | 公网新 | uid+space id 持久切换点赞状态；返回 data=1 表示已点赞，data=0 表示已取消点赞。 |
 | `SFreeSpace/spaceReview` | GET/POST / staff | `id,type` | 公网新 | `type=1` 通过，`0` 拒绝并删主行，写系统通知。 |
-| `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发。 |
+| `SFreeSpace/spaceLock` | GET/POST / staff | `id,type` | 公网新 | `type=2` 锁定、`1` 解锁；待审不可锁，锁定后不能回复或转发，并清除精华和置顶展示状态。 |
+| `SFreeSpace/spacePresentation` | POST / staff | `token,id,featured,pinType,pinOrder,pinStartTime,pinEndTime` | 代码新/公网旧 | `featured` 为 0/1；`pinType=0/1/2` 分别表示普通、列表置顶、横幅置顶。仅公开、已发布、非回复动态可启用；开始/结束时间为 Unix 秒，0 表示不限制，结束必须晚于开始和当前时间。字段独立于文章推荐/置顶。 |
+| `SFreeSpace/spacePresentationList` | GET/POST / 可选 token | `token` | 代码新/公网旧 | 返回 `data.banner` 和 `data.list`，各最多 3 条，仅含仍在有效期内的公开已发布主动态，按 `pinOrder`、修改时间和 id 稳定倒序。 |
 | `SFreeSpace/topicList` | GET/POST / 可选 token | `token,searchKey` | 公网新 | 按名称/描述关键词模糊搜索，返回 `data.all/hot/official/followed`；每项含动态数、关注数和当前用户关注状态。关注列表只在登录后返回。 |
 | `SFreeSpace/topicCreate` | GET/POST / token | `token,name` | 公网新 | 用户自建话题；名称自动去掉首尾 `#` 和空白，只允许中英文、数字、下划线、短横线，1-24 字；创建后自动关注。 |
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 | `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 代码新/公网旧 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
-| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | 管理端举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回，返回举报人、动态摘要和动态是否已删除。 |
-| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note` | 代码新/公网旧 | `action=delete` 通过举报并删除原动态，同时关闭该动态的全部待处理举报；`action=dismiss` 只驳回当前举报。记录审核人、结果、说明和时间。 |
+| `SFreeSpace/reportList` | GET/POST / staff | `token,status,source,decision,contentStatus,page,limit` | 代码新/公网旧 | 默认返回举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回。`source=ai` 时返回每条动态的最新 AI 审核记录，可按 `decision=approved/rejected/error` 和当前动态状态筛选。 |
+| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 普通举报不传或传 `source=report`；`action=delete` 处理举报并删除原动态，`action=dismiss` 驳回举报。AI 记录传 `source=ai`，`action=approve` 公开动态，`action=hide` 隐藏但不删除动态；每次人工改判追加独立操作记录。 |
 | `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 代码新/公网新 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。成功响应中的 `totalVotes/options[].votes/options[].selected` 用于渲染结果条。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
 
 动态举报表由 `backend/database/migrations/009_space_reports.sql` 创建。未执行迁移前不能启用上述三个举报路由；发布默认不执行该迁移。
+
+动态精华、列表置顶和横幅置顶字段由 `backend/database/migrations/012_space_presentation.sql` 添加。该迁移是幂等的增量迁移，不改变旧 API 已使用字段；未执行迁移前不能部署包含上述展示字段查询的新后端，通用发布流程不会自动执行迁移。
+
+AI 风险审核由原 `starfree_apiconfig.spaceAudit` 作为总门控。总开关关闭时动态和提问直接发布，AI 配置与历史保留但不执行；总开关开启后，动态和提问先写隐藏状态，按后台的动态/提问子开关交给 AI，通过后公开，拒绝或服务异常时保留内容并等待人工改判。图片和视频动态只审核附带文字，不做视觉识别，也不会仅因存在附件转人工。动态评论先公开，按北京时间配置每日扫描；巡检范围还包括问答回答和问答评论，风险项可配置自动隐藏或只记录。统一审核历史、人工操作日志和每日总结由 `backend/database/migrations/013_ai_moderation_complete.sql` 创建。
 
 ### 校园问答
 
@@ -327,22 +333,22 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
-| `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；推荐、排序值和更新时间共同决定顺序。 |
-| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；服务端固定 `status=0,recommended=0,sortOrder=0,createdBy=当前用户`，忽略客户端伪造的管理字段，20 秒内相同标题和说明拒绝重复提交。 |
+| `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；`recommended=1` 只返回首页推荐问答，主页不得回退混入普通问答；推荐、排序值和更新时间共同决定顺序。 |
+| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；忽略客户端伪造的管理字段。审核总开关关闭时直接发布；开启时先隐藏，提问 AI 子开关开启且 AI 通过后自动发布，否则等待人工复核。20 秒内相同标题和说明拒绝重复提交。 |
 | `SFreeQa/questionInfo` | GET/POST / 可选 token | `id,token` | 代码新/公网旧 | 普通用户只能读取已发布问题；staff 可预览停用问题。 |
 | `SFreeQa/answerList` | GET/POST / 可选 token | `questionId,page,limit,sort,token` | 代码新/公网旧 | `sort=latest` 按时间，其他值按点赞和时间；登录时返回 `isLiked`。 |
 | `SFreeQa/answerAdd` | POST / token | `params={questionId,text}` | 代码新/公网旧 | 回答至少 4 字、最多 5000 字；20 秒内相同回答拒绝重复提交。 |
 | `SFreeQa/answerEdit` | POST / owner/staff | `params={id,text}` | 代码新/公网旧 | 仅回答作者或 staff 可修改。 |
 | `SFreeQa/answerDelete` | POST / owner/staff | `id,token` | 代码新/公网旧 | 逻辑删除回答并清理点赞关系，不硬删历史正文。 |
 | `SFreeQa/answerLike` | POST / token | `answerId,token` | 代码新/公网旧 | uid+answer id 唯一，重复点击在点赞和取消之间切换并返回最新计数。 |
-| `SFreeQa/commentList` | GET/POST / 无 | `answerId,page,limit` | 代码新/公网旧 | 根评论分页，返回页内完整 `children` 回复树。 |
-| `SFreeQa/commentAdd` | POST / token | `params={answerId,parentId,text}` | 代码新/公网旧 | `parentId=0` 评论回答；非 0 回复评论；至少 1 字，20 秒内相同内容防重复。 |
+| `SFreeQa/commentList` | GET/POST / 无 | `answerId,page,limit` | 代码新/公网旧 | 根评论分页，返回页内完整 `children` 回复树；前端最多展示 3 层，后续回复按时间平铺。 |
+| `SFreeQa/commentAdd` | POST / token | `params={answerId,parentId,text}` | 代码新/公网旧 | `parentId=0` 评论回答；非 0 回复评论；至少 1 字，20 秒内相同内容防重复。问答通知响应同时提供 `answerId` 与 `commentId`，可直接定位回复。 |
 | `SFreeQa/commentDelete` | POST / owner/staff | `id,token` | 代码新/公网旧 | 作者或 staff 可删除；删除根评论时隐藏整条回复树。 |
 | `SFreeQa/questionManage` | GET/POST / staff | `token,page,limit,keyword,status` | 代码新/公网旧 | 后台读取发布和停用问题，支持关键词与状态筛选。 |
 | `SFreeQa/questionSave` | POST / staff | `params={id,title,description,topic,coverUrl,recommended,sortOrder,status}` | 代码新/公网旧 | id 为空新增，否则修改；问题标题至少 4 字。 |
-| `SFreeQa/questionStatus` | POST / staff | `id,status,token` | 代码新/公网旧 | `status=1` 发布，`0` 停用；不提供硬删除接口。 |
+| `SFreeQa/questionStatus` | POST / staff | `id,status,token` | 代码新/公网旧 | `status=1` 发布，`0` 隐藏；不提供硬删除接口。AI 审核过的提问每次状态改判都会写入人工操作日志。 |
 
-问答通知写入 `starfree_inbox`：新回答使用 `qaAnswer`，回答评论或评论回复使用 `qaComment`，`value` 保存问题 id，消息中心和 UniPush 点击均可回到问题详情。数据库迁移为 `backend/database/migrations/007_campus_qa.sql`，未执行迁移前不能启用这些路由。
+问答通知写入 `starfree_inbox`：新回答使用 `qaAnswer`，回答评论或评论回复使用 `qaComment`，`value` 保存问题 id。新通知的 `qaComment.cid` 保存评论 id，接口同时返回 `answerId/commentId`；旧通知仍按原 `cid=answerId` 兼容读取。消息中心和 UniPush 点击可回到对应回答与评论。数据库迁移为 `backend/database/migrations/007_campus_qa.sql`，未执行迁移前不能启用这些路由。
 
 ### QQ 动态助手（NapCat 个人账号）
 
@@ -505,7 +511,9 @@ form_post("SFreeShop/buyShop", {
 
 ### 7.1 上传
 
-`upload/full` 仍由旧端处理。已确认的前端协议是 multipart，文件字段名为 `file`，token 是普通表单字段：
+`upload/full` 仍由旧端处理。已确认的前端协议是 multipart，文件字段名为 `file`，token 是普通表单字段。
+公网请求先由 replacement 校验登录态；Spring 解析 multipart 后，安全代理会使用原字段、文件名、
+媒体类型和文件内容重新生成 multipart 边界，再转发给旧端，不能从已解析的原始输入流直接复制：
 
 ```bash
 curl -sS -X POST 'https://api.lcxqy.cn/upload/full' \

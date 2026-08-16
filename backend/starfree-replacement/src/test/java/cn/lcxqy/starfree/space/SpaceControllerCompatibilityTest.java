@@ -36,6 +36,12 @@ class SpaceControllerCompatibilityTest {
         assertRoute("reportReview", "/reportReview");
     }
 
+    @Test
+    void dynamicPresentationExposesStaffMutationAndPublicListRoutes() throws Exception {
+        assertRoute("presentation", "/spacePresentation");
+        assertRoute("presentationList", "/spacePresentationList");
+    }
+
     private void assertRoute(String methodName, String route) throws Exception {
         Method method = SpaceController.class.getMethod(methodName, java.util.Map.class);
         RequestMapping mapping = method.getAnnotation(RequestMapping.class);

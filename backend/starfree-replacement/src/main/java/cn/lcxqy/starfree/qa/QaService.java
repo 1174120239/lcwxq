@@ -4,6 +4,8 @@ import cn.lcxqy.starfree.api.RequestValues;
 import cn.lcxqy.starfree.push.UniPushService;
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.security.StaffAccess;
+import cn.lcxqy.starfree.space.AiModerationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -26,6 +28,7 @@ public class QaService {
     private final StaffAccess access;
     private final LegacyTokenService tokens;
     private final UniPushService push;
+    private AiModerationService aiModeration;
 
     public QaService(JdbcTemplate jdbc, StaffAccess access, LegacyTokenService tokens,
                      UniPushService push) {
@@ -33,6 +36,11 @@ public class QaService {
         this.access = access;
         this.tokens = tokens;
         this.push = push;
+    }
+
+    @Autowired
+    void setAiModeration(AiModerationService aiModeration) {
+        this.aiModeration = aiModeration;
     }
 
     public Page questionList(Map<String, String> request) {
@@ -74,7 +82,6 @@ public class QaService {
         return normalizeQuestion(rows.get(0));
     }
 
-    @Transactional
     public Map<String, Object> questionAdd(String token, Map<String, Object> body) {
         StaffAccess.Actor actor = access.requireUser(token);
         String title = validateText(body.get("title"), 4, 160,
@@ -89,14 +96,35 @@ public class QaService {
         if (duplicate != null && duplicate > 0) {
             throw new IllegalArgumentException("问题已提交，请勿重复发送");
         }
+        boolean auditEnabled = aiModeration != null && aiModeration.globalAuditEnabled();
+        int initialStatus = auditEnabled ? 0 : 1;
         long id = insertKey("INSERT INTO starfree_qa_questions"
                         + "(title,description,topic,cover_url,status,recommended,sort_order,created_by,created,modified) "
-                        + "VALUES(?,?,?,'',0,0,0,?,?,?)",
-                title, description, topic, actor.getUid(), now, now);
+                        + "VALUES(?,?,?,'',?,0,0,?,?,?)",
+                title, description, topic, initialStatus, actor.getUid(), now, now);
+        int status = initialStatus;
+        AiModerationService.Decision decision = null;
+        if (auditEnabled && aiModeration.enabledForQuestion()) {
+            decision = aiModeration.reviewQuestion(id, actor.getUid(), title, description, "");
+            if (decision.isSafe()) {
+                int changed = jdbc.update(
+                        "UPDATE starfree_qa_questions SET status=1,modified=? WHERE id=? AND status=0",
+                        Instant.now().getEpochSecond(), id);
+                status = changed == 1 ? 1 : 0;
+                aiModeration.markContentStatus(decision.getReviewId(), status);
+            } else {
+                aiModeration.markContentStatus(decision.getReviewId(), 0);
+            }
+        }
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("id", id);
-        result.put("status", 0);
+        result.put("status", status);
         result.put("createdBy", actor.getUid());
+        if (decision != null) {
+            result.put("aiDecision", decision.getStatus());
+            result.put("aiCategory", decision.getCategory());
+            result.put("aiReason", decision.getReason());
+        }
         return result;
     }
 
@@ -288,7 +316,10 @@ public class QaService {
                         + "VALUES(?,?,?,?,?,1,?,?)",
                 answerId, actor.getUid(), parentId, rootId, text, now, now);
         long questionId = number(answer.get("questionId"));
-        writeNotice("qaComment", actor.getUid(), noticeUid, questionId, answerId,
+        // Keep the answer relationship in the response while using the notification cid
+        // for the exact comment that was created. Older rows are normalized by the inbox
+        // service so existing notifications remain usable.
+        writeNotice("qaComment", actor.getUid(), noticeUid, questionId, id,
                 parentId > 0 ? "回复了你的评论：" + preview(text) : "评论了你的回答：" + preview(text),
                 "问答收到新评论");
         return comment(id);
@@ -325,12 +356,13 @@ public class QaService {
         List<Object> rowArgs = new ArrayList<Object>(args);
         rowArgs.add((page - 1) * limit);
         rowArgs.add(limit);
-        List<Map<String, Object>> rows = jdbc.queryForList(questionSelect() + where
+        List<Map<String, Object>> rows = jdbc.queryForList(questionManageSelect() + where
                         + " ORDER BY q.sort_order DESC,q.modified DESC,q.id DESC LIMIT ?,?",
                 rowArgs.toArray());
         return new Page(normalizeQuestions(rows), total == null ? 0 : total);
     }
 
+    @Transactional
     public Map<String, Object> questionSave(String token, Map<String, Object> body) {
         StaffAccess.Actor actor = access.requireStaff(token);
         long id = number(body.get("id"));
@@ -342,12 +374,23 @@ public class QaService {
         int status = flagDefault(body.get("status"), 1);
         int sortOrder = integer(body.get("sortOrder"), 0);
         long now = Instant.now().getEpochSecond();
+        int oldStatus = -1;
         if (id > 0) {
+            List<Map<String, Object>> existing = jdbc.queryForList(
+                    "SELECT status FROM starfree_qa_questions WHERE id=? LIMIT 1", id);
+            if (existing.isEmpty()) {
+                throw new IllegalArgumentException("问题不存在");
+            }
+            oldStatus = (int) number(value(existing.get(0), "status"));
             int changed = jdbc.update("UPDATE starfree_qa_questions SET title=?,description=?,topic=?,"
                             + "cover_url=?,recommended=?,status=?,sort_order=?,modified=? WHERE id=?",
                     title, description, topic, coverUrl, recommended, status, sortOrder, now, id);
             if (changed != 1) {
                 throw new IllegalArgumentException("问题不存在");
+            }
+            if (aiModeration != null && oldStatus != status) {
+                aiModeration.recordHumanAction(AiModerationService.TYPE_QUESTION, id,
+                        oldStatus, status, actor.getUid(), "后台编辑提问并调整状态");
             }
         } else {
             id = insertKey("INSERT INTO starfree_qa_questions"
@@ -359,15 +402,29 @@ public class QaService {
         return managedQuestion(id);
     }
 
+    @Transactional
     public Map<String, Object> questionStatus(String token, long id, int status) {
-        access.requireStaff(token);
+        StaffAccess.Actor actor = access.requireStaff(token);
         if (status != 0 && status != 1) {
             throw new IllegalArgumentException("问题状态不正确");
+        }
+        List<Map<String, Object>> existing = jdbc.queryForList(
+                "SELECT status FROM starfree_qa_questions WHERE id=? LIMIT 1", id);
+        if (existing.isEmpty()) {
+            throw new IllegalArgumentException("问题不存在");
+        }
+        int oldStatus = (int) number(value(existing.get(0), "status"));
+        if (oldStatus == status) {
+            throw new IllegalArgumentException("问题已经是当前状态");
         }
         int changed = jdbc.update("UPDATE starfree_qa_questions SET status=?,modified=? WHERE id=?",
                 status, Instant.now().getEpochSecond(), id);
         if (changed != 1) {
             throw new IllegalArgumentException("问题不存在");
+        }
+        if (aiModeration != null) {
+            aiModeration.recordHumanAction(AiModerationService.TYPE_QUESTION, id,
+                    oldStatus, status, actor.getUid(), "APP管理端改判提问状态");
         }
         return managedQuestion(id);
     }
@@ -376,6 +433,23 @@ public class QaService {
         return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.status,q.recommended,"
                 + "q.sort_order,q.created_by,q.created,q.modified,"
                 + "(SELECT COUNT(*) FROM starfree_qa_answers a WHERE a.question_id=q.id AND a.status=1) AS answer_count "
+                + "FROM starfree_qa_questions q";
+    }
+
+    private String questionManageSelect() {
+        return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.status,q.recommended,"
+                + "q.sort_order,q.created_by,q.created,q.modified,"
+                + "(SELECT COUNT(*) FROM starfree_qa_answers a WHERE a.question_id=q.id AND a.status=1) AS answer_count,"
+                + "(SELECT r.ai_decision FROM starfree_ai_moderation_reviews r "
+                + "WHERE r.content_type='question' AND r.content_id=q.id ORDER BY r.created DESC,r.id DESC LIMIT 1) AS ai_decision,"
+                + "(SELECT r.risk_category FROM starfree_ai_moderation_reviews r "
+                + "WHERE r.content_type='question' AND r.content_id=q.id ORDER BY r.created DESC,r.id DESC LIMIT 1) AS ai_category,"
+                + "(SELECT r.reason FROM starfree_ai_moderation_reviews r "
+                + "WHERE r.content_type='question' AND r.content_id=q.id ORDER BY r.created DESC,r.id DESC LIMIT 1) AS ai_reason,"
+                + "(SELECT r.human_decision FROM starfree_ai_moderation_reviews r "
+                + "WHERE r.content_type='question' AND r.content_id=q.id ORDER BY r.created DESC,r.id DESC LIMIT 1) AS human_decision,"
+                + "(SELECT r.review_note FROM starfree_ai_moderation_reviews r "
+                + "WHERE r.content_type='question' AND r.content_id=q.id ORDER BY r.created DESC,r.id DESC LIMIT 1) AS review_note "
                 + "FROM starfree_qa_questions q";
     }
 
@@ -401,6 +475,11 @@ public class QaService {
         result.put("created", number(value(row, "created")));
         result.put("modified", number(value(row, "modified")));
         result.put("answerCount", number(value(row, "answer_count")));
+        result.put("aiDecision", text(value(row, "ai_decision")));
+        result.put("aiCategory", text(value(row, "ai_category")));
+        result.put("aiReason", text(value(row, "ai_reason")));
+        result.put("humanDecision", text(value(row, "human_decision")));
+        result.put("reviewNote", text(value(row, "review_note")));
         return result;
     }
 
@@ -465,7 +544,8 @@ public class QaService {
     }
 
     private Map<String, Object> managedQuestion(long id) {
-        List<Map<String, Object>> rows = jdbc.queryForList(questionSelect() + " WHERE q.id=? LIMIT 1", id);
+        List<Map<String, Object>> rows = jdbc.queryForList(questionManageSelect()
+                + " WHERE q.id=? LIMIT 1", id);
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("问题不存在");
         }
@@ -550,15 +630,15 @@ public class QaService {
         return "";
     }
 
-    private void writeNotice(String type, long fromUid, long toUid, long questionId, long answerId,
+    private void writeNotice(String type, long fromUid, long toUid, long questionId, long referenceId,
                              String message, String title) {
         if (toUid <= 0 || fromUid == toUid) {
             return;
         }
         try {
-            jdbc.update("INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
+                    jdbc.update("INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
                             + "VALUES(?,?,?,?,0,?,?,?)",
-                    type, fromUid, message, toUid, questionId, Instant.now().getEpochSecond(), answerId);
+                    type, fromUid, message, toUid, questionId, Instant.now().getEpochSecond(), referenceId);
             if (push != null) {
                 push.sendComment(toUid, title, message, "qa:" + questionId);
             }

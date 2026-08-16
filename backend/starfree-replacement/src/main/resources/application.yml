@@ -51,7 +51,8 @@ legacy:
   redis:
     enabled: ${LEGACY_REDIS_ENABLED:false}
     prefix: ${LEGACY_REDIS_PREFIX:starfree}
-    session-ttl: ${LEGACY_REDIS_SESSION_TTL:86400}
+    # Active sessions use sliding expiration. Ninety days of inactivity still requires login.
+    session-ttl: ${LEGACY_REDIS_SESSION_TTL:7776000}
 
 # UniPush is opt-in. Keep credentials outside the repository and enable it only in the
 # production runtime environment after the UniApp app id/client id pairing is verified.

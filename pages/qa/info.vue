@@ -27,7 +27,7 @@
 		</view>
 
 		<view class="qa-answer-list">
-			<view class="qa-answer" v-for="answer in answers" :key="answer.id">
+			<view class="qa-answer" v-for="answer in answers" :key="answer.id" :id="'qa-answer-' + answer.id" :class="{'is-target-answer': targetAnswerId && String(targetAnswerId) === String(answer.id)}">
 				<view class="qa-author-row" @tap.stop>
 					<campus-avatar class="qa-author-avatar round" :src="answer.userJson && answer.userJson.avatar" :name="answer.userJson && answer.userJson.name" @tap="openUser(answer.userJson)"></campus-avatar>
 					<view class="qa-author-main" @tap="openUser(answer.userJson)">
@@ -53,7 +53,7 @@
 				<view class="qa-comments" v-if="answer._commentsExpanded" @tap.stop>
 					<view class="qa-comments-loading" v-if="answer._commentsLoading"><view class="campus-loader"></view></view>
 					<view class="qa-comments-empty" v-else-if="answer._commentsLoaded && answer._comments.length===0">还没有评论</view>
-					<qa-comment-thread v-else :items="answer._comments" :night="campusNight" :current-uid="uid" :group="group" @reply="replyComment(answer, $event)" @delete="deleteComment(answer, $event)" @user="openUser"></qa-comment-thread>
+					<qa-comment-thread v-else :items="answer._comments" :night="campusNight" :current-uid="uid" :group="group" :highlight-id="targetCommentId" @reply="replyComment(answer, $event)" @delete="deleteComment(answer, $event)" @user="openUser"></qa-comment-thread>
 				</view>
 			</view>
 		</view>
@@ -116,7 +116,11 @@
 				composerAnswer: null,
 				composerParent: null,
 				composerEditingId: 0,
-				composerSubmitting: false
+				composerSubmitting: false,
+				targetAnswerId: 0,
+				targetCommentId: 0,
+				qaLocatePending: null,
+				qaLocating: false
 			}
 		},
 		computed: {
@@ -139,10 +143,14 @@
 		},
 		onLoad(options) {
 			this.id = Number(options.id || 0);
+			this.qaLocatePending = {
+				answerId: Number(options.answerId || options.cid || 0),
+				commentId: Number(options.commentId || 0)
+			};
 			this.loadIdentity();
 			this.loadTheme();
 			this.loadQuestion();
-			this.loadAnswers(false);
+			this.loadAnswers(false, () => this.locateQaTarget());
 		},
 		onShow() {
 			this.loadIdentity();
@@ -328,8 +336,12 @@
 				this.$set(answer, '_commentsExpanded', !answer._commentsExpanded);
 				if (answer._commentsExpanded && !answer._commentsLoaded) this.loadComments(answer, false);
 			},
-			loadComments(answer, force) {
+			loadComments(answer, force, complete) {
 				if (answer._commentsLoading) return;
+				if (answer._commentsLoaded && !force) {
+					if (complete) complete();
+					return;
+				}
 				this.$set(answer, '_commentsLoading', true);
 				this.$Net.request({
 					url: this.$API.qaCommentList(),
@@ -342,8 +354,59 @@
 					complete: () => {
 						this.$set(answer, '_commentsLoaded', true);
 						this.$set(answer, '_commentsLoading', false);
+						if (complete) complete();
 					}
 				})
+			},
+			findQaComment(items, id) {
+				for (var index = 0; index < (items || []).length; index++) {
+					var item = items[index];
+					if (String(item.id) === String(id)) return item;
+					var nested = this.findQaComment(item.children || [], id);
+					if (nested) return nested;
+				}
+				return null;
+			},
+			locateQaTarget() {
+				var that = this;
+				var pending = that.qaLocatePending || {};
+				var answerId = Number(pending.answerId || 0);
+				var commentId = Number(pending.commentId || 0);
+				if ((!answerId && !commentId) || that.qaLocating || that.targetAnswerId) return;
+				that.qaLocating = true;
+				var answer = that.answers.filter(function(item) { return String(item.id) === String(answerId); })[0];
+				if (!answer) {
+					if (that.answerTotal > that.answers.length) {
+						that.qaLocating = false;
+						that.loadAnswers(true, function(){ that.locateQaTarget(); });
+						return;
+					}
+					that.qaLocating = false;
+					that.qaLocatePending = null;
+					uni.showToast({title: '回答已不存在或不可见', icon: 'none'});
+					return;
+				}
+				that.$set(answer, '_commentsExpanded', true);
+			that.loadComments(answer, false, function(){
+				var comment = commentId ? that.findQaComment(answer._comments, commentId) : null;
+				that.targetAnswerId = answer.id;
+				that.targetCommentId = comment ? comment.id : 0;
+				that.qaLocatePending = null;
+				that.qaLocating = false;
+				that.$nextTick(function(){ that.scrollToQaTarget(comment ? comment.id : answer.id, !!comment); });
+			});
+			},
+			scrollToQaTarget(id, isComment) {
+				var selector = isComment ? '#qa-comment-' + id : '#qa-answer-' + id;
+				var query = uni.createSelectorQuery();
+				query.selectViewport().scrollOffset();
+				query.select(selector).boundingClientRect();
+				query.exec(function(result){
+					var viewport = result && result[0] ? result[0] : {};
+					var rect = result && result[1] ? result[1] : null;
+					if (!rect) return;
+					uni.pageScrollTo({scrollTop: Math.max(0, Number(viewport.scrollTop || 0) + rect.top - 140), duration: 320});
+				});
 			},
 			deleteAnswer(answer) {
 				uni.showModal({
@@ -476,5 +539,7 @@
 	.qa-night .qa-composer-title,.qa-night .qa-composer-input { color: #edf2ef; }
 	.qa-night .qa-composer-input { border-color: #3a4541; background: #252e2b; }
 	.qa-night .qa-answer-expand { color: #8ed2c4; }
+	.qa-answer.is-target-answer { background: rgba(73, 183, 164, .08); box-shadow: inset 0 0 0 2rpx rgba(73, 183, 164, .18); }
+	.qa-night .qa-answer.is-target-answer { background: rgba(111, 210, 192, .12); box-shadow: inset 0 0 0 2rpx rgba(111, 210, 192, .22); }
 	@keyframes composerUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 </style>

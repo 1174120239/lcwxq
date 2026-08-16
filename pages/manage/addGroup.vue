@@ -65,6 +65,7 @@ export default {
 			name:"",
 			avatar:"",
 			avatarNew:"",
+			avatarCropRequested:false,
 			
 			postType:'add',
 			
@@ -83,11 +84,22 @@ export default {
 			that.rejectDisabledGroup();
 			return false;
 		}
-		if(localStorage.getItem('toAvatar')){
-			var toAvatar = JSON.parse(localStorage.getItem('toAvatar'));
-			that.avatarUpload(toAvatar.dataUrl);
-		}else{
-			console.log("没有图片缓存")
+		var pendingAvatar = localStorage.getItem('toAvatar');
+		if(that.avatarCropRequested){
+			that.avatarCropRequested = false;
+			if(pendingAvatar){
+				localStorage.removeItem('toAvatar');
+				try {
+					var toAvatar = JSON.parse(pendingAvatar);
+					if(toAvatar && toAvatar.dataUrl){
+						that.avatarUpload(toAvatar.dataUrl);
+					}
+				} catch (error) {
+					console.error('用户组头像裁剪结果无效', error);
+				}
+			}
+		}else if(pendingAvatar){
+			localStorage.removeItem('toAvatar');
 		}
 		// #ifdef APP-PLUS
 		plus.navigator.setStatusBarStyle("dark")
@@ -448,6 +460,8 @@ export default {
 		toAvatar(){
 			// #ifdef APP-PLUS || H5
 			const that = this;
+			that.avatarCropRequested = true;
+			localStorage.removeItem('toAvatar');
 			  uni.navigateTo({
 				url: "../../uni_modules/buuug7-img-cropper/pages/cropper",
 				events: {

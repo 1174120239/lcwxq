@@ -1,6 +1,6 @@
 <template>
-	<view class="reply-thread" :class="{'is-night': night}">
-		<view class="reply-thread-item" v-for="item in items" :key="item.id">
+	<view class="reply-thread" :class="{'is-night': night, 'is-flat': flatMode}">
+		<view class="reply-thread-item" v-for="item in items" :key="item.id" :id="'space-comment-' + item.id" :class="{'is-highlighted': isHighlighted(item)}">
 			<view class="reply-thread-node">
 				<campus-avatar class="reply-thread-avatar round" :src="item.userJson.avatar" :name="item.userJson.name" @tap.stop="$emit('user', item.userJson)"></campus-avatar>
 				<view class="reply-thread-body">
@@ -18,16 +18,21 @@
 						<text class="reply-thread-delete" v-if="canDelete(item)" @tap="$emit('delete', item)">删除</text>
 					</view>
 
-					<view class="reply-thread-toggle" v-if="item.reply>0 && !item._expanded" @tap="$emit('toggle', item)">
+					<view class="reply-thread-toggle" v-if="!flatMode && item.reply>0 && !item._expanded" @tap="$emit('toggle', item)">
 						<text v-if="item._loading">正在加载…</text>
-						<block v-else><text>显示{{item.reply}}条回复</text><text class="cuIcon-unfold"></text></block>
+						<block v-else><text>{{depth >= maxDepth ? '显示后续回复' : '显示' + item.reply + '条回复'}}</text><text class="cuIcon-unfold"></text></block>
 					</view>
-					<view v-if="item._expanded" class="reply-thread-children">
+					<view v-if="!flatMode && item._expanded" class="reply-thread-children">
+						<view v-if="!flatMode && depth >= maxDepth && flatItems(item).length" class="reply-thread-tail-title">后续回复</view>
 						<space-reply-thread
-							:items="item._children"
+							:items="depth >= maxDepth ? flatItems(item) : item._children"
+							:depth="depth >= maxDepth ? maxDepth : depth + 1"
+							:max-depth="maxDepth"
+							:flat-mode="depth >= maxDepth"
 							:night="night"
 							:current-uid="currentUid"
 							:group="group"
+							:highlight-id="highlightId"
 							@reply="$emit('reply', $event)"
 							@like="$emit('like', $event)"
 							@delete="$emit('delete', $event)"
@@ -70,9 +75,42 @@
 			group: {
 				type: String,
 				default: ''
+			},
+			depth: {
+				type: Number,
+				default: 2
+			},
+			maxDepth: {
+				type: Number,
+				default: 3
+			},
+			flatMode: {
+				type: Boolean,
+				default: false
+			},
+			highlightId: {
+				type: [Number, String],
+				default: 0
 			}
 		},
 		methods: {
+			isHighlighted(item) {
+				return item && this.highlightId && String(item.id) === String(this.highlightId);
+			},
+			flatItems(item) {
+				var result = [];
+				var visit = function(children) {
+					(children || []).forEach(function(child) {
+						result.push(child);
+						visit(child._children);
+					});
+				};
+				visit(item && item._children);
+				return result.sort(function(a, b) {
+					var createdDiff = Number(a.created || 0) - Number(b.created || 0);
+					return createdDiff || Number(a.id || 0) - Number(b.id || 0);
+				});
+			},
 			copyComment(text) {
 				copyText(text, '评论已复制');
 			},
@@ -104,6 +142,14 @@
 	.reply-thread-item {
 		position: relative;
 		padding: 8rpx 0 20rpx;
+	}
+
+	.reply-thread-item.is-highlighted {
+		padding-left: 12rpx;
+		margin-left: -12rpx;
+		border-radius: 12rpx;
+		background: rgba(73, 183, 164, .14);
+		box-shadow: 0 0 0 2rpx rgba(73, 183, 164, .24);
 	}
 
 	.reply-thread-item::before {
@@ -202,6 +248,26 @@
 		margin-top: 2rpx;
 	}
 
+	.reply-thread-tail-title {
+		margin: 4rpx 0 2rpx;
+		color: #71807a;
+		font-size: 22rpx;
+	}
+
+	.reply-thread.is-flat {
+		margin-top: 0;
+		padding-left: 0;
+	}
+
+	.reply-thread.is-flat::before,
+	.reply-thread.is-flat .reply-thread-item::before {
+		display: none;
+	}
+
+	.reply-thread.is-flat .reply-thread-item {
+		padding: 8rpx 0 14rpx;
+	}
+
 	.reply-thread.is-night::before {
 		background: #3b4745;
 	}
@@ -230,5 +296,14 @@
 	.reply-thread.is-night .reply-thread-mention,
 	.reply-thread.is-night .reply-thread-action.is-liked {
 		color: #8dd2c4;
+	}
+
+	.reply-thread.is-night .reply-thread-item.is-highlighted {
+		background: rgba(111, 210, 192, .16);
+		box-shadow: 0 0 0 2rpx rgba(111, 210, 192, .26);
+	}
+
+	.reply-thread.is-night .reply-thread-tail-title {
+		color: #9aa9a3;
 	}
 </style>

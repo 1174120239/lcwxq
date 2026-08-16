@@ -251,6 +251,7 @@
 <script>
 	import waves from '@/components/xxley-waves/waves.vue';
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js';
+	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	var API = require('../../utils/api');
 	var Net = require('../../utils/net');
 	export default {
@@ -529,29 +530,8 @@
 				// #endif
 			},
 			unreadNum() {
-				var that = this;
-				that.$Net.request({
-					
-					url: that.$API.unreadNum(),
-					data:{
-						"token":that.token
-					},
-					header:{
-						'Content-Type':'application/x-www-form-urlencoded'
-					},
-					method: "get",
-					dataType: 'json',
-					success: function(res) {
-						if(res.data.code==1){
-							that.noticeSum = res.data.data;
-						}
-					},
-					fail: function(res) {
-						uni.showToast({
-							title: "网络不太好哦",
-							icon: 'none'
-						})
-					}
+				refreshUnreadBadge(this, this.token, (count) => {
+					this.noticeSum = count
 				})
 			},
 		},

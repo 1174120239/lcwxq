@@ -20,10 +20,12 @@ import java.util.Map;
 public class SpaceController {
     private final SpaceService spaces;
     private final SpaceReportService reports;
+    private final SpacePollService polls;
 
-    public SpaceController(SpaceService spaces, SpaceReportService reports) {
+    public SpaceController(SpaceService spaces, SpaceReportService reports, SpacePollService polls) {
         this.spaces = spaces;
         this.reports = reports;
+        this.polls = polls;
     }
 
     /**
@@ -63,7 +65,7 @@ public class SpaceController {
      * ANY {@code /SFreeSpace/spaceReview}：审核待审动态。
      *
      * <p>仅 administrator/editor token；必填 {@code id/type}，type=1 通过并设 status=1，
-     * type=0 拒绝并删除该行。重复通过或非法动作返回业务失败。状态变更完成后写系统通知；
+     * type=0 拒绝并设 status=0，但保留原内容供后续改判。非法动作返回业务失败。状态变更完成后写系统通知；
      * 通知是次要投影，主状态一旦成功就不应因通知失败被客户端再次提交。
      */
     @RequestMapping("/spaceReview")
@@ -83,6 +85,19 @@ public class SpaceController {
     public ApiResponse lock(@RequestParam Map<String, String> params) {
         int changed = spaces.lock(params);
         return ApiResponse.success("\u64cd\u4f5c\u6210\u529f", changed);
+    }
+
+    /** ANY /SFreeSpace/spacePresentation: staff update featured or pin state. */
+    @RequestMapping("/spacePresentation")
+    public ApiResponse presentation(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("\u5c55\u793a\u72b6\u6001\u5df2\u66f4\u65b0", spaces.presentation(params));
+    }
+
+    /** ANY /SFreeSpace/spacePresentationList: public active banners and list pins. */
+    @RequestMapping("/spacePresentationList")
+    public ApiResponse presentationList(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("", spaces.activePresentation(
+                RequestValues.text(params, "token")));
     }
 
     /**
@@ -232,6 +247,11 @@ public class SpaceController {
     @RequestMapping("/reportReview")
     public ApiResponse reportReview(@RequestParam Map<String, String> params) {
         return ApiResponse.success("举报已处理", reports.review(params));
+    }
+
+    @RequestMapping("/pollVote")
+    public ApiResponse pollVote(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("\u6295\u7968\u6210\u529f", polls.vote(params));
     }
 
     private String clientIp(HttpServletRequest request) {

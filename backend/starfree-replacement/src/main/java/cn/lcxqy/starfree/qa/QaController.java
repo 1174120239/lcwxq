@@ -33,8 +33,11 @@ public class QaController {
 
     @RequestMapping("/questionAdd")
     public ApiResponse questionAdd(@RequestParam Map<String, String> params) {
-        return ApiResponse.success("问题已提交，等待审核", service.questionAdd(
-                RequestValues.text(params, "token"), body(params)));
+        Map<String, Object> result = service.questionAdd(
+                RequestValues.text(params, "token"), body(params));
+        String message = number(result.get("status")) == 1
+                ? "提问已通过审核并发布" : "提问已提交，等待人工复核";
+        return ApiResponse.success(message, result);
     }
 
     @RequestMapping("/answerList")
@@ -111,6 +114,14 @@ public class QaController {
     private long longValue(String value) {
         try {
             return value == null ? 0 : Long.parseLong(value);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    private long number(Object value) {
+        try {
+            return value == null ? 0 : Long.parseLong(String.valueOf(value));
         } catch (NumberFormatException ignored) {
             return 0;
         }

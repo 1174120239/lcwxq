@@ -155,6 +155,7 @@
 					}
 				],
 				modalName: null,
+				avatarCropRequested: false,
 				
 			}
 		},
@@ -164,11 +165,22 @@
 		},
 		onShow(){
 			var that = this;
-			if(localStorage.getItem('toAvatar')){
-				var toAvatar = JSON.parse(localStorage.getItem('toAvatar'));
-				that.avatarUpload(toAvatar.dataUrl);
-			}else{
-				console.log("没有图片缓存")
+			var pendingAvatar = localStorage.getItem('toAvatar');
+			if(that.avatarCropRequested){
+				that.avatarCropRequested = false;
+				if(pendingAvatar){
+					localStorage.removeItem('toAvatar');
+					try {
+						var toAvatar = JSON.parse(pendingAvatar);
+						if(toAvatar && toAvatar.dataUrl){
+							that.avatarUpload(toAvatar.dataUrl);
+						}
+					} catch (error) {
+						console.error('版块图标裁剪结果无效', error);
+					}
+				}
+			}else if(pendingAvatar){
+				localStorage.removeItem('toAvatar');
 			}
 			// #ifdef APP-PLUS
 			
@@ -505,6 +517,8 @@
 			toAvatar(){
 				// #ifdef APP-PLUS || H5
 				const that = this;
+				that.avatarCropRequested = true;
+				localStorage.removeItem('toAvatar');
 				  uni.navigateTo({
 					url: "../../uni_modules/buuug7-img-cropper/pages/cropper",
 					events: {

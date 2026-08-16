@@ -11,6 +11,9 @@
 							<view class="content flex-sub space-author-content">
 								<view class="space-author-line" @tap.stop="toUserContents(item.userJson)"><text class="space-author-name" :class="{'is-vip': item.userJson.isvip>0}">{{item.userJson.name}}</text>
 								<text class="space-campus-badge" v-if="item.userJson.campus">{{item.userJson.campus}}</text>
+								<text class="space-presentation-badge is-featured" v-if="item.featured==1">精华</text>
+								<text class="space-presentation-badge is-pinned" v-if="item.pinType==1">置顶</text>
+								<text class="space-presentation-badge is-banner" v-if="item.pinType==2">横幅</text>
 								<block v-if="item.userJson.uid!=0">
 									<text class="userlv space-vip-badge" v-if="item.userJson.isvip>0">VIP</text>
 									<text class="userlv space-level-badge" :style="getLvStyle(item.userJson.experience)">{{getLv(item.userJson.experience)}}</text>
@@ -951,6 +954,30 @@
 	font-weight: 500;
 	line-height: 28rpx;
 	color: #788b8c;
+}
+
+.space-presentation-badge {
+	flex: 0 0 auto;
+	padding: 2rpx 9rpx;
+	border-radius: 5rpx;
+	font-size: 18rpx;
+	font-weight: 700;
+	line-height: 28rpx;
+}
+
+.space-presentation-badge.is-featured {
+	background: #fff0d9;
+	color: #a15a13;
+}
+
+.space-presentation-badge.is-pinned {
+	background: #e4f3ef;
+	color: #26766b;
+}
+
+.space-presentation-badge.is-banner {
+	background: #fbe8df;
+	color: #9b4a30;
 }
 
 .space-vip-badge,

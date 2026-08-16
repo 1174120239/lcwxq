@@ -44,7 +44,9 @@ export REDIS_PORT="${REDIS_PORT:-$(read_property spring.redis.port)}"
 export REDIS_PASSWORD="${REDIS_PASSWORD-$(read_property spring.redis.password)}"
 export LEGACY_REDIS_ENABLED="${LEGACY_REDIS_ENABLED:-true}"
 export LEGACY_REDIS_PREFIX="${LEGACY_REDIS_PREFIX:-$(read_property web.prefix)}"
-export LEGACY_REDIS_SESSION_TTL="${LEGACY_REDIS_SESSION_TTL:-$(read_property webinfo.usertime)}"
+# The replacement backend owns the hardened session lifetime. Keep active users signed in for
+# 90 days of inactivity even when the closed API still carries its historical shorter value.
+export LEGACY_REDIS_SESSION_TTL="${LEGACY_REDIS_SESSION_TTL:-7776000}"
 
 # Reuse the closed API's SMTP runtime configuration without copying secrets into
 # the repository. Verification and dynamic-comment notices share the SMTP account,

@@ -13,19 +13,24 @@
 			<view class="manage-filter">
 				<text :class="{'is-active': status===''}" @tap="setStatus('')">全部</text>
 				<text :class="{'is-active': status==='1'}" @tap="setStatus('1')">已发布</text>
-				<text :class="{'is-active': status==='0'}" @tap="setStatus('0')">已停用</text>
+				<text :class="{'is-active': status==='0'}" @tap="setStatus('0')">隐藏/待审</text>
 			</view>
 		</view>
 
 		<view class="question-list">
 			<view class="question-row" v-for="item in list" :key="item.id">
 				<view class="question-row-head">
-					<view class="question-state" :class="{'is-disabled': item.status!=1}">{{item.status==1 ? '已发布' : '已停用'}}</view>
+				<view class="question-state" :class="{'is-disabled': item.status!=1}">{{item.status==1 ? '已发布' : (item.aiDecision ? 'AI 隐藏' : '已停用')}}</view>
 					<text v-if="item.recommended==1" class="question-recommended">推荐</text>
 					<text class="question-sort">排序 {{item.sortOrder || 0}}</text>
 				</view>
 				<text class="question-title">{{item.title}}</text>
 				<text v-if="item.description" class="question-description">{{item.description}}</text>
+				<view class="question-ai" v-if="item.aiDecision">
+					<view class="question-ai-head"><text>AI {{aiDecisionText(item.aiDecision)}}</text><text v-if="item.aiCategory">{{item.aiCategory}}</text></view>
+					<text class="question-ai-reason">{{item.aiReason || '未返回具体原因'}}</text>
+					<text class="question-ai-human" v-if="item.humanDecision">人工最终状态：{{item.humanDecision==='approved' ? '公开' : '隐藏'}}<text v-if="item.reviewNote"> · {{item.reviewNote}}</text></text>
+				</view>
 				<view class="question-meta"><text v-if="item.topic">{{item.topic}}</text><text>{{item.answerCount || 0}} 个回答</text></view>
 				<view class="question-actions">
 					<text @tap="preview(item)">查看</text>
@@ -117,6 +122,7 @@
 				})
 			},
 			setStatus(status) { if (this.status === status) return; this.status = status; this.reload(); },
+			aiDecisionText(value) { return value === 'approved' ? '通过' : (value === 'error' ? '异常' : '风险'); },
 			clearSearch() { this.keyword = ''; this.reload(); },
 			createQuestion() { this.form = emptyForm(); this.editorVisible = true; },
 			editQuestion(item) { this.form = Object.assign(emptyForm(), item); this.editorVisible = true; },
@@ -174,6 +180,10 @@
 	.question-sort { margin-left: auto; }
 	.question-title { display: block; margin-top: 13rpx; font-size: 31rpx; font-weight: 600; line-height: 1.5; }
 	.question-description { display: -webkit-box; overflow: hidden; margin-top: 9rpx; color: #61706b; font-size: 25rpx; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+	.question-ai { margin-top: 16rpx; padding: 18rpx 20rpx; border-left: 5rpx solid #b06b61; background: #faf4f2; }
+	.question-ai-head { display: flex; justify-content: space-between; color: #9a5148; font-size: 23rpx; font-weight: 600; }
+	.question-ai-reason,.question-ai-human { display: block; margin-top: 8rpx; color: #655f5d; font-size: 23rpx; line-height: 1.5; }
+	.question-ai-human { color: #66746f; }
 	.question-meta { display: flex; gap: 18rpx; margin-top: 14rpx; color: #88948f; font-size: 22rpx; }
 	.question-actions { display: flex; gap: 34rpx; margin-top: 22rpx; color: #536761; font-size: 25rpx; }
 	.question-actions .is-danger { color: #a46666; }
@@ -201,6 +211,8 @@
 	.is-night .question-row { border-bottom-color: #151b19; }
 	.is-night .question-title,.is-night .editor-title { color: #edf2ef; }
 	.is-night .question-description { color: #b2bfba; }
+	.is-night .question-ai { border-left-color: #cc8278; background: #2b2524; }
+	.is-night .question-ai-reason,.is-night .question-ai-human { color: #c8cfcc; }
 	.is-night .manage-filter .is-active { background: #2d403a; color: #8dd0c2; }
 	.is-night .editor-head,.is-night .form-item { border-color: #303a37; }
 	@keyframes editorUp { from { transform: translateY(100%); } to { transform: translateY(0); } }

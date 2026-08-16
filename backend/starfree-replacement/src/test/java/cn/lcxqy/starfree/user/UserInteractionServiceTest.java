@@ -257,6 +257,34 @@ class UserInteractionServiceTest {
     }
 
     @Test
+    void inboxExposesExactAnswerAndCommentTargetsForQuestionReply() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(8L);
+        when(tokens.publicUserById(7L)).thenReturn(Collections.<String, Object>singletonMap("name", "评论者"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
+
+        Map<String, Object> row = row(
+                "id", 2L, "type", "qaComment", "uid", 7L, "text", "回复了你的评论：收到",
+                "touid", 8L, "isread", 0, "value", 44L, "created", 1700000000L, "cid", 99L);
+        when(jdbc.queryForList(startsWith("SELECT id,type,uid,text,touid,isread,value,created,cid"),
+                any(Object.class))).thenReturn(Collections.singletonList(row));
+        when(jdbc.queryForList(startsWith("SELECT id,title,status FROM starfree_qa_questions"),
+                eq(44L))).thenReturn(Collections.singletonList(row("id", 44L, "title", "校园问题", "status", 1)));
+        when(jdbc.queryForList(startsWith("SELECT c.id,c.answer_id,c.status FROM starfree_qa_comments"),
+                eq(99L), eq(44L), eq(7L), eq(1700000000L)))
+                .thenReturn(Collections.singletonList(row("id", 99L, "answer_id", 55L, "status", 1)));
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+
+        Map<String, Object> notification = new UserInteractionService(jdbc, tokens)
+                .inbox(request).getData().get(0);
+
+        assertThat(notification).containsEntry("answerId", 55L).containsEntry("commentId", 99L);
+    }
+
+    @Test
     void inboxPrefersNicknameAndBuildsQqAvatar() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);

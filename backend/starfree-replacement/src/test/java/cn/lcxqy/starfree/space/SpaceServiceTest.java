@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.support.KeyHolder;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -379,9 +381,8 @@ class SpaceServiceTest {
         LegacySpaceAbuseGuard.PostReservation reservation =
                 mock(LegacySpaceAbuseGuard.PostReservation.class);
         when(fixture.abuseGuard.reservePost(7L, false, 999, 0)).thenReturn(reservation);
-        when(fixture.jdbc.update(startsWith("INSERT INTO starfree_space"),
-                eq(7L), anyLong(), anyLong(), eq("valid post text"), any(), eq(0), eq(0),
-                eq(0), eq(1), eq(0))).thenReturn(0);
+        when(fixture.jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class)))
+                .thenReturn(0);
 
         assertThatThrownBy(() -> fixture.service.add(addRequest("valid post text"), "127.0.0.1"))
                 .isInstanceOf(IllegalStateException.class)
@@ -422,7 +423,7 @@ class SpaceServiceTest {
         when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
                 .thenReturn(Collections.singletonList(config()));
         when(fixture.jdbc.update(startsWith("UPDATE starfree_space SET text"),
-                eq("edited text"), eq("new.png"), eq(0), eq(1), anyLong(), eq(11L)))
+                eq("edited text"), eq("new.png"), eq(0), eq(1), eq(1), anyLong(), eq(11L)))
                 .thenReturn(1);
 
         Map<String, String> request = new HashMap<>();
@@ -437,8 +438,8 @@ class SpaceServiceTest {
 
         assertThat(changed).isOne();
         verify(fixture.jdbc).update(
-                eq("UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,modified = ? WHERE id = ?"),
-                eq("edited text"), eq("new.png"), eq(0), eq(1), anyLong(), eq(11L));
+                eq("UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,status=?,modified = ? WHERE id = ?"),
+                eq("edited text"), eq("new.png"), eq(0), eq(1), eq(1), anyLong(), eq(11L));
     }
 
     @Test
@@ -498,14 +499,12 @@ class SpaceServiceTest {
     }
 
     @Test
-    void staffCanRejectPendingSpaceAndWriteSystemNotice() {
+    void staffCanRejectPendingSpaceWithoutDeletingIt() {
         Fixture fixture = new Fixture();
         fixture.login(7L, "administrator");
         Map<String, Object> pending = space(11L, 8L, 0, 0, 0);
         when(fixture.jdbc.queryForList(startsWith("SELECT id,uid"), eq(11L)))
                 .thenReturn(Collections.singletonList(pending));
-        when(fixture.jdbc.update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L)))
-                .thenReturn(1);
         when(fixture.jdbc.update(startsWith("INSERT INTO starfree_inbox"),
                 any(Object[].class))).thenReturn(1);
 
@@ -515,9 +514,9 @@ class SpaceServiceTest {
         request.put("type", "0");
 
         assertThat(fixture.service.review(request)).isOne();
-        verify(fixture.jdbc).update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L));
+        verify(fixture.jdbc, never()).update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L));
         verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
-                eq("system"), eq(7L), contains("\u5df2\u88ab\u5220\u9664"), eq(8L), eq(0), eq(0),
+                eq("system"), eq(7L), contains("\u9690\u85cf"), eq(8L), eq(0), eq(0),
                 anyLong(), eq(0));
     }
 
@@ -576,6 +575,106 @@ class SpaceServiceTest {
         verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
                 eq("system"), eq(7L), contains("ID:11\u3011\u5df2\u88ab\u9501\u5b9a"), eq(8L),
                 eq(0), eq(0), anyLong(), eq(0));
+    }
+
+    @Test
+    void nonStaffCannotChangeSpacePresentation() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "contributor");
+
+        assertThatThrownBy(() -> fixture.service.presentation(presentationRequest()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("\u4f60\u6ca1\u6709\u64cd\u4f5c\u6743\u9650");
+        verify(fixture.jdbc, never()).queryForList(startsWith("SELECT id,uid"), anyLong());
+        verify(fixture.jdbc, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
+    void staffCannotPinPendingSpace() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "editor");
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid"), eq(11L)))
+                .thenReturn(Collections.singletonList(space(11L, 8L, 0, 0, 0)));
+
+        assertThatThrownBy(() -> fixture.service.presentation(presentationRequest()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("\u53ea\u80fd\u8bbe\u7f6e\u5df2\u53d1\u5e03\u7684\u516c\u5f00\u52a8\u6001");
+        verify(fixture.jdbc, never()).update(startsWith("UPDATE starfree_space SET featured"),
+                any(Object[].class));
+    }
+
+    @Test
+    void staffCanFeatureAndPinPublishedSpace() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "administrator");
+        Map<String, Object> row = space(11L, 7L, 1, 0, 0);
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid"), eq(11L)))
+                .thenReturn(Collections.singletonList(row));
+        when(fixture.jdbc.update(
+                eq("UPDATE starfree_space SET featured=?,pin_type=?,pin_order=?,pin_start=?,pin_end=? WHERE id=?"),
+                eq(1), eq(2), eq(50), eq(0L), eq(0L), eq(11L))).thenReturn(1);
+
+        Map<String, Object> state = fixture.service.presentation(presentationRequest());
+
+        assertThat(state)
+                .containsEntry("featured", 1)
+                .containsEntry("pinType", 2)
+                .containsEntry("pinConfiguredType", 2)
+                .containsEntry("pinOrder", 50);
+    }
+
+    @Test
+    void presentationRejectsEndBeforeStart() {
+        Fixture fixture = new Fixture();
+        fixture.login(7L, "administrator");
+        when(fixture.jdbc.queryForList(startsWith("SELECT id,uid"), eq(11L)))
+                .thenReturn(Collections.singletonList(space(11L, 7L, 1, 0, 0)));
+        Map<String, String> request = presentationRequest();
+        request.put("pinStartTime", "200");
+        request.put("pinEndTime", "100");
+
+        assertThatThrownBy(() -> fixture.service.presentation(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("\u7ed3\u675f\u65f6\u95f4\u5fc5\u987b\u665a\u4e8e\u5f00\u59cb\u65f6\u95f4");
+        verify(fixture.jdbc, never()).update(startsWith("UPDATE starfree_space SET featured"),
+                any(Object[].class));
+    }
+
+    @Test
+    void featuredFeedCanExcludeActivePresentationRows() {
+        Fixture fixture = new Fixture();
+        when(fixture.jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class)))
+                .thenReturn(0);
+        when(fixture.jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(Collections.<Map<String, Object>>emptyList());
+
+        fixture.service.page("{\"featured\":1,\"excludePresented\":1}",
+                1, 15, "", "created", 0, "");
+
+        verify(fixture.jdbc).queryForObject(
+                contains("s.featured = ? AND NOT (s.pin_type IN (1,2)"),
+                eq(Integer.class), eq(1), anyLong(), anyLong());
+    }
+
+    @Test
+    void activePresentationUsesPublicVisibilityExpiryAndStableOrdering() {
+        Fixture fixture = new Fixture();
+        when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
+                .thenReturn(Collections.singletonList(config()));
+        when(fixture.jdbc.queryForList(contains("AND s.pin_type=?"),
+                anyInt(), anyLong(), anyLong()))
+                .thenReturn(Collections.<Map<String, Object>>emptyList());
+
+        Map<String, Object> result = fixture.service.activePresentation("");
+
+        assertThat((java.util.List<?>) result.get("banner")).isEmpty();
+        assertThat((java.util.List<?>) result.get("list")).isEmpty();
+        verify(fixture.jdbc).queryForList(
+                contains("s.status=1 AND s.onlyMe=0 AND s.type<>3"),
+                eq(2), anyLong(), anyLong());
+        verify(fixture.jdbc).queryForList(
+                contains("ORDER BY s.pin_order DESC,s.modified DESC,s.id DESC LIMIT 3"),
+                eq(1), anyLong(), anyLong());
     }
 
     @Test
@@ -1017,6 +1116,18 @@ class SpaceServiceTest {
         return request;
     }
 
+    private static Map<String, String> presentationRequest() {
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "token");
+        request.put("id", "11");
+        request.put("featured", "1");
+        request.put("pinType", "2");
+        request.put("pinOrder", "50");
+        request.put("pinStartTime", "0");
+        request.put("pinEndTime", "0");
+        return request;
+    }
+
     private static Map<String, String> deleteRequest() {
         Map<String, String> request = new HashMap<>();
         request.put("token", "token");
@@ -1036,6 +1147,10 @@ class SpaceServiceTest {
         private Fixture() {
             when(abuseGuard.reservePost(anyLong(), anyBoolean(), anyInt(), anyInt()))
                     .thenReturn(LegacySpaceAbuseGuard.PostReservation.noop());
+            // SpaceService uses the generated-key overload so topics, polls and notifications
+            // can resolve the newly inserted dynamic id. Keep the fixture aligned with that API.
+            when(jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class)))
+                    .thenReturn(1);
         }
 
         private void login(long uid, String group) {

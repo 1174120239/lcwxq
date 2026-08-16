@@ -177,9 +177,54 @@ public class UserInteractionService {
             enrichSpaceReference(result, number(row.get("value")), viewerUid);
         }
         if ("qaAnswer".equals(type) || "qaComment".equals(type)) {
-            enrichQuestionReference(result, number(row.get("value")));
+            long questionId = number(row.get("value"));
+            enrichQuestionReference(result, questionId);
+            enrichQaTarget(result, row, questionId);
         }
         return result;
+    }
+
+    /**
+     * Exposes stable navigation targets for Q&A notifications. New rows store the exact
+     * comment id in cid; older rows stored the answer id, so the fallback keeps those rows
+     * navigable and attempts to recover their most recent matching comment.
+     */
+    private void enrichQaTarget(Map<String, Object> result, Map<String, Object> row, long questionId) {
+        String type = String.valueOf(row.get("type"));
+        long referenceId = number(row.get("cid"));
+        if ("qaAnswer".equals(type)) {
+            result.put("answerId", referenceId);
+            return;
+        }
+        if (referenceId <= 0) {
+            return;
+        }
+        List<Map<String, Object>> exact = jdbc.queryForList(
+                "SELECT c.id,c.answer_id,c.status FROM starfree_qa_comments c "
+                        + "JOIN starfree_qa_answers a ON a.id=c.answer_id "
+                        + "WHERE c.id=? AND a.question_id=? AND c.uid=? AND c.created<=? "
+                        + "LIMIT 1",
+                referenceId, questionId, number(row.get("uid")), number(row.get("created")));
+        if (exact != null && !exact.isEmpty()) {
+            Map<String, Object> comment = exact.get(0);
+            result.put("answerId", number(comment.get("answer_id")));
+            if (number(comment.get("status")) == 1) {
+                result.put("commentId", number(comment.get("id")));
+            }
+            return;
+        }
+
+        // Compatibility with notifications written before cid was changed to comment id.
+        result.put("answerId", referenceId);
+        List<Map<String, Object>> fallback = jdbc.queryForList(
+                "SELECT c.id FROM starfree_qa_comments c "
+                        + "JOIN starfree_qa_answers a ON a.id=c.answer_id "
+                        + "WHERE c.answer_id=? AND a.question_id=? AND c.uid=? AND c.status=1 "
+                        + "AND c.created<=? ORDER BY c.created DESC,c.id DESC LIMIT 1",
+                referenceId, questionId, number(row.get("uid")), number(row.get("created")));
+        if (fallback != null && !fallback.isEmpty()) {
+            result.put("commentId", number(fallback.get(0).get("id")));
+        }
     }
 
     private void enrichQuestionReference(Map<String, Object> result, long questionId) {

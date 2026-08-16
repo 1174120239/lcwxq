@@ -123,7 +123,7 @@
 					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/manage/spaceReports')">
 							<view class="index-sort-i"><text class="cuIcon-warn"></text></view>
-							<view class="index-sort-text">举报审核</view>
+							<view class="index-sort-text">风险审核</view>
 						</view>
 					</waves>
 				</view>

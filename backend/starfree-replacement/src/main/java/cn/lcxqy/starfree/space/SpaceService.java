@@ -50,7 +50,8 @@ public class SpaceService {
     private static final Pattern HTML_TAG = Pattern.compile("<[^>]+>");
     private static final String SPACE_SELECT =
             "SELECT s.id,s.uid,s.created,s.modified,s.text,s.pic,s.type,s.views,s.likes,s.toid,"
-                    + "s.status,s.onlyMe,u.uid AS user_uid,u.name AS user_name,"
+                    + "s.status,s.onlyMe,s.featured,s.pin_type,s.pin_order,s.pin_start,s.pin_end,"
+                    + "u.uid AS user_uid,u.name AS user_name,"
                     + "u.screenName AS user_screenName,u.mail AS user_mail,"
                     + "u.avatar AS user_avatar,u.experience AS user_experience,"
                     + "u.vip AS user_vip,u.bantime AS user_bantime,"
@@ -70,6 +71,8 @@ public class SpaceService {
     private final SpaceTopicService topics;
     private final UniPushService push;
     private final EmailNotificationService email;
+    private SpacePollService polls;
+    private AiModerationService aiModeration;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
@@ -87,6 +90,16 @@ public class SpaceService {
         this.topics = new SpaceTopicService(jdbc);
         this.push = push;
         this.email = email;
+    }
+
+    @Autowired
+    void setPolls(SpacePollService polls) {
+        this.polls = polls;
+    }
+
+    @Autowired
+    void setAiModeration(AiModerationService aiModeration) {
+        this.aiModeration = aiModeration;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -113,9 +126,15 @@ public class SpaceService {
         if (type == 4 && (pic == null || pic.isEmpty())) {
             throw new IllegalArgumentException("\u8bf7\u4e0a\u4f20\u89c6\u9891");
         }
-        boolean mediaAllowsEmptyText = type == 0 && pic != null && !pic.isEmpty();
+        SpacePollService.PollDraft pollDraft = polls == null ? null
+                : polls.draft(RequestValues.text(request, "poll"));
+        boolean mediaAllowsEmptyText = type == 0 && ((pic != null && !pic.isEmpty())
+                || pollDraft != null);
         String text = validateText(request.get("text"), mediaAllowsEmptyText, type == 3 ? 1 : 4);
         List<Integer> topicIds = topics.validateIds(RequestValues.text(request, "topicIds"));
+        if (pollDraft != null && type != 0) {
+            throw new IllegalArgumentException("\u6295\u7968\u53ea\u80fd\u6dfb\u52a0\u5230\u666e\u901a\u52a8\u6001");
+        }
         SpaceConfig config = config();
 
         Map<String, Object> user = viewer.user;
@@ -155,22 +174,47 @@ public class SpaceService {
         if (type == 3 && recentDuplicateReply(viewer.uid, toid, text, now)) {
             return false;
         }
-        int status = config.spaceAudit == 1 ? 0 : 1;
+        boolean aiEnabled = type != 3 && config.spaceAudit == 1
+                && aiModeration != null && aiModeration.enabledForSpace();
+        // Dynamic comments are published first and are covered by the configured daily scan.
+        int status = type == 3 ? 1 : (config.spaceAudit == 1 ? 0 : 1);
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
         boolean published = false;
+        long spaceId = 0;
         try {
-            int inserted = jdbc.update(
-                    "INSERT INTO starfree_space "
-                            + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
-                            + "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                    viewer.uid, now, now, text.replace("||rn||", "\r\n"),
-                    pic, type, 0, toid, status, onlyMe);
+            String sql = "INSERT INTO starfree_space "
+                    + "(uid,created,modified,text,pic,type,likes,toid,status,onlyMe) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            final String contentText = text.replace("||rn||", "\r\n");
+            final String contentPic = pic;
+            final int contentType = type;
+            final int contentToId = toid;
+            final int contentStatus = status;
+            final int contentOnlyMe = onlyMe;
+            int inserted = jdbc.update(connection -> {
+                PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+                int i = 1;
+                statement.setLong(i++, viewer.uid);
+                statement.setLong(i++, now);
+                statement.setLong(i++, now);
+                statement.setString(i++, contentText);
+                statement.setString(i++, contentPic);
+                statement.setInt(i++, contentType);
+                statement.setInt(i++, 0);
+                statement.setInt(i++, contentToId);
+                statement.setInt(i++, contentStatus);
+                statement.setInt(i++, contentOnlyMe);
+                return statement;
+            }, keyHolder);
             if (inserted != 1) {
                 throw new IllegalStateException("Space insert did not affect exactly one row");
             }
             published = true;
+            Number generatedId = keyHolder.getKey();
+            if (generatedId != null) spaceId = generatedId.longValue();
         } finally {
             if (!published) {
                 // starfree_space is MyISAM: only release the Redis quota when no row was written.
@@ -180,19 +224,41 @@ public class SpaceService {
 
         if (!topicIds.isEmpty()) {
             try {
-                Long spaceId = jdbc.queryForObject(
-                        "SELECT id FROM starfree_space WHERE uid=? AND created=? AND modified=? "
-                                + "AND type=? ORDER BY id DESC LIMIT 1",
-                        Long.class, viewer.uid, now, now, type);
-                if (spaceId == null || spaceId <= 0) {
-                    throw new IllegalStateException("Published Space id could not be read");
+                if (spaceId <= 0) {
+                    Long resolved = jdbc.queryForObject("SELECT id FROM starfree_space WHERE uid=? AND created=? AND modified=? AND type=? ORDER BY id DESC LIMIT 1", Long.class, viewer.uid, now, now, type);
+                    spaceId = resolved == null ? 0 : resolved;
                 }
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
                 topics.replace(spaceId, topicIds);
             } catch (RuntimeException error) {
                 // The MyISAM Space row already exists. Do not make the client retry and create a
                 // duplicate; log the missing secondary relation for operational repair instead.
                 LOG.error("Space was published but its topic relations could not be saved for uid {}",
                         viewer.uid, error);
+            }
+        }
+
+        if (pollDraft != null) {
+            try {
+                if (spaceId <= 0) throw new IllegalStateException("Published Space id could not be read");
+                polls.create(spaceId, pollDraft);
+            } catch (RuntimeException error) {
+                LOG.error("Could not create poll for new space {}; keeping dynamic pending", spaceId, error);
+                if (spaceId > 0) {
+                    try { jdbc.update("UPDATE starfree_space SET status=0 WHERE id=?", spaceId); }
+                    catch (RuntimeException ignored) { }
+                }
+            }
+        }
+
+        if (aiEnabled) {
+            if (spaceId > 0) {
+                AiModerationService.Decision decision = aiModeration.reviewSpace(
+                        spaceId, viewer.uid, text, pic);
+                status = applyAiSpaceDecision(spaceId, decision);
+            } else {
+                status = 0;
+                sendSystemNotice(0, viewer.uid, "\u4f60\u7684\u52a8\u6001\u6b63\u5728\u4eba\u5de5\u5ba1\u6838\uff1a\u5ba1\u6838\u8bb0\u5f55\u6682\u65f6\u65e0\u6cd5\u5efa\u7acb");
             }
         }
 
@@ -280,6 +346,8 @@ public class SpaceService {
         }
 
         long now = Instant.now().getEpochSecond();
+        boolean aiEnabled = config.spaceAudit == 1 && !reviewRequired
+                && aiModeration != null && aiModeration.enabledForSpace();
         int status = (config.spaceAudit == 1 || reviewRequired) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
@@ -337,6 +405,11 @@ public class SpaceService {
             LOG.error("Anonymous space {} was published but owner mapping could not be saved for uid {}",
                     spaceId, viewer.uid, error);
         }
+        if (aiEnabled) {
+            AiModerationService.Decision decision = aiModeration.reviewSpace(
+                    spaceId, viewer.uid, text, pic);
+            status = applyAiSpaceDecision(spaceId, decision);
+        }
         try {
             jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
                     now, ip == null ? "" : ip, viewer.uid);
@@ -345,6 +418,36 @@ public class SpaceService {
                     spaceId, viewer.uid, error);
         }
         return status == 0;
+    }
+
+    private int applyAiSpaceDecision(long spaceId, AiModerationService.Decision decision) {
+        if (!decision.isEvaluated() || !decision.isSafe()) {
+            if (aiModeration != null) {
+                aiModeration.markContentStatus(decision.getReviewId(), 0);
+            }
+            return 0;
+        }
+        try {
+            int changed = jdbc.update(
+                    "UPDATE starfree_space SET status=1 WHERE id=? AND status=0", spaceId);
+            if (changed == 1) {
+                aiModeration.markContentStatus(decision.getReviewId(), 1);
+                return 1;
+            }
+        } catch (DataAccessException error) {
+            LOG.error("Could not publish AI-approved space {}", spaceId, error);
+        }
+        aiModeration.markContentStatus(decision.getReviewId(), 0);
+        return 0;
+    }
+
+    private void restoreSpaceStatusBestEffort(long spaceId, int status) {
+        try {
+            jdbc.update("UPDATE starfree_space SET status=? WHERE id=?", status, spaceId);
+        } catch (RuntimeException restoreError) {
+            LOG.error("Could not restore space {} status {} after audit log failure",
+                    spaceId, status, restoreError);
+        }
     }
 
     public int edit(Map<String, String> request) {
@@ -400,15 +503,26 @@ public class SpaceService {
          * update uid to the editor, which transferred ownership when staff edited a post.
          * Preserve the immutable type and original owner while retaining the public contract.
          */
+        boolean reviewGate = currentType != 3 && editConfig.spaceAudit == 1;
+        boolean aiEnabled = reviewGate && aiModeration != null
+                && aiModeration.enabledForSpace();
+        int editedStatus = reviewGate ? 0 : (int) number(get(existing, "status"));
         int changed = jdbc.update(
-                "UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,modified = ? "
+                "UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,status=?,modified = ? "
                         + "WHERE id = ?",
-                text.replace("||rn||", "\r\n"), pic, toid, onlyMe, now, id);
+                text.replace("||rn||", "\r\n"), pic, toid, onlyMe, editedStatus, now, id);
         if (changed != 1) {
             throw new IllegalStateException("Space update did not affect exactly one row");
         }
         if (topicIds != null) {
             topics.replace(id, topicIds);
+        }
+        if (onlyMe == 1) {
+            clearPresentationBestEffort(id);
+        }
+        if (aiEnabled) {
+            applyAiSpaceDecision(id, aiModeration.reviewSpace(
+                    id, number(get(existing, "uid")), text, pic));
         }
         return changed;
     }
@@ -421,26 +535,35 @@ public class SpaceService {
             throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
         }
         Map<String, Object> space = requireSpace(id);
-        if (type == 1 && number(get(space, "status")) == 1) {
+        int oldStatus = (int) number(get(space, "status"));
+        if (type == 1 && oldStatus == 1) {
             throw new IllegalArgumentException("\u52a8\u6001\u5df2\u88ab\u8fdb\u884c\u76f8\u540c\u64cd\u4f5c");
         }
 
-        int changed = type == 1
-                ? jdbc.update("UPDATE starfree_space SET status = 1 WHERE id = ?", id)
-                : jdbc.update("DELETE FROM starfree_space WHERE id = ?", id);
+        int changed = oldStatus == type ? 1
+                : jdbc.update("UPDATE starfree_space SET status = ? WHERE id = ?", type, id);
         if (changed != 1) {
             throw new IllegalStateException("Space review did not affect exactly one row");
         }
         if (type == 0) {
-            removeTopicsBestEffort(id);
+            clearPresentationBestEffort(id);
         }
         if (type == 1 && number(get(space, "type")) == 3) {
             notifySpaceComment(number(get(space, "uid")), space,
                     number(get(space, "created")), value(get(space, "text")));
         }
+        if (aiModeration != null) {
+            try {
+                aiModeration.recordHumanAction(AiModerationService.TYPE_SPACE, id, oldStatus, type,
+                        viewer.uid, RequestValues.text(request, "note"));
+            } catch (RuntimeException error) {
+                restoreSpaceStatusBestEffort(id, oldStatus);
+                throw new IllegalStateException("审核记录保存失败，动态状态已恢复", error);
+            }
+        }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u5df2\u5ba1\u6838\u901a\u8fc7"
-                : "\u4f60\u7684\u52a8\u6001\u672a\u5ba1\u6838\u901a\u8fc7\uff0c\u5df2\u88ab\u5220\u9664";
+                : "\u4f60\u7684\u52a8\u6001\u5df2\u88ab\u5ba1\u6838\u5458\u9690\u85cf\uff0c\u53ef\u7531\u7ba1\u7406\u5458\u91cd\u65b0\u516c\u5f00";
         sendSystemNotice(viewer.uid, number(get(space, "uid")), notice);
         return changed;
     }
@@ -465,11 +588,102 @@ public class SpaceService {
         if (changed != 1) {
             throw new IllegalStateException("Space lock did not affect exactly one row");
         }
+        if (type == 2) {
+            clearPresentationBestEffort(id);
+        }
+        if (aiModeration != null) {
+            try {
+                aiModeration.recordHumanAction(AiModerationService.TYPE_SPACE, id, oldStatus, type,
+                        viewer.uid, RequestValues.text(request, "note"));
+            } catch (RuntimeException error) {
+                restoreSpaceStatusBestEffort(id, oldStatus);
+                throw new IllegalStateException("审核记录保存失败，动态状态已恢复", error);
+            }
+        }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u88ab\u89e3\u9501"
                 : "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u88ab\u9501\u5b9a";
         sendSystemNotice(viewer.uid, number(get(space, "uid")), notice);
         return changed;
+    }
+
+    /** Updates staff-controlled presentation state without changing the dynamic owner. */
+    public Map<String, Object> presentation(Map<String, String> request) {
+        Viewer viewer = requireStaff(request);
+        long id = RequestValues.integer(request, "id", 0);
+        Map<String, Object> space = requireSpace(id);
+        if (!request.containsKey("featured") && !request.containsKey("pinType")
+                && !request.containsKey("pinOrder") && !request.containsKey("pinStartTime")
+                && !request.containsKey("pinEndTime")) {
+            throw new IllegalArgumentException("\u8bf7\u9009\u62e9\u8981\u4fee\u6539\u7684\u5c55\u793a\u72b6\u6001");
+        }
+
+        int featured = request.containsKey("featured")
+                ? RequestValues.integer(request, "featured", -1)
+                : (int) number(get(space, "featured"));
+        int pinType = request.containsKey("pinType")
+                ? RequestValues.integer(request, "pinType", -1)
+                : (int) number(get(space, "pin_type"));
+        int pinOrder = request.containsKey("pinOrder")
+                ? RequestValues.integer(request, "pinOrder", -1)
+                : (int) number(get(space, "pin_order"));
+        long pinStart = request.containsKey("pinStartTime")
+                ? requestLong(request, "pinStartTime", -1)
+                : number(get(space, "pin_start"));
+        long pinEnd = request.containsKey("pinEndTime")
+                ? requestLong(request, "pinEndTime", -1)
+                : number(get(space, "pin_end"));
+
+        if ((featured != 0 && featured != 1) || pinType < 0 || pinType > 2
+                || pinOrder < 0 || pinStart < 0 || pinEnd < 0) {
+            throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
+        }
+        if (pinStart > 0 && pinEnd > 0 && pinEnd <= pinStart) {
+            throw new IllegalArgumentException("\u7ed3\u675f\u65f6\u95f4\u5fc5\u987b\u665a\u4e8e\u5f00\u59cb\u65f6\u95f4");
+        }
+        long now = Instant.now().getEpochSecond();
+        if (pinType > 0 && pinEnd > 0 && pinEnd <= now) {
+            throw new IllegalArgumentException("\u7ed3\u675f\u65f6\u95f4\u5fc5\u987b\u665a\u4e8e\u5f53\u524d\u65f6\u95f4");
+        }
+        boolean enablingPresentation = featured == 1 || pinType > 0;
+        if (enablingPresentation && (number(get(space, "status")) != 1
+                || number(get(space, "onlyMe")) != 0)) {
+            throw new IllegalArgumentException("\u53ea\u80fd\u8bbe\u7f6e\u5df2\u53d1\u5e03\u7684\u516c\u5f00\u52a8\u6001");
+        }
+        if (enablingPresentation && number(get(space, "type")) == 3) {
+            throw new IllegalArgumentException("\u52a8\u6001\u56de\u590d\u4e0d\u80fd\u8bbe\u7f6e\u7cbe\u534e\u6216\u7f6e\u9876");
+        }
+        if (pinType == 0) {
+            pinOrder = 0;
+            pinStart = 0;
+            pinEnd = 0;
+        } else if (pinOrder == 0) {
+            pinOrder = (int) Math.min(now, Integer.MAX_VALUE);
+        }
+
+        int changed = jdbc.update(
+                "UPDATE starfree_space SET featured=?,pin_type=?,pin_order=?,pin_start=?,pin_end=? WHERE id=?",
+                featured, pinType, pinOrder, pinStart, pinEnd, id);
+        if (changed != 1) {
+            throw new IllegalStateException("Space presentation update did not affect exactly one row");
+        }
+
+        long owner = number(get(space, "uid"));
+        if (owner != viewer.uid) {
+            sendSystemNotice(viewer.uid, owner, presentationNotice(id, featured, pinType));
+        }
+        return presentationState(featured, pinType, pinOrder, pinStart, pinEnd, now);
+    }
+
+    /** Returns at most three active list pins and three active banner pins. */
+    public Map<String, Object> activePresentation(String token) {
+        Viewer viewer = viewer(token, false);
+        SpaceConfig config = config();
+        long now = Instant.now().getEpochSecond();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("banner", activePresentationRows(2, now, viewer, config));
+        result.put("list", activePresentationRows(1, now, viewer, config));
+        return result;
     }
 
     public Map<String, Object> info(long id, String token) {
@@ -501,6 +715,8 @@ public class SpaceService {
         appendIntegerFilter(where, args, filters, "toid", "s.toid");
         appendIntegerFilter(where, args, filters, "status", "s.status");
         appendIntegerFilter(where, args, filters, "onlyMe", "s.onlyMe");
+        appendBinaryFilter(where, args, filters, "featured", "s.featured");
+        appendPresentedExclusion(where, args, filters);
         List<Integer> topicFilters = topicFilterIds(filters);
         for (Integer topicId : topicFilters) {
             where.append(" AND EXISTS (SELECT 1 FROM starfree_space_topics st "
@@ -564,6 +780,7 @@ public class SpaceService {
             throw new IllegalStateException("Space delete did not affect exactly one row");
         }
         removeTopicsBestEffort(id);
+        if (polls != null) polls.removeForSpace(id);
         if (viewer.staff && owner != viewer.uid) {
             sendSystemNotice(viewer.uid, owner,
                     "\u4f60\u7684\u52a8\u6001\u3010" + value(get(space, "text"))
@@ -686,6 +903,10 @@ public class SpaceService {
                 "SELECT COUNT(*) FROM starfree_fan WHERE uid = ? AND touid = ?",
                 viewer.uid, owner));
         result.put("topics", topics.forSpace(id, viewer.uid));
+        if (polls != null) {
+            Map<String, Object> poll = polls.forSpace(id, viewer.uid);
+            if (poll != null) result.put("poll", poll);
+        }
 
         // Public counters use public rows only; pending/private replies must not leak through
         // aggregate values even when their bodies are filtered from the list.
@@ -784,6 +1005,64 @@ public class SpaceService {
         }
     }
 
+    private List<Map<String, Object>> activePresentationRows(int pinType, long now,
+                                                              Viewer viewer, SpaceConfig config) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                SPACE_SELECT + " WHERE s.status=1 AND s.onlyMe=0 AND s.type<>3 "
+                        + "AND s.pin_type=? AND (s.pin_start=0 OR s.pin_start<=?) "
+                        + "AND (s.pin_end=0 OR s.pin_end>?) "
+                        + "ORDER BY s.pin_order DESC,s.modified DESC,s.id DESC LIMIT 3",
+                pinType, now, now);
+        List<Map<String, Object>> data = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            data.add(enrich(row, viewer, config));
+        }
+        return data;
+    }
+
+    private Map<String, Object> presentationState(int featured, int pinType, int pinOrder,
+                                                   long pinStart, long pinEnd, long now) {
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("featured", featured);
+        state.put("pinType", activePinType(pinType, pinStart, pinEnd, now));
+        state.put("pinConfiguredType", pinType);
+        state.put("pinOrder", pinOrder);
+        state.put("pinStartTime", pinStart);
+        state.put("pinEndTime", pinEnd);
+        return state;
+    }
+
+    private int activePinType(int pinType, long pinStart, long pinEnd, long now) {
+        if (pinType < 1 || pinType > 2) return 0;
+        if (pinStart > 0 && pinStart > now) return 0;
+        if (pinEnd > 0 && pinEnd <= now) return 0;
+        return pinType;
+    }
+
+    private String presentationNotice(long id, int featured, int pinType) {
+        if (pinType == 2) {
+            return "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u8bbe\u4e3a\u6a2a\u5e45\u7f6e\u9876";
+        }
+        if (pinType == 1) {
+            return "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u8bbe\u4e3a\u5217\u8868\u7f6e\u9876";
+        }
+        if (featured == 1) {
+            return "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u8bbe\u4e3a\u7cbe\u534e";
+        }
+        return "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u7684\u5c55\u793a\u72b6\u6001\u5df2\u66f4\u65b0";
+    }
+
+    private void clearPresentationBestEffort(long id) {
+        try {
+            jdbc.update("UPDATE starfree_space SET featured=0,pin_type=0,pin_order=0,"
+                    + "pin_start=0,pin_end=0 WHERE id=?", id);
+        } catch (RuntimeException error) {
+            // The primary MyISAM write already succeeded. Visibility rules still keep a
+            // private or locked row out of public presentation queries.
+            LOG.error("Could not clear presentation state for space {}", id, error);
+        }
+    }
+
     private Map<String, Object> coreSpace(Map<String, Object> row) {
         Map<String, Object> result = new LinkedHashMap<>();
         putNumber(result, "id", get(row, "id"));
@@ -801,6 +1080,13 @@ public class SpaceService {
         putNumber(result, "toid", get(row, "toid"));
         putNumber(result, "status", get(row, "status"));
         putNumber(result, "onlyMe", get(row, "onlyMe"));
+        int featured = (int) number(get(row, "featured"));
+        int configuredPinType = (int) number(get(row, "pin_type"));
+        int pinOrder = (int) number(get(row, "pin_order"));
+        long pinStart = number(get(row, "pin_start"));
+        long pinEnd = number(get(row, "pin_end"));
+        result.putAll(presentationState(featured, configuredPinType, pinOrder,
+                pinStart, pinEnd, Instant.now().getEpochSecond()));
         return result;
     }
 
@@ -955,6 +1241,33 @@ public class SpaceService {
         args.add(RequestValues.objectInteger(filters, key, 0));
     }
 
+    private void appendBinaryFilter(StringBuilder where, List<Object> args,
+                                    Map<String, Object> filters, String key, String column) {
+        if (!filters.containsKey(key)) return;
+        int value = RequestValues.objectInteger(filters, key, -1);
+        if (value != 0 && value != 1) {
+            throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
+        }
+        where.append(" AND ").append(column).append(" = ?");
+        args.add(value);
+    }
+
+    private void appendPresentedExclusion(StringBuilder where, List<Object> args,
+                                          Map<String, Object> filters) {
+        if (!filters.containsKey("excludePresented")) return;
+        int value = RequestValues.objectInteger(filters, "excludePresented", -1);
+        if (value != 0 && value != 1) {
+            throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
+        }
+        if (value == 0) return;
+        long now = Instant.now().getEpochSecond();
+        where.append(" AND NOT (s.pin_type IN (1,2) "
+                + "AND (s.pin_start=0 OR s.pin_start<=?) "
+                + "AND (s.pin_end=0 OR s.pin_end>?))");
+        args.add(now);
+        args.add(now);
+    }
+
     private String safeOrder(String order) {
         if ("modified".equals(order) || "likes".equals(order) || "id".equals(order)) {
             return order;
@@ -967,7 +1280,8 @@ public class SpaceService {
             throw new IllegalArgumentException("\u52a8\u6001\u4e0d\u5b58\u5728");
         }
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT id,uid,created,modified,text,pic,type,views,likes,toid,status,onlyMe "
+                "SELECT id,uid,created,modified,text,pic,type,views,likes,toid,status,onlyMe,"
+                        + "featured,pin_type,pin_order,pin_start,pin_end "
                         + "FROM starfree_space WHERE id = ? LIMIT 1", id);
         if (rows.isEmpty()) {
             throw new IllegalArgumentException("\u52a8\u6001\u4e0d\u5b58\u5728");
@@ -1444,6 +1758,14 @@ public class SpaceService {
     private String nullableText(Map<String, String> request, String key) {
         String value = request.get(key);
         return value == null ? null : value.trim();
+    }
+
+    private long requestLong(Map<String, String> request, String key, long fallback) {
+        try {
+            return Long.parseLong(RequestValues.text(request, key));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 
     private List<String> images(String text) {
