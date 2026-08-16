@@ -274,6 +274,8 @@
 				messageGeneration:0,
 				unreadCount:getUnreadBadgeCount(),
 				readAllPending:false,
+				readingInboxIds:{},
+				readInboxIds:{},
 				// 请求锁避免页面重复显示或快速切换时产生并发列表请求。
 				inboxRequesting:false,
 				chatRequesting:false,
@@ -572,6 +574,7 @@
 			},
 			goInbox(data){
 				var that = this;
+				if (!that.markInboxRead(data)) return false;
 				if((data.type=="comment" || data.type=="postComment") && data.contentsInfo && data.contentsInfo.cid){
 					that.toInfo(data.contentsInfo.cid,data.contenTitle);
 				}
@@ -608,6 +611,54 @@
 					return false;
 				}
 				
+			},
+			markInboxRead(data) {
+				var that = this;
+				var inboxId = Number(data && data.id);
+				if (!that.token || !Number.isFinite(inboxId) || inboxId <= 0 || Number(data.isread) !== 0) return true;
+				var pendingKey = String(inboxId);
+				if (that.readingInboxIds[pendingKey]) return false;
+				that.$set(that.readingInboxIds, pendingKey, true);
+				that.$set(that.readInboxIds, pendingKey, true);
+				that.setInboxReadState(data, inboxId, 1);
+				that.$Net.request({
+					url: that.$API.setRead(),
+					data: {
+						token: that.token,
+						id: inboxId
+					},
+					header: {
+						'Content-Type':'application/x-www-form-urlencoded'
+					},
+					method: 'get',
+					dataType: 'json',
+					timeout: 15000,
+					success: function(res) {
+						if (res && res.data && res.data.code == 1) {
+							that.setInboxReadState(data, inboxId, 1);
+							refreshUnreadBadge(that, that.token);
+							return;
+						}
+						that.$delete(that.readInboxIds, pendingKey);
+						that.setInboxReadState(data, inboxId, 0);
+						refreshUnreadBadge(that, that.token);
+					},
+					fail: function() {
+						that.$delete(that.readInboxIds, pendingKey);
+						that.setInboxReadState(data, inboxId, 0);
+						refreshUnreadBadge(that, that.token);
+					},
+					complete: function() {
+						that.$delete(that.readingInboxIds, pendingKey);
+					}
+				});
+				return true;
+			},
+			setInboxReadState(data, inboxId, isread) {
+				if (data && Number(data.id) === inboxId) this.$set(data, 'isread', isread);
+				this.inboxList.forEach((item) => {
+					if (item && Number(item.id) === inboxId) this.$set(item, 'isread', isread);
+				});
 			},
 			getUserLv(i){
 				var that = this;
@@ -692,6 +743,7 @@
 							var inboxList = [];
 							for(var i in list){
 								var arr = list[i];
+								if (that.readInboxIds[String(arr.id)]) arr.isread = 1;
 								arr.userJson = normalizeUser(arr.userJson, arr.type == 'system' ? '系统通知' : '已注销用户');
 								inboxList.push(arr);
 							}

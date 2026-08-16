@@ -341,9 +341,10 @@ public class UserController {
     }
 
     /**
-     * GET/POST {@code /SFreeUsers/setRead}：批量标记通知已读。
+     * GET/POST {@code /SFreeUsers/setRead}：标记单条或批量通知已读。
      *
-     * <p>必填 {@code token}；{@code type} 为空/all 表示全部，comment 同时覆盖 comment 和
+     * <p>必填 {@code token}；传 {@code id} 时只更新当前用户的对应通知。未传 id 时，
+     * {@code type} 为空/all 表示全部，comment 同时覆盖 comment 和
      * postComment，finance/system/fan 只更新对应类型。chat 当前返回 0，因为聊天仍属旧后端；
      * 未支持的 type 返回业务失败。data 是实际更新行数，重复调用自然返回 0，属于幂等操作。
      */
