@@ -1,6 +1,6 @@
 # 生产部署与回滚手册
 
-> 更新日期：2026-08-15
+> 更新日期：2026-08-16
 >
 > 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
@@ -252,6 +252,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 011 | 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
 | 012 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和展示时效字段及索引 |
 | 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
+| 014 | 014_lost_and_found.sql | 校园互助信息、评论、QQ 定向授权、审核日志和功能配置 |
 
 规则：
 
@@ -305,6 +306,12 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 并把旧动态 AI 记录复制到统一历史。上线顺序必须是定向备份 `starfree_ai_moderation_config`、
 `starfree_space_ai_reviews`、`starfree_space` 和三张问答表，执行 013，再同时发布 replacement JAR、
 PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空上线后产生的审核历史。
+
+014 新增五张独立 InnoDB 表，不修改旧商城、订单、积分或用户表。执行前查询并定向备份已存在的
+`starfree_lost_found_%` 表；执行后核对配置行 `id=1`、联系方式授权唯一键和列表/接收者索引，再部署
+匹配的 replacement JAR 与 App。先在本机 18082 验证公开列表、Lv 门槛、审核、评论删除撤销授权和
+接收者专属 QQ 投影，最后运行 `promote-mutual-aid-routes.sh` 切换 16 条精确路由。回滚 JAR 或 Nginx
+时保留新增表以及上线后产生的互助、评论和审计数据；普通开发或组件发布不得顺带执行 014。
 
 001 可使用：
 
@@ -364,7 +371,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；校园互助的 16 个 `SFreeLostFound/*` 接口使用 `promote-mutual-aid-routes.sh`，且必须先完成迁移 014、replacement JAR 和 App 验证；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 安全版本切流
 

@@ -47,7 +47,7 @@
 				<view v-if="top_of==1" class="index-sort home-shortcuts grid col-4">
 					<view class="index-sort-box" v-if="!sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/contents/blackhouse')"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">小黑屋</view></view></waves></view>
 					<view class="index-sort-box" v-if="sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/plugins/sy_appbox/home',true)"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">应用</view></view></waves></view>
-					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toShop"><view class="index-sort-i shortcut-blue"><text class="cuIcon-goods"></text></view><view class="index-sort-text">商城</view></view></waves></view>
+					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toShop"><view class="index-sort-i shortcut-blue"><text class="cuIcon-friend"></text></view><view class="index-sort-text">校园互助</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toLink('/pages/user/invitation')"><view class="index-sort-i shortcut-violet"><text class="cuIcon-share"></text></view><view class="index-sort-text">分享</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toUsers"><view class="index-sort-i shortcut-coral"><text class="cuIcon-calendar"></text></view><view class="index-sort-text">签到</view></view></waves></view>
 				</view>
@@ -107,7 +107,7 @@
 		<view v-if="false" class="cu-modal cu-modal2 bottom-modal show2 publish-modal" :class="modalName=='bottomModal'?'show':''" @tap="hideModal">
 			<view class="cu-dialog"><view class="publish-sheet" @tap.stop>
 				<view class="publish-sheet-title">发布到校园</view>
-				<view class="publish-sheet-actions"><view class="publish-action" @tap="postSpace(1)"><image src="../../static/page/square/photo.png" mode="aspectFit"></image><text>发帖</text></view><view class="publish-action" @tap="postSpace(5)"><image src="../../static/page/square/shop.png" mode="aspectFit"></image><text>商品</text></view></view>
+				<view class="publish-sheet-actions"><view class="publish-action" @tap="postSpace(1)"><image src="../../static/page/square/photo.png" mode="aspectFit"></image><text>发动态</text></view><view class="publish-action" @tap="postSpace(5)"><image src="../../static/page/square/shop.png" mode="aspectFit"></image><text>校园互助</text></view></view>
 			</view></view>
 		</view>
 
@@ -171,7 +171,7 @@
 									<image src="../../static/page/square/shop.png" mode="widthFix"></image>
 
 								</text>
-								<view>商品</view>
+								<view>校园互助</view>
 
 
 							</view>
@@ -232,7 +232,7 @@
 										<text class="cuIcon-goods" style="color:  #ffffff;"></text>
 									</view>
 									<view class="index-sort-text">
-										商城
+										校园互助
 									</view>
 								</view>
 							</waves>
@@ -2225,15 +2225,6 @@
 
 			},
 			toShop() {
-				var that = this;
-				var token;
-				if (!localStorage.getItem('token')) {
-					uni.showToast({
-						title: "请先登录！",
-						icon: 'none'
-					})
-					return false;
-				}
 				uni.navigateTo({
 					url: '/pages/contents/shop'
 				});

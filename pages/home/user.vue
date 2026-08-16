@@ -14,8 +14,7 @@
 				<view class="profile-menu" :class="{'is-open':showProfileMenu}">
 					<view @tap="toLink('/pages/user/useredit');showProfileMenu=false"><text class="cuIcon-edit"></text><text>编辑资料</text></view>
 					<view @tap="toSetUp();showProfileMenu=false"><text class="cuIcon-settings"></text><text>账户设置</text></view>
-					<view @tap="toLink('/pages/user/myshop');showProfileMenu=false"><text class="cuIcon-goods"></text><text>我的商品</text></view>
-					<view @tap="toLink('/pages/user/sellorder');showProfileMenu=false"><text class="cuIcon-form"></text><text>售出订单</text></view>
+					<view @tap="toLink('/pages/user/myshop');showProfileMenu=false"><text class="cuIcon-friend"></text><text>我的互助</text></view>
 					<view @tap="toMedia();showProfileMenu=false"><text class="cuIcon-service"></text><text>联系我们</text></view>
 				</view>
 
@@ -215,7 +214,7 @@
 				<view @tap="toLink('/pages/user/myshop')">
 					 	<text class="tn-icon-shop" style="margin-left:8px"></text>
 					 	<view class="tn-flex-1">
-					 		<text>我的商品</text>
+						<text>我的互助</text>
 					 	</view>
 					 		<image class="right"  style="float: right;" src="../../static/image/travel/personal/Clipped.png">
 					 </view>

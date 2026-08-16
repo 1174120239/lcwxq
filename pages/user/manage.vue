@@ -28,7 +28,7 @@
 				</view>
 				<view class="user-data-box" v-if="group=='administrator'">
 					<view class="user-data-value">{{allData.allShop}}</view>
-					<view class="user-data-title">商品数</view>
+					<view class="user-data-title">历史商品</view>
 				</view>
 				<view class="user-data-box" v-if="group=='administrator'">
 					<view class="user-data-value">{{allData.allUsers}}</view>
@@ -58,8 +58,8 @@
 				<view class="index-sort-box">
 					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/user/addshop')">
-							<view class="index-sort-i"><text class="cuIcon-goods"></text></view>
-							<view class="index-sort-text">发布商品</view>
+							<view class="index-sort-i"><text class="cuIcon-friendadd"></text></view>
+							<view class="index-sort-text">发布互助</view>
 						</view>
 					</waves>
 				</view>
@@ -139,9 +139,9 @@
 					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/manage/shop')">
 							<view class="index-sort-i">
-								<text class="cuIcon-shop"></text>
+								<text class="cuIcon-friend"></text>
 							</view>
-							<view class="index-sort-text">商品管理</view>
+							<view class="index-sort-text">互助管理</view>
 						</view>
 					</waves>
 				</view>

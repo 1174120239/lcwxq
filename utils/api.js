@@ -471,6 +471,55 @@ module.exports = {
 	upload:function(){
 		return API_URL + 'upload/full';
 	},
+	// 校园互助（含失物招领）。独立于商城、订单和积分经济逻辑。
+	lostFoundList:function(){
+		return API_URL + 'SFreeLostFound/itemList';
+	},
+	lostFoundConfig:function(){
+		return API_URL + 'SFreeLostFound/config';
+	},
+	lostFoundConfigManage:function(){
+		return API_URL + 'SFreeLostFound/configManage';
+	},
+	lostFoundConfigSave:function(){
+		return API_URL + 'SFreeLostFound/configSave';
+	},
+	lostFoundInfo:function(){
+		return API_URL + 'SFreeLostFound/itemInfo';
+	},
+	lostFoundAdd:function(){
+		return API_URL + 'SFreeLostFound/itemAdd';
+	},
+	lostFoundEdit:function(){
+		return API_URL + 'SFreeLostFound/itemEdit';
+	},
+	lostFoundStatus:function(){
+		return API_URL + 'SFreeLostFound/itemStatus';
+	},
+	lostFoundDelete:function(){
+		return API_URL + 'SFreeLostFound/itemDelete';
+	},
+	lostFoundManage:function(){
+		return API_URL + 'SFreeLostFound/itemManage';
+	},
+	lostFoundAudit:function(){
+		return API_URL + 'SFreeLostFound/itemAudit';
+	},
+	lostFoundCommentList:function(){
+		return API_URL + 'SFreeLostFound/commentList';
+	},
+	lostFoundCommentAdd:function(){
+		return API_URL + 'SFreeLostFound/commentAdd';
+	},
+	lostFoundCommentDelete:function(){
+		return API_URL + 'SFreeLostFound/commentDelete';
+	},
+	lostFoundContactShare:function(){
+		return API_URL + 'SFreeLostFound/contactShare';
+	},
+	lostFoundContactAccess:function(){
+		return API_URL + 'SFreeLostFound/contactAccess';
+	},
 	shopList:function(){
 		return API_URL + 'SFreeShop/shopList';
 	},

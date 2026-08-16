@@ -437,6 +437,31 @@ form_post("SFreeSpace/spaceList", {
 
 广告 type 为 0..2，购买天数 1..3650。广告购买、奖励和打赏均需按经济幂等规则处理。
 
+### 5.5 校园互助
+
+校园互助替代客户端原商城入口，但不复用商城订单、余额、积分、库存或 VIP 逻辑。公开信息和评论可匿名读取；默认达到 Lv2（当前为 50 经验）的登录用户才能发布、评论及定向发送/查看 QQ，最低等级和功能开关由管理端配置。等级和 QQ 均由后端从 token 对应用户重读，客户端字段不可信。
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeLostFound/config` | GET/POST / 可选 token | `token` | 代码新 | 公开配置；带 token 时返回 `currentLevel/eligible`。默认最低 Lv2。 |
+| `SFreeLostFound/itemList` | GET/POST / 无 | `kind,category,state,keyword,page,limit` | 代码新 | 只列出审核通过且未过期的信息；kind 1 求助、2 提供帮助，category 1..5。 |
+| `SFreeLostFound/itemInfo` | GET/POST / 可选 token | `id,token` | 代码新 | 公开 active/resolved；待审、拒绝和关闭仅 owner/staff 可读。 |
+| `SFreeLostFound/itemAdd` | GET/POST / Lv 门槛 | `token,params` | 代码新 | uid/status/review 字段服务端派生；重复提交 20 秒拦截；免费且无经济副作用。 |
+| `SFreeLostFound/itemEdit` | GET/POST / owner/staff | `token,params.id` 与内容字段 | 代码新 | 普通用户编辑后按配置重新审核；不能修改 uid 或伪造状态。 |
+| `SFreeLostFound/itemStatus` | GET/POST / owner/staff | `token,id,action=resolve/reopen` | 代码新 | 只有 active 可解决、resolved 可重开；重开按审核配置进入 active/pending。 |
+| `SFreeLostFound/itemDelete` | GET/POST / owner/staff | `token,id` | 代码新 | 软关闭为 status=4，不物理删除信息和审计记录。 |
+| `SFreeLostFound/itemManage` | GET/POST / token | `token,status,uid,page,limit` | 代码新 | 普通用户强制只读自己的数据；staff 可按 uid/status 管理。 |
+| `SFreeLostFound/itemAudit` | GET/POST / staff | `token,id,action=approve/reject,reason` | 代码新 | 通过只接受待审/已拒绝，拒绝只接受待审/进行中且理由必填；状态变化写 append-only audit，并尽力发送站内通知。 |
+| `SFreeLostFound/commentList` | GET/POST / 无 | `itemId` | 代码新 | 公开树形评论；响应永不包含 QQ、邮箱或联系方式授权状态。 |
+| `SFreeLostFound/commentAdd` | GET/POST / Lv 门槛 | `token,itemId,parentId,text` | 代码新 | 只允许未过期 active 信息；评论 2..1000 字，10 秒重复拦截。 |
+| `SFreeLostFound/commentDelete` | GET/POST / owner/staff | `token,commentId` | 代码新 | 软删除评论，同时撤销附着在该评论上的联系方式授权。 |
+| `SFreeLostFound/contactShare` | GET/POST / Lv 门槛 | `token,itemId,commentId` | 代码新 | 单向授权；发布者和该评论作者之间有效。QQ 从发送者绑定的 `@qq.com` 邮箱解析，不接受客户端 QQ/receiverUid。 |
+| `SFreeLostFound/contactAccess` | GET/POST / Lv 门槛 | `token,itemId` | 代码新 | 只向当前接收者返回收到的 QQ；发送者投影仅含“已发送”，不回显 QQ。其他用户无权读取。 |
+| `SFreeLostFound/configManage` | GET/POST / staff | `token` | 代码新 | 管理端读取完整互助设置。 |
+| `SFreeLostFound/configSave` | GET/POST / administrator | `token,params` | 代码新 | 设置开关、最低等级、审核、QQ 授权、每日上限和有效期；完全免费与私密可见性不是可配置项。 |
+
+联系方式授权必须关联一条公开评论。评论者只能把自己的 QQ 发给发布者；发布者只能把自己的 QQ 发给选中的评论者。授权表不保存 QQ 明文，接收者读取时从发送者当前绑定邮箱解析。管理员接口也不提供批量读取 QQ 的能力。
+
 ## 6. 钱包、签到、商城、VIP 与支付
 
 ### 6.1 钱包、提现和财务读取

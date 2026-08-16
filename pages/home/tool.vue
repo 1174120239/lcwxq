@@ -58,7 +58,7 @@
 								<text class="cuIcon-taoxiaopu"></text>
 							</view>
 							<view class="index-sort-text">
-								商城
+								校园互助
 							</view>
 						</view>
 					</waves>
@@ -176,7 +176,7 @@
 								<text class="cuIcon-taoxiaopu"></text>
 							</view>
 							<view class="index-sort-text">
-								商城
+								校园互助
 							</view>
 						</view>
 					</waves>
