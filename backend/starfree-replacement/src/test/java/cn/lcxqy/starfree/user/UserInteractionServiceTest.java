@@ -80,6 +80,39 @@ class UserInteractionServiceTest {
     }
 
     @Test
+    void marksOnlyRequestedNotificationOwnedByCurrentUser() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(7L);
+        when(jdbc.update(anyString(), eq(42), eq(7L))).thenReturn(1);
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+        request.put("id", "42");
+
+        int changed = new UserInteractionService(jdbc, tokens).markRead(request);
+
+        assertThat(changed).isEqualTo(1);
+        verify(jdbc).update(contains("id = ? AND touid = ? AND isread = 0"), eq(42), eq(7L));
+    }
+
+    @Test
+    void rejectsInvalidNotificationIdWithoutBulkUpdate() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(7L);
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+        request.put("id", "invalid");
+
+        assertThatThrownBy(() -> new UserInteractionService(jdbc, tokens).markRead(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid notification id");
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
+    }
+
+    @Test
     void commentTypeFilterIncludesDynamicCommentNotifications() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         LegacyTokenService tokens = mock(LegacyTokenService.class);

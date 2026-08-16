@@ -186,7 +186,7 @@ form_post("SFreeUsers/userRegister", {
 |---|---|---|---|---|
 | `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；问答通知额外返回 `answerId`，`qaComment` 返回 `commentId`，可从消息中心直接定位到回答和评论；动态点赞不产生站内信。 |
 | `SFreeUsers/unreadNum` | GET/POST / token | `token` | 公网新 | 不包括旧聊天未读数。 |
-| `SFreeUsers/setRead` | GET/POST / token | `type` | 公网新 | `all/comment/finance/system/fan`；`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
+| `SFreeUsers/setRead` | GET/POST / token | `id,type` | 公网新 | 传 `id` 时只标记当前用户的该条通知；未传 `id` 时支持 `all/comment/finance/system/fan` 批量已读，`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
 | `SFreeUsers/follow` | GET/POST / token | `touid,type` | 旧端 | `type=1` 关注、`0` 取消；首次关注写粉丝通知。 |
 | `SFreeUsers/isFollow` | GET/POST / token | `touid` | 旧端 | 已关注为 `code=1`，未关注为 `code=0`，不是 `data` 布尔值。 |

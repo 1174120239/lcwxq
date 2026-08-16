@@ -62,6 +62,15 @@ public class UserInteractionService {
 
     public int markRead(Map<String, String> request) {
         long uid = requireUser(request);
+        if (request.containsKey("id")) {
+            int inboxId = RequestValues.integer(request, "id", 0);
+            if (inboxId <= 0) {
+                throw new IllegalArgumentException("Invalid notification id");
+            }
+            return jdbc.update(
+                    "UPDATE starfree_inbox SET isread = 1 WHERE id = ? AND touid = ? AND isread = 0",
+                    inboxId, uid);
+        }
         String type = RequestValues.text(request, "type");
         if (type.isEmpty() || "all".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0", uid);
