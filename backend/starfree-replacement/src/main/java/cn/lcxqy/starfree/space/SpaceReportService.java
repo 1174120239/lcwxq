@@ -74,6 +74,9 @@ public class SpaceReportService {
 
     public Page list(Map<String, String> request) {
         access.requireStaff(RequestValues.text(request, "token"));
+        if ("ai".equals(RequestValues.text(request, "source"))) {
+            return aiList(request);
+        }
         int limit = Math.max(1, Math.min(RequestValues.integer(request, "limit", 20), 60));
         int page = Math.max(1, RequestValues.integer(request, "page", 1));
         int status = RequestValues.integer(request, "status", 0);
@@ -98,22 +101,29 @@ public class SpaceReportService {
             data.add(normalize(row));
         }
         if (status == 0) {
-            reconcileAiQueue();
             Integer aiTotal = 0;
             List<Map<String, Object>> aiRows = Collections.emptyList();
             try {
                 aiTotal = jdbc.queryForObject(
-                        "SELECT COUNT(*) FROM starfree_space_ai_reviews WHERE status='pending'",
+                        "SELECT COUNT(*) FROM starfree_ai_moderation_reviews r "
+                                + "WHERE r.content_type='space' AND r.content_status=0 "
+                                + "AND r.id=(SELECT MAX(latest.id) FROM starfree_ai_moderation_reviews latest "
+                                + "WHERE latest.content_type='space' AND latest.content_id=r.content_id)",
                         Integer.class);
                 aiRows = jdbc.queryForList(
-                        "SELECT r.id,r.space_id,r.author_uid,r.risk_category,r.reason,r.created,"
+                        "SELECT r.id,r.content_id AS space_id,r.author_uid,r.ai_decision,"
+                                + "r.risk_category,r.reason,r.human_decision,r.review_note,r.created,r.modified,"
                                 + "s.id AS target_id,s.uid AS target_uid,s.text AS target_text,"
                                 + "s.type AS target_type,s.status AS target_status,s.onlyMe AS target_only_me "
-                                + "FROM starfree_space_ai_reviews r LEFT JOIN starfree_space s ON s.id=r.space_id "
-                                + "WHERE r.status='pending' ORDER BY r.created ASC,r.id ASC LIMIT ?,?",
+                                + "FROM starfree_ai_moderation_reviews r "
+                                + "LEFT JOIN starfree_space s ON s.id=r.content_id "
+                                + "WHERE r.content_type='space' AND r.content_status=0 "
+                                + "AND r.id=(SELECT MAX(latest.id) FROM starfree_ai_moderation_reviews latest "
+                                + "WHERE latest.content_type='space' AND latest.content_id=r.content_id) "
+                                + "ORDER BY r.created ASC,r.id ASC LIMIT ?,?",
                         0, fetchLimit);
             } catch (org.springframework.dao.DataAccessException ignored) {
-                // Existing report review stays available until additive migration 011 is run.
+                // Existing report review stays available until additive migration 013 is run.
             }
             for (Map<String, Object> row : aiRows) data.add(normalizeAi(row));
             Collections.sort(data, (left, right) -> Long.compare(
@@ -122,6 +132,48 @@ public class SpaceReportService {
             data = offset >= end ? new ArrayList<Map<String, Object>>()
                     : new ArrayList<Map<String, Object>>(data.subList(offset, end));
             total = (total == null ? 0 : total) + (aiTotal == null ? 0 : aiTotal);
+        }
+        return new Page(data, total == null ? 0 : total);
+    }
+
+    private Page aiList(Map<String, String> request) {
+        int limit = Math.max(1, Math.min(RequestValues.integer(request, "limit", 20), 60));
+        int page = Math.max(1, RequestValues.integer(request, "page", 1));
+        String decision = RequestValues.text(request, "decision");
+        String statusText = RequestValues.text(request, "contentStatus");
+        List<Object> args = new ArrayList<Object>();
+        String where = " WHERE r.content_type='space' AND r.id=(SELECT MAX(latest.id) "
+                + "FROM starfree_ai_moderation_reviews latest WHERE latest.content_type='space' "
+                + "AND latest.content_id=r.content_id)";
+        if ("approved".equals(decision) || "rejected".equals(decision)
+                || "error".equals(decision)) {
+            where += " AND r.ai_decision=?";
+            args.add(decision);
+        }
+        if ("0".equals(statusText) || "1".equals(statusText) || "2".equals(statusText)) {
+            where += " AND s.status=?";
+            args.add(Integer.parseInt(statusText));
+        }
+        Integer total = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM starfree_ai_moderation_reviews r "
+                        + "LEFT JOIN starfree_space s ON s.id=r.content_id" + where,
+                Integer.class, args.toArray());
+        List<Object> rowArgs = new ArrayList<Object>(args);
+        rowArgs.add((page - 1) * limit);
+        rowArgs.add(limit);
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT r.id,r.content_id AS space_id,r.author_uid,r.ai_decision,"
+                        + "r.risk_category,r.reason,r.content_snapshot,r.attachment_summary,"
+                        + "r.human_decision,r.reviewer_uid,r.review_note,r.created,r.modified,"
+                        + "s.id AS target_id,s.uid AS target_uid,s.text AS target_text,"
+                        + "s.type AS target_type,s.status AS target_status,s.onlyMe AS target_only_me "
+                        + "FROM starfree_ai_moderation_reviews r "
+                        + "LEFT JOIN starfree_space s ON s.id=r.content_id" + where
+                        + " ORDER BY r.created DESC,r.id DESC LIMIT ?,?",
+                rowArgs.toArray());
+        List<Map<String, Object>> data = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> row : rows) {
+            data.add(normalizeAi(row));
         }
         return new Page(data, total == null ? 0 : total);
     }
@@ -193,55 +245,26 @@ public class SpaceReportService {
     private int reviewAi(Map<String, String> request, StaffAccess.Actor actor) {
         long reviewId = positive(longValue(request.get("id")), "\u5ba1\u6838\u8bb0\u5f55\u4e0d\u5b58\u5728");
         String action = RequestValues.text(request, "action");
-        if (!"approve".equals(action) && !"delete".equals(action)) {
+        if (!"approve".equals(action) && !"hide".equals(action) && !"delete".equals(action)) {
             throw new IllegalArgumentException("\u5ba1\u6838\u64cd\u4f5c\u4e0d\u6b63\u786e");
         }
         String note = RequestValues.text(request, "note");
         if (note.length() > 500) throw new IllegalArgumentException("\u5ba1\u6838\u8bf4\u660e\u4e0d\u80fd\u8d85\u8fc7500\u4e2a\u5b57");
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT id,space_id,author_uid,reason FROM starfree_space_ai_reviews "
-                        + "WHERE id=? AND status='pending' LIMIT 1", reviewId);
-        if (rows.isEmpty()) throw new IllegalArgumentException("\u5ba1\u6838\u8bb0\u5f55\u4e0d\u5b58\u5728\u6216\u5df2\u7ecf\u5904\u7406");
+                "SELECT id,content_id AS space_id,author_uid,reason FROM starfree_ai_moderation_reviews "
+                        + "WHERE id=? AND content_type='space' LIMIT 1", reviewId);
+        if (rows.isEmpty()) throw new IllegalArgumentException("\u5ba1\u6838\u8bb0\u5f55\u4e0d\u5b58\u5728");
         Map<String, Object> review = rows.get(0);
         long spaceId = number(get(review, "space_id"));
-        long authorUid = number(get(review, "author_uid"));
-        long now = Instant.now().getEpochSecond();
-        int claimed = jdbc.update("UPDATE starfree_space_ai_reviews SET status='processing',"
-                        + "reviewer_uid=?,review_note=?,modified=? WHERE id=? AND status='pending'",
-                actor.getUid(), note, now, reviewId);
-        if (claimed != 1) throw new IllegalArgumentException("\u5ba1\u6838\u8bb0\u5f55\u5df2\u7ecf\u5904\u7406");
-        try {
-            if ("approve".equals(action)) {
-                List<Map<String, Object>> spacesRows = jdbc.queryForList(
-                        "SELECT status FROM starfree_space WHERE id=? LIMIT 1", spaceId);
-                if (spacesRows.isEmpty()) {
-                    throw new IllegalArgumentException("\u52a8\u6001\u4e0d\u5b58\u5728\u6216\u5df2\u7ecf\u5904\u7406");
-                }
-                if (number(get(spacesRows.get(0), "status")) == 0) {
-                    if (jdbc.update("UPDATE starfree_space SET status=1 WHERE id=? AND status=0", spaceId) != 1) {
-                        throw new IllegalArgumentException("\u52a8\u6001\u5df2\u88ab其他审核操作处理");
-                    }
-                }
-                int changed = jdbc.update("UPDATE starfree_space_ai_reviews SET status='approved',modified=? "
-                                + "WHERE id=? AND status='processing' AND reviewer_uid=?",
-                        now, reviewId, actor.getUid());
-                writeNotice(actor.getUid(), authorUid, spaceId, "\u4f60\u7684\u52a8\u6001\u5df2\u901a\u8fc7\u4eba\u5de5\u5ba1\u6838\u5e76\u516c\u5f00");
-                return changed;
-            }
-            if (spaceExists(spaceId)) spaces.deleteForModeration(spaceId);
-            int changed = jdbc.update("UPDATE starfree_space_ai_reviews SET status='rejected',modified=? "
-                            + "WHERE id=? AND status='processing' AND reviewer_uid=?",
-                    now, reviewId, actor.getUid());
-            String reason = note.isEmpty() ? text(get(review, "reason")) : note;
-            writeNotice(actor.getUid(), authorUid, spaceId,
-                    "\u4f60\u7684\u52a8\u6001\u672a\u901a\u8fc7\u5ba1\u6838\uff1a" + (reason.isEmpty() ? "\u5185\u5bb9\u4e0d\u7b26\u5408\u793e\u533a\u89c4\u8303" : reason));
-            return changed;
-        } catch (RuntimeException error) {
-            jdbc.update("UPDATE starfree_space_ai_reviews SET status='pending',reviewer_uid=NULL,"
-                            + "review_note='',modified=? WHERE id=? AND status='processing' AND reviewer_uid=?",
-                    Instant.now().getEpochSecond(), reviewId, actor.getUid());
-            throw error;
+        if (!spaceExists(spaceId)) {
+            throw new IllegalArgumentException("\u52a8\u6001\u4e0d\u5b58\u5728\u6216\u5df2\u5220\u9664");
         }
+        Map<String, String> spaceRequest = new LinkedHashMap<String, String>();
+        spaceRequest.put("token", RequestValues.text(request, "token"));
+        spaceRequest.put("id", String.valueOf(spaceId));
+        spaceRequest.put("type", "approve".equals(action) ? "1" : "0");
+        spaceRequest.put("note", note);
+        return spaces.review(spaceRequest);
     }
 
     private Map<String, Object> normalizeAi(Map<String, Object> row) {
@@ -252,7 +275,12 @@ public class SpaceReportService {
         result.put("reporterUid", 0);
         result.put("reason", text(get(row, "risk_category")));
         result.put("detail", text(get(row, "reason")));
-        result.put("status", 0);
+        result.put("status", number(get(row, "target_status")));
+        result.put("aiDecision", text(get(row, "ai_decision")));
+        result.put("humanDecision", text(get(row, "human_decision")));
+        result.put("reviewNote", text(get(row, "review_note")));
+        result.put("contentSnapshot", text(get(row, "content_snapshot")));
+        result.put("attachmentSummary", text(get(row, "attachment_summary")));
         result.put("created", number(get(row, "created")));
         Map<String, Object> reviewer = new LinkedHashMap<String, Object>();
         reviewer.put("uid", 0); reviewer.put("name", "AI \u5ba1\u6838"); reviewer.put("avatar", "");

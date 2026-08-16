@@ -3,6 +3,7 @@ package cn.lcxqy.starfree.qa;
 import cn.lcxqy.starfree.push.UniPushService;
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.security.StaffAccess;
+import cn.lcxqy.starfree.space.AiModerationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -96,7 +97,7 @@ class QaServiceTest {
     }
 
     @Test
-    void ordinaryUserQuestionIsAlwaysCreatedPendingReview() throws Exception {
+    void ordinaryUserQuestionPublishesWhenGlobalAuditIsDisabled() throws Exception {
         Fixture fixture = new Fixture();
         when(fixture.access.requireUser("user-token")).thenReturn(actor(7L, "contributor", 0L));
         when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_qa_questions"),
@@ -113,7 +114,7 @@ class QaServiceTest {
                 "title", "校园里哪里适合安静自习？", "description", "希望晚上也开放", "topic", "学习",
                 "status", 1, "recommended", 1, "sortOrder", 999, "createdBy", 999));
 
-        assertThat(result).containsEntry("id", 42L).containsEntry("status", 0)
+        assertThat(result).containsEntry("id", 42L).containsEntry("status", 1)
                 .containsEntry("createdBy", 7L);
         ArgumentCaptor<PreparedStatementCreator> creator = ArgumentCaptor.forClass(PreparedStatementCreator.class);
         verify(fixture.jdbc).update(creator.capture(), any(KeyHolder.class));
@@ -124,7 +125,8 @@ class QaServiceTest {
         verify(statement).setObject(1, "校园里哪里适合安静自习？");
         verify(statement).setObject(2, "希望晚上也开放");
         verify(statement).setObject(3, "学习");
-        verify(statement).setObject(4, 7L);
+        verify(statement).setObject(4, 1);
+        verify(statement).setObject(5, 7L);
     }
 
     @Test
@@ -141,6 +143,35 @@ class QaServiceTest {
                 .hasMessage("问题已提交，请勿重复发送");
 
         verify(fixture.jdbc, never()).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
+    }
+
+    @Test
+    void aiApprovedQuestionIsPublishedAndReviewStatusIsFinalized() {
+        Fixture fixture = new Fixture();
+        AiModerationService moderation = mock(AiModerationService.class);
+        fixture.service.setAiModeration(moderation);
+        when(moderation.globalAuditEnabled()).thenReturn(true);
+        when(moderation.enabledForQuestion()).thenReturn(true);
+        when(moderation.reviewQuestion(42L, 7L, "校园里哪里适合安静自习？", "希望晚上也开放", ""))
+                .thenReturn(AiModerationService.Decision.approved("正常", "未发现风险", 66L));
+        when(fixture.access.requireUser("user-token")).thenReturn(actor(7L, "contributor", 0L));
+        when(fixture.jdbc.queryForObject(startsWith("SELECT COUNT(*) FROM starfree_qa_questions"),
+                eq(Integer.class), eq(7L), eq("校园里哪里适合安静自习？"), eq("希望晚上也开放"), anyLong()))
+                .thenReturn(0);
+        when(fixture.jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class)))
+                .thenAnswer(invocation -> {
+                    KeyHolder holder = invocation.getArgument(1);
+                    holder.getKeyList().add(Collections.<String, Object>singletonMap("GENERATED_KEY", 42L));
+                    return 1;
+                });
+        when(fixture.jdbc.update(startsWith("UPDATE starfree_qa_questions SET status=1"),
+                anyLong(), eq(42L))).thenReturn(1);
+
+        Map<String, Object> result = fixture.service.questionAdd("user-token", row(
+                "title", "校园里哪里适合安静自习？", "description", "希望晚上也开放"));
+
+        assertThat(result).containsEntry("status", 1).containsEntry("aiDecision", "approved");
+        verify(moderation).markContentStatus(66L, 1);
     }
 
     @Test

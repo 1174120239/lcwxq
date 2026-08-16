@@ -143,7 +143,7 @@ $adminpw = "123456";
                         </li>
                         <li class="side-nav-item right_10">
                             <a href="<?php echo $ADMIN_PATH;?>/aiModeration.php" class="side-nav-link">
-                                <i class="dripicons-checkmark"></i><span>AI 动态审核</span><span class="menu-arrow"></span>
+                                <i class="dripicons-checkmark"></i><span>AI 风险审核</span><span class="menu-arrow"></span>
                             </a>
                         </li>
                         <li class="side-nav-item right_10">

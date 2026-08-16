@@ -30,7 +30,9 @@ $requiredFiles = @(
     'admin/starfree-admin/source/admin/aiModerationPost.php',
     'backend/database/migrations/011_dynamic_core_extensions.sql',
     'backend/database/migrations/012_space_presentation.sql',
+    'backend/database/migrations/013_ai_moderation_complete.sql',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiModerationService.java',
+    'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiCommentModerationScheduler.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpacePollService.java',
     'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserProfileService.java',
     'pages/contents/userinfo.vue',
@@ -46,6 +48,8 @@ Require-Marker 'admin/starfree-admin/source/admin/Menu.php' 'aiModeration.php'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceController.java' '/pollVote'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceController.java' '/spacePresentationList'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceReportService.java' 'reviewAi'
+Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/AiCommentModerationScheduler.java' 'Asia/Shanghai'
+Require-Marker 'admin/starfree-admin/source/admin/aiModeration.php' 'starfree_ai_comment_daily_summaries'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/space/SpaceReportService.java' 'normalizeAi'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserController.java' 'profiles.attach'
 Require-Marker 'backend/starfree-replacement/src/main/java/cn/lcxqy/starfree/user/UserController.java' 'containsProfileFields'

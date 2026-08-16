@@ -423,7 +423,7 @@ class SpaceServiceTest {
         when(fixture.jdbc.queryForList(startsWith("SELECT spaceMinExp")))
                 .thenReturn(Collections.singletonList(config()));
         when(fixture.jdbc.update(startsWith("UPDATE starfree_space SET text"),
-                eq("edited text"), eq("new.png"), eq(0), eq(1), anyLong(), eq(11L)))
+                eq("edited text"), eq("new.png"), eq(0), eq(1), eq(1), anyLong(), eq(11L)))
                 .thenReturn(1);
 
         Map<String, String> request = new HashMap<>();
@@ -438,8 +438,8 @@ class SpaceServiceTest {
 
         assertThat(changed).isOne();
         verify(fixture.jdbc).update(
-                eq("UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,modified = ? WHERE id = ?"),
-                eq("edited text"), eq("new.png"), eq(0), eq(1), anyLong(), eq(11L));
+                eq("UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,status=?,modified = ? WHERE id = ?"),
+                eq("edited text"), eq("new.png"), eq(0), eq(1), eq(1), anyLong(), eq(11L));
     }
 
     @Test
@@ -499,14 +499,12 @@ class SpaceServiceTest {
     }
 
     @Test
-    void staffCanRejectPendingSpaceAndWriteSystemNotice() {
+    void staffCanRejectPendingSpaceWithoutDeletingIt() {
         Fixture fixture = new Fixture();
         fixture.login(7L, "administrator");
         Map<String, Object> pending = space(11L, 8L, 0, 0, 0);
         when(fixture.jdbc.queryForList(startsWith("SELECT id,uid"), eq(11L)))
                 .thenReturn(Collections.singletonList(pending));
-        when(fixture.jdbc.update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L)))
-                .thenReturn(1);
         when(fixture.jdbc.update(startsWith("INSERT INTO starfree_inbox"),
                 any(Object[].class))).thenReturn(1);
 
@@ -516,9 +514,9 @@ class SpaceServiceTest {
         request.put("type", "0");
 
         assertThat(fixture.service.review(request)).isOne();
-        verify(fixture.jdbc).update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L));
+        verify(fixture.jdbc, never()).update(eq("DELETE FROM starfree_space WHERE id = ?"), eq(11L));
         verify(fixture.jdbc).update(startsWith("INSERT INTO starfree_inbox"),
-                eq("system"), eq(7L), contains("\u5df2\u88ab\u5220\u9664"), eq(8L), eq(0), eq(0),
+                eq("system"), eq(7L), contains("\u9690\u85cf"), eq(8L), eq(0), eq(0),
                 anyLong(), eq(0));
     }
 

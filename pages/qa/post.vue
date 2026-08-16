@@ -135,7 +135,8 @@
 							return
 						}
 						this.submitted = true
-						uni.showToast({ title: '问题已提交，等待审核', icon: 'success', duration: 1800 })
+						var published = res.data.data && Number(res.data.data.status) === 1
+						uni.showToast({ title: published ? 'AI 审核通过，已发布' : '已提交，等待人工复核', icon: 'success', duration: 1800 })
 						setTimeout(() => uni.navigateBack({ delta: 1 }), 1800)
 					},
 					fail: () => uni.showToast({ title: '网络异常，请稍后重试', icon: 'none' }),

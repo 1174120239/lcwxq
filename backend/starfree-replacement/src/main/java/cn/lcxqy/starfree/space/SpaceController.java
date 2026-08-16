@@ -65,7 +65,7 @@ public class SpaceController {
      * ANY {@code /SFreeSpace/spaceReview}：审核待审动态。
      *
      * <p>仅 administrator/editor token；必填 {@code id/type}，type=1 通过并设 status=1，
-     * type=0 拒绝并删除该行。重复通过或非法动作返回业务失败。状态变更完成后写系统通知；
+     * type=0 拒绝并设 status=0，但保留原内容供后续改判。非法动作返回业务失败。状态变更完成后写系统通知；
      * 通知是次要投影，主状态一旦成功就不应因通知失败被客户端再次提交。
      */
     @RequestMapping("/spaceReview")

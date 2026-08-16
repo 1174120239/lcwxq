@@ -174,9 +174,10 @@ public class SpaceService {
         if (type == 3 && recentDuplicateReply(viewer.uid, toid, text, now)) {
             return false;
         }
-        boolean aiEnabled = type != 3 && config.spaceAudit != 1
-                && aiModeration != null && aiModeration.enabled();
-        int status = (config.spaceAudit == 1 || aiEnabled) ? 0 : 1;
+        boolean aiEnabled = type != 3 && config.spaceAudit == 1
+                && aiModeration != null && aiModeration.enabledForSpace();
+        // Dynamic comments are published first and are covered by the configured daily scan.
+        int status = type == 3 ? 1 : (config.spaceAudit == 1 ? 0 : 1);
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
@@ -252,8 +253,9 @@ public class SpaceService {
 
         if (aiEnabled) {
             if (spaceId > 0) {
-                AiModerationService.Decision decision = aiModeration.review(spaceId, viewer.uid, text, pic);
-                status = decision.isSafe() ? 1 : 0;
+                AiModerationService.Decision decision = aiModeration.reviewSpace(
+                        spaceId, viewer.uid, text, pic);
+                status = applyAiSpaceDecision(spaceId, decision);
             } else {
                 status = 0;
                 sendSystemNotice(0, viewer.uid, "\u4f60\u7684\u52a8\u6001\u6b63\u5728\u4eba\u5de5\u5ba1\u6838\uff1a\u5ba1\u6838\u8bb0\u5f55\u6682\u65f6\u65e0\u6cd5\u5efa\u7acb");
@@ -344,9 +346,9 @@ public class SpaceService {
         }
 
         long now = Instant.now().getEpochSecond();
-        boolean aiEnabled = config.spaceAudit != 1 && !reviewRequired
-                && aiModeration != null && aiModeration.enabled();
-        int status = (config.spaceAudit == 1 || reviewRequired || aiEnabled) ? 0 : 1;
+        boolean aiEnabled = config.spaceAudit == 1 && !reviewRequired
+                && aiModeration != null && aiModeration.enabledForSpace();
+        int status = (config.spaceAudit == 1 || reviewRequired) ? 0 : 1;
         int recentPosts = requireWithinPostLimit(viewer, config);
         LegacySpaceAbuseGuard.PostReservation reservation = abuseGuard.reservePost(
                 viewer.uid, viewer.staff, config.postMax, recentPosts);
@@ -404,8 +406,9 @@ public class SpaceService {
                     spaceId, viewer.uid, error);
         }
         if (aiEnabled) {
-            AiModerationService.Decision decision = aiModeration.review(spaceId, viewer.uid, text, pic);
-            status = decision.isSafe() ? 1 : 0;
+            AiModerationService.Decision decision = aiModeration.reviewSpace(
+                    spaceId, viewer.uid, text, pic);
+            status = applyAiSpaceDecision(spaceId, decision);
         }
         try {
             jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
@@ -415,6 +418,36 @@ public class SpaceService {
                     spaceId, viewer.uid, error);
         }
         return status == 0;
+    }
+
+    private int applyAiSpaceDecision(long spaceId, AiModerationService.Decision decision) {
+        if (!decision.isEvaluated() || !decision.isSafe()) {
+            if (aiModeration != null) {
+                aiModeration.markContentStatus(decision.getReviewId(), 0);
+            }
+            return 0;
+        }
+        try {
+            int changed = jdbc.update(
+                    "UPDATE starfree_space SET status=1 WHERE id=? AND status=0", spaceId);
+            if (changed == 1) {
+                aiModeration.markContentStatus(decision.getReviewId(), 1);
+                return 1;
+            }
+        } catch (DataAccessException error) {
+            LOG.error("Could not publish AI-approved space {}", spaceId, error);
+        }
+        aiModeration.markContentStatus(decision.getReviewId(), 0);
+        return 0;
+    }
+
+    private void restoreSpaceStatusBestEffort(long spaceId, int status) {
+        try {
+            jdbc.update("UPDATE starfree_space SET status=? WHERE id=?", status, spaceId);
+        } catch (RuntimeException restoreError) {
+            LOG.error("Could not restore space {} status {} after audit log failure",
+                    spaceId, status, restoreError);
+        }
     }
 
     public int edit(Map<String, String> request) {
@@ -470,10 +503,14 @@ public class SpaceService {
          * update uid to the editor, which transferred ownership when staff edited a post.
          * Preserve the immutable type and original owner while retaining the public contract.
          */
+        boolean reviewGate = currentType != 3 && editConfig.spaceAudit == 1;
+        boolean aiEnabled = reviewGate && aiModeration != null
+                && aiModeration.enabledForSpace();
+        int editedStatus = reviewGate ? 0 : (int) number(get(existing, "status"));
         int changed = jdbc.update(
-                "UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,modified = ? "
+                "UPDATE starfree_space SET text = ?,pic = ?,toid = ?,onlyMe = ?,status=?,modified = ? "
                         + "WHERE id = ?",
-                text.replace("||rn||", "\r\n"), pic, toid, onlyMe, now, id);
+                text.replace("||rn||", "\r\n"), pic, toid, onlyMe, editedStatus, now, id);
         if (changed != 1) {
             throw new IllegalStateException("Space update did not affect exactly one row");
         }
@@ -482,6 +519,10 @@ public class SpaceService {
         }
         if (onlyMe == 1) {
             clearPresentationBestEffort(id);
+        }
+        if (aiEnabled) {
+            applyAiSpaceDecision(id, aiModeration.reviewSpace(
+                    id, number(get(existing, "uid")), text, pic));
         }
         return changed;
     }
@@ -494,27 +535,35 @@ public class SpaceService {
             throw new IllegalArgumentException("\u53c2\u6570\u9519\u8bef");
         }
         Map<String, Object> space = requireSpace(id);
-        if (type == 1 && number(get(space, "status")) == 1) {
+        int oldStatus = (int) number(get(space, "status"));
+        if (type == 1 && oldStatus == 1) {
             throw new IllegalArgumentException("\u52a8\u6001\u5df2\u88ab\u8fdb\u884c\u76f8\u540c\u64cd\u4f5c");
         }
 
-        int changed = type == 1
-                ? jdbc.update("UPDATE starfree_space SET status = 1 WHERE id = ?", id)
-                : jdbc.update("DELETE FROM starfree_space WHERE id = ?", id);
+        int changed = oldStatus == type ? 1
+                : jdbc.update("UPDATE starfree_space SET status = ? WHERE id = ?", type, id);
         if (changed != 1) {
             throw new IllegalStateException("Space review did not affect exactly one row");
         }
         if (type == 0) {
-            removeTopicsBestEffort(id);
-            if (polls != null) polls.removeForSpace(id);
+            clearPresentationBestEffort(id);
         }
         if (type == 1 && number(get(space, "type")) == 3) {
             notifySpaceComment(number(get(space, "uid")), space,
                     number(get(space, "created")), value(get(space, "text")));
         }
+        if (aiModeration != null) {
+            try {
+                aiModeration.recordHumanAction(AiModerationService.TYPE_SPACE, id, oldStatus, type,
+                        viewer.uid, RequestValues.text(request, "note"));
+            } catch (RuntimeException error) {
+                restoreSpaceStatusBestEffort(id, oldStatus);
+                throw new IllegalStateException("审核记录保存失败，动态状态已恢复", error);
+            }
+        }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u5df2\u5ba1\u6838\u901a\u8fc7"
-                : "\u4f60\u7684\u52a8\u6001\u672a\u5ba1\u6838\u901a\u8fc7\uff0c\u5df2\u88ab\u5220\u9664";
+                : "\u4f60\u7684\u52a8\u6001\u5df2\u88ab\u5ba1\u6838\u5458\u9690\u85cf\uff0c\u53ef\u7531\u7ba1\u7406\u5458\u91cd\u65b0\u516c\u5f00";
         sendSystemNotice(viewer.uid, number(get(space, "uid")), notice);
         return changed;
     }
@@ -541,6 +590,15 @@ public class SpaceService {
         }
         if (type == 2) {
             clearPresentationBestEffort(id);
+        }
+        if (aiModeration != null) {
+            try {
+                aiModeration.recordHumanAction(AiModerationService.TYPE_SPACE, id, oldStatus, type,
+                        viewer.uid, RequestValues.text(request, "note"));
+            } catch (RuntimeException error) {
+                restoreSpaceStatusBestEffort(id, oldStatus);
+                throw new IllegalStateException("审核记录保存失败，动态状态已恢复", error);
+            }
         }
         String notice = type == 1
                 ? "\u4f60\u7684\u52a8\u6001\u3010ID:" + id + "\u3011\u5df2\u88ab\u89e3\u9501"
@@ -728,15 +786,6 @@ public class SpaceService {
                     "\u4f60\u7684\u52a8\u6001\u3010" + value(get(space, "text"))
                             + "\u3011\u5df2\u88ab\u5220\u9664");
         }
-        return changed;
-    }
-
-    int deleteForModeration(long id) {
-        Map<String, Object> space = requireSpace(id);
-        int changed = jdbc.update("DELETE FROM starfree_space WHERE id = ?", id);
-        if (changed != 1) throw new IllegalStateException("Space moderation delete did not affect one row");
-        removeTopicsBestEffort(id);
-        if (polls != null) polls.removeForSpace(id);
         return changed;
     }
 

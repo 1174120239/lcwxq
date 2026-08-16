@@ -315,8 +315,8 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeSpace/topicFollow` | GET/POST / token | `token,mid,type` | 公网新 | `type=1` 关注，`type=0` 取消；幂等处理，不会重复插入关注。 |
 | `SFreeSpace/userReplies` | GET/POST / 可选 token | `uid,page,limit,token` | 代码新/公网旧 | 按时间倒序返回指定用户发表的动态评论；未传 uid 时必须登录。每项以 `originalState=visible/deleted/forbidden` 区分原动态，并在可见时返回作者和最多 180 字摘要。 |
 | `SFreeSpace/reportAdd` | POST / token | `id,reason,detail` | 代码新/公网旧 | 只能举报公开主动态，不能举报自己的动态；`reason` 为广告营销、人身攻击、色情低俗、违法违规或其他。同一用户对同一动态只保留一条举报，重复提交返回业务失败。 |
-| `SFreeSpace/reportList` | GET/POST / staff | `token,status,page,limit` | 代码新/公网旧 | 管理端举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回，返回举报人、动态摘要和动态是否已删除。 |
-| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 普通举报不传或传 `source=report`；`action=delete` 通过举报并删除原动态，同时关闭该动态的全部待处理举报；`action=dismiss` 只驳回当前举报。AI 队列传 `source=ai`，`action=approve` 公开动态，`delete` 拒绝并删除。记录审核人、结果、说明和时间。 |
+| `SFreeSpace/reportList` | GET/POST / staff | `token,status,source,decision,contentStatus,page,limit` | 代码新/公网旧 | 默认返回举报队列；`status=0` 待处理、`1` 已处理、`2` 已驳回。`source=ai` 时返回每条动态的最新 AI 审核记录，可按 `decision=approved/rejected/error` 和当前动态状态筛选。 |
+| `SFreeSpace/reportReview` | POST / staff | `token,id,action,note,source` | 代码新/公网旧 | 普通举报不传或传 `source=report`；`action=delete` 处理举报并删除原动态，`action=dismiss` 驳回举报。AI 记录传 `source=ai`，`action=approve` 公开动态，`action=hide` 隐藏但不删除动态；每次人工改判追加独立操作记录。 |
 | `SFreeSpace/pollVote` | POST / token | `pollId,optionIds` | 代码新/公网新 | 对公开主动态匿名投票；单选只能 1 项，多选不得超过上限；同一账号不可修改或重复提交。不返回参与者身份。成功响应中的 `totalVotes/options[].votes/options[].selected` 用于渲染结果条。 |
 
 动态话题复用 `starfree_metas.type='tag'` 作为话题目录，但动态和话题的关系不走文章用的 `starfree_relationships`，而是写入 `starfree_space_topics`，避免文章 cid 和动态 id 数字碰撞。后台“分类/话题”页面的“新增话题”会创建官方话题；用户在发布页输入的新话题会创建为用户话题，并写 `starfree_topic_meta.is_official=0`。后台将该话题设为推荐后，也会出现在官方话题区。
@@ -325,6 +325,8 @@ article = form_post("SFreeContents/contentsAdd", {
 
 动态精华、列表置顶和横幅置顶字段由 `backend/database/migrations/012_space_presentation.sql` 添加。该迁移是幂等的增量迁移，不改变旧 API 已使用字段；未执行迁移前不能部署包含上述展示字段查询的新后端，通用发布流程不会自动执行迁移。
 
+AI 风险审核由原 `starfree_apiconfig.spaceAudit` 作为总门控。总开关关闭时动态和提问直接发布，AI 配置与历史保留但不执行；总开关开启后，动态和提问先写隐藏状态，按后台的动态/提问子开关交给 AI，通过后公开，拒绝或服务异常时保留内容并等待人工改判。图片和视频动态只审核附带文字，不做视觉识别，也不会仅因存在附件转人工。动态评论先公开，按北京时间配置每日扫描；巡检范围还包括问答回答和问答评论，风险项可配置自动隐藏或只记录。统一审核历史、人工操作日志和每日总结由 `backend/database/migrations/013_ai_moderation_complete.sql` 创建。
+
 ### 校园问答
 
 校园问答使用独立表，不复用帖子、动态或文章评论。普通登录用户可从发布面板提交问题，服务端强制进入待审核状态；管理员或编辑在管理控制台审核、编辑和发布。登录用户也可以回答、点赞回答、评论回答和回复评论。
@@ -332,7 +334,7 @@ article = form_post("SFreeContents/contentsAdd", {
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
 | `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；`recommended=1` 只返回首页推荐问答，主页不得回退混入普通问答；推荐、排序值和更新时间共同决定顺序。 |
-| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；服务端固定 `status=0,recommended=0,sortOrder=0,createdBy=当前用户`，忽略客户端伪造的管理字段，20 秒内相同标题和说明拒绝重复提交。 |
+| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；忽略客户端伪造的管理字段。审核总开关关闭时直接发布；开启时先隐藏，提问 AI 子开关开启且 AI 通过后自动发布，否则等待人工复核。20 秒内相同标题和说明拒绝重复提交。 |
 | `SFreeQa/questionInfo` | GET/POST / 可选 token | `id,token` | 代码新/公网旧 | 普通用户只能读取已发布问题；staff 可预览停用问题。 |
 | `SFreeQa/answerList` | GET/POST / 可选 token | `questionId,page,limit,sort,token` | 代码新/公网旧 | `sort=latest` 按时间，其他值按点赞和时间；登录时返回 `isLiked`。 |
 | `SFreeQa/answerAdd` | POST / token | `params={questionId,text}` | 代码新/公网旧 | 回答至少 4 字、最多 5000 字；20 秒内相同回答拒绝重复提交。 |
@@ -344,7 +346,7 @@ article = form_post("SFreeContents/contentsAdd", {
 | `SFreeQa/commentDelete` | POST / owner/staff | `id,token` | 代码新/公网旧 | 作者或 staff 可删除；删除根评论时隐藏整条回复树。 |
 | `SFreeQa/questionManage` | GET/POST / staff | `token,page,limit,keyword,status` | 代码新/公网旧 | 后台读取发布和停用问题，支持关键词与状态筛选。 |
 | `SFreeQa/questionSave` | POST / staff | `params={id,title,description,topic,coverUrl,recommended,sortOrder,status}` | 代码新/公网旧 | id 为空新增，否则修改；问题标题至少 4 字。 |
-| `SFreeQa/questionStatus` | POST / staff | `id,status,token` | 代码新/公网旧 | `status=1` 发布，`0` 停用；不提供硬删除接口。 |
+| `SFreeQa/questionStatus` | POST / staff | `id,status,token` | 代码新/公网旧 | `status=1` 发布，`0` 隐藏；不提供硬删除接口。AI 审核过的提问每次状态改判都会写入人工操作日志。 |
 
 问答通知写入 `starfree_inbox`：新回答使用 `qaAnswer`，回答评论或评论回复使用 `qaComment`，`value` 保存问题 id。新通知的 `qaComment.cid` 保存评论 id，接口同时返回 `answerId/commentId`；旧通知仍按原 `cid=answerId` 兼容读取。消息中心和 UniPush 点击可回到对应回答与评论。数据库迁移为 `backend/database/migrations/007_campus_qa.sql`，未执行迁移前不能启用这些路由。
 

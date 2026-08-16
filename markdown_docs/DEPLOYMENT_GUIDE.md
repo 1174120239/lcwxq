@@ -251,6 +251,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 010 | 010_admin_password_hash.sql | 将 `starfree_admin_login.pw` 扩为 255 位，支持 PHP `password_hash()` |
 | 011 | 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
 | 012 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和展示时效字段及索引 |
+| 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
 
 规则：
 
@@ -299,6 +300,11 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 `starfree_space`、核对 001-011 已完成并执行 012；随后部署匹配的 replacement JAR，验证本机 18082
 上的展示读取和管理员写接口，最后运行 `promote-space-presentation-routes.sh` 切换两个精确路由。
 回滚 JAR 或 Nginx 时保留新增列及其中的管理配置，避免覆盖上线后写入的展示状态。
+
+013 依赖 011 和 007：它以幂等方式扩展 AI 配置，新增统一审核记录、人工操作日志和每日评论总结，
+并把旧动态 AI 记录复制到统一历史。上线顺序必须是定向备份 `starfree_ai_moderation_config`、
+`starfree_space_ai_reviews`、`starfree_space` 和三张问答表，执行 013，再同时发布 replacement JAR、
+PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空上线后产生的审核历史。
 
 001 可使用：
 
