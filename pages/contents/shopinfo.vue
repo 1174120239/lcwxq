@@ -94,6 +94,7 @@
 				id: 0, item: null, loading: true, currentUid: 0, currentGroup: '',
 				comments: [], commentsLoaded: false, commentText: '', commentSending: false, replyTo: null,
 				contactAccess: { received: [], sent: [] }, shareTarget: null,
+				returnToMutualAidList: false,
 				featureConfig: { enabled: 1, eligible: false, contactEnabled: 1, minimumLevel: 2 },
 				categoryLabels: ['', '失物招领', '物品借用', '学习互助', '校园生活', '其他帮助']
 			}
@@ -117,6 +118,7 @@
 			this.NavBar = this.CustomBar
 			// #endif
 			this.id = Number(options.id || 0)
+			this.returnToMutualAidList = options.returnTo === 'mutualAidList' || getCurrentPages().length <= 1
 			if (!this.id) {
 				uni.showToast({ title: options.sid ? '原商城内容已停用' : '互助信息不存在', icon: 'none' })
 				setTimeout(function() { uni.navigateBack({ delta: 1 }) }, 900)
@@ -131,8 +133,23 @@
 			if (this.id) this.loadAll()
 		},
 		onPullDownRefresh() { this.loadAll() },
+		onBackPress() {
+			if (!this.returnToMutualAidList) return false
+			this.back()
+			return true
+		},
 		methods: {
-			back() { uni.navigateBack({ delta: 1 }) },
+			back() {
+				if (this.returnToMutualAidList) {
+					this.returnToMutualAidList = false
+					uni.redirectTo({ url: '/pages/contents/shop' })
+					return
+				}
+				uni.navigateBack({
+					delta: 1,
+					fail: function() { uni.redirectTo({ url: '/pages/contents/shop' }) }
+				})
+			},
 			loadAll() { this.getConfig(); this.getInfo(); this.getComments() },
 			getConfig() {
 				var that = this
