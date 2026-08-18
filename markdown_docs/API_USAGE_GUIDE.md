@@ -574,6 +574,8 @@ QQBot 不使用 `webinfo.key` 冒充上传 token。replacement 会为已绑定�
 
 这些不是 `api.lcxqy.cn` 的 Spring API，也不在后端重建范围。项目明确不做插件功能：Space `type=6` 不支持；未知插件形态内容由旧端处理，不应猜测表结构或写入格式。
 
+PHP 后台的“功能设置 → 校园互助”（`/admin/mutualAid.php`）是迁移 014 的运营界面，直接使用后台既有数据库连接读取配置和互助信息，并在状态变更时写入 `starfree_lost_found_actions` 审计记录。该页面只展示发布者公开名称、互助正文和状态，不读取或展示 QQ、邮箱或任何联系方式；设置保存和审核操作均要求 PHP 管理员会话、POST 和 CSRF 校验。后台发布不需要再次执行数据库迁移。
+
 ## 9. 接入检查清单
 
 1. 正式发布前确认 `utils/api.js` 的 `API_URL` 是 `https://api.lcxqy.cn/`，不能保留 `localhost:18082`。

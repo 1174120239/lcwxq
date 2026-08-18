@@ -158,6 +158,8 @@ sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/ins
 - `$db_prefix`、`$redis_prefix` 与现有数据库和 Redis 数据一致。
 - `$ADMIN_PATH` 与后台访问路径一致。
 
+迁移 014 已执行后，后台菜单“功能设置 → 校园互助”由 `admin/mutualAid.php` 提供配置和互助信息运营操作。该页面随 `admin` 组件发布，不执行数据库迁移；发布后应在登录态下检查菜单、设置读取和一条只读列表筛选。审核、解决、重开和关闭按钮只在明确的状态转换下出现，并把操作写入互助审计表。
+
 生产站点的 `.user.ini` 可能带 immutable 属性。admin 安装脚本会保留目标目录中已有的
 `.user.ini`，在复制文件前用 `lsattr` 检查属性；写入 PHP 会话安全配置时会临时执行
 `chattr -i`，并通过退出清理逻辑在成功或失败时恢复 `chattr +i`。属性无法检查、解锁或
@@ -191,8 +193,9 @@ curl -skI https://admin.example.com/
 4. 新后端 `/health` 和 `/health/live`。
 5. API 域名匿名读取接口。
 6. 一个登录态读取接口。
-7. 后台登录、帖子读取和一个可回滚的设置读取。
-8. 查看 systemd、PHP-FPM、Nginx 日志，没有持续错误后再放量。
+7. 后台登录、帖子读取和一个可回滚的设置读取；同时检查“校园互助”页面配置读取和互助列表筛选。
+8. 生产验收不创建测试信息、评论或联系方式授权。
+9. 查看 systemd、PHP-FPM、Nginx 日志，没有持续错误后再放量。
 
 ## 4. 服务器文件
 

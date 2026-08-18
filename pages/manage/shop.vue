@@ -24,12 +24,18 @@
 					<image v-if="item.imageUrl" class="review-image" :src="item.imageUrl" mode="aspectFill"></image>
 					<view v-else class="review-image image-placeholder"><text class="cuIcon-form"></text></view>
 					<view class="review-copy">
-						<view class="review-labels"><text :class="item.kind === 1 ? 'request-label' : 'offer-label'">{{ item.kind === 1 ? '求助' : '可帮助' }}</text><text>{{ categoryName(item.category) }}</text></view>
+						<view class="review-labels"><text :class="item.kind === 1 ? 'request-label' : 'offer-label'">{{ item.kind === 1 ? '求助' : '可帮助' }}</text><text>{{ categoryName(item.category) }}</text><text>{{ statusName(item.status) }}</text></view>
 						<text class="review-title">{{ item.title }}</text>
 						<text class="review-location"><text class="cuIcon-location"></text>{{ item.location }}</text>
 					</view>
 				</view>
-				<view v-if="item.status === 0" class="review-actions"><button class="cu-btn line-red" @tap="openReject(item)"><text class="cuIcon-close"></text>拒绝</button><button class="cu-btn bg-green" @tap="audit(item, 'approve', '')"><text class="cuIcon-check"></text>通过</button></view>
+				<view v-if="item.status !== 4" class="review-actions">
+					<button v-if="item.status === 0 || item.status === 1" class="cu-btn line-red" @tap.stop="openReject(item)"><text class="cuIcon-close"></text>拒绝</button>
+					<button v-if="item.status === 0 || item.status === 3" class="cu-btn bg-green" @tap.stop="audit(item, 'approve', '')"><text class="cuIcon-check"></text>通过</button>
+					<button v-if="item.status === 1" class="cu-btn line-blue" @tap.stop="changeStatus(item, 'resolve')"><text class="cuIcon-roundcheck"></text>标记解决</button>
+					<button v-if="item.status === 2" class="cu-btn line-blue" @tap.stop="changeStatus(item, 'reopen')"><text class="cuIcon-refresh"></text>重新开放</button>
+					<button class="cu-btn line-gray" @tap.stop="closeItem(item)"><text class="cuIcon-delete"></text>关闭</button>
+				</view>
 			</view>
 		</view>
 
@@ -65,7 +71,7 @@
 				AppStyle: this.$store.state.AppStyle,
 				tab: 'review', reviewStatus: 0, items: [], loaded: false, loading: true, saving: false,
 				currentGroup: '', rejectItem: null, rejectReason: '',
-				statusOptions: [{ value: 0, label: '待审核' }, { value: 1, label: '进行中' }, { value: 2, label: '已解决' }, { value: 3, label: '未通过' }],
+				statusOptions: [{ value: 0, label: '待审核' }, { value: 1, label: '进行中' }, { value: 2, label: '已解决' }, { value: 3, label: '未通过' }, { value: 4, label: '已关闭' }],
 				levelLabels: ['Lv0', 'Lv1', 'Lv2', 'Lv3', 'Lv4', 'Lv5', 'Lv6', 'Lv7', 'Lv8', 'Lv9'],
 				settings: { enabled: 1, minimumLevel: 2, auditRequired: 1, contactEnabled: 1, dailyContactLimit: 5, itemExpiryDays: 30 },
 				categories: ['', '失物招领', '物品借用', '学习互助', '校园生活', '其他帮助']
@@ -85,12 +91,15 @@
 			loadItems() { var that = this; that.loading = true; that.$Net.request({ url: that.$API.lostFoundManage(), data: { token: that.token(), status: that.reviewStatus, page: 1, limit: 30 }, method: 'get', dataType: 'json', success: function(res) { if (res.data.code === 1) that.items = res.data.data || []; else uni.showToast({ title: res.data.msg, icon: 'none' }) }, complete: function() { that.loaded = true; that.loading = false } }) },
 			openSettings() { this.tab = 'settings'; this.loadSettings() },
 			loadSettings() { var that = this; that.loading = true; that.$Net.request({ url: that.$API.lostFoundConfigManage(), data: { token: that.token() }, method: 'get', dataType: 'json', success: function(res) { if (res.data.code === 1) that.settings = Object.assign({}, that.settings, res.data.data); else uni.showToast({ title: res.data.msg, icon: 'none' }) }, complete: function() { that.loading = false } }) },
-			saveSettings() { if (this.currentGroup !== 'administrator' || this.saving) return; var that = this; that.saving = true; that.$Net.request({ url: that.$API.lostFoundConfigSave(), data: { token: that.token(), params: JSON.stringify(that.settings) }, method: 'post', dataType: 'json', success: function(res) { uni.showToast({ title: res.data.msg, icon: 'none' }); if (res.data.code === 1) that.settings = Object.assign({}, that.settings, res.data.data) }, complete: function() { that.saving = false } }) },
+			saveSettings() { if (this.currentGroup !== 'administrator' || this.saving) return; var dailyLimit = Number(this.settings.dailyContactLimit); var expiryDays = Number(this.settings.itemExpiryDays); if (!isFinite(dailyLimit) || dailyLimit % 1 !== 0 || dailyLimit < 1 || dailyLimit > 50) { uni.showToast({ title: '每日发送上限应为1到50', icon: 'none' }); return } if (!isFinite(expiryDays) || expiryDays % 1 !== 0 || expiryDays < 1 || expiryDays > 365) { uni.showToast({ title: '有效期应为1到365天', icon: 'none' }); return } this.settings.dailyContactLimit = dailyLimit; this.settings.itemExpiryDays = expiryDays; var that = this; that.saving = true; that.$Net.request({ url: that.$API.lostFoundConfigSave(), data: { token: that.token(), params: JSON.stringify(that.settings) }, method: 'post', dataType: 'json', success: function(res) { uni.showToast({ title: res.data.msg, icon: 'none' }); if (res.data.code === 1) that.settings = Object.assign({}, that.settings, res.data.data) }, complete: function() { that.saving = false } }) },
 			openItem(id) { uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + id }) },
 			openReject(item) { this.rejectItem = item; this.rejectReason = '' },
 			submitReject() { if (!this.rejectReason.trim()) { uni.showToast({ title: '请填写拒绝理由', icon: 'none' }); return } this.audit(this.rejectItem, 'reject', this.rejectReason); this.rejectItem = null },
 			audit(item, action, reason) { var that = this; that.$Net.request({ url: that.$API.lostFoundAudit(), data: { token: that.token(), id: item.id, action: action, reason: reason }, method: 'post', dataType: 'json', success: function(res) { uni.showToast({ title: res.data.msg, icon: 'none' }); if (res.data.code === 1) that.loadItems() } }) },
+			changeStatus(item, action) { var that = this; that.$Net.request({ url: that.$API.lostFoundStatus(), data: { token: that.token(), id: item.id, action: action }, method: 'post', dataType: 'json', success: function(res) { uni.showToast({ title: res.data.msg, icon: 'none' }); if (res.data.code === 1) that.loadItems() } }) },
+			closeItem(item) { var that = this; uni.showModal({ title: '关闭互助', content: '关闭后将停止公开展示和交流。', success: function(res) { if (!res.confirm) return; that.$Net.request({ url: that.$API.lostFoundDelete(), data: { token: that.token(), id: item.id }, method: 'post', dataType: 'json', success: function(result) { uni.showToast({ title: result.data.msg, icon: 'none' }); if (result.data.code === 1) that.loadItems() } }) } }) },
 			categoryName(value) { return this.categories[Number(value)] || '其他帮助' },
+			statusName(value) { return ['待审核', '进行中', '已解决', '未通过', '已关闭'][Number(value)] || '未知状态' },
 			token() { if (localStorage.getItem('token')) return localStorage.getItem('token'); if (!localStorage.getItem('userinfo')) return ''; try { return JSON.parse(localStorage.getItem('userinfo')).token || '' } catch (error) { return '' } }
 		}
 	}
