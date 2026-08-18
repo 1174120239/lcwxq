@@ -285,6 +285,7 @@
 				owoList:[],
 				
 				chatLoading:null,
+				inboxSyncTimer:null,
 				pushRefreshHandler:null,
 				
 			}
@@ -320,9 +321,11 @@
 			var that = this
 			clearInterval(that.chatLoading);
 			that.chatLoading = null
+			that.stopInboxSync();
 			that.stopCampusThemeClock();
 		},
 		onUnload() {
+			this.stopInboxSync();
 			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility)
 			uni.$off(CAMPUS_UNREAD_EVENT, this.handleUnreadBadge)
 			this.stopCampusThemeClock();
@@ -387,10 +390,14 @@
 				that.token = localStorage.getItem('token');
 				that.messageLoading = true
 				if (that.type === 'chat' && that.privateChatEnabled) that.getMyChat(false);
-				else that.getInboxList(false);
+				else {
+					that.getInboxList(false);
+					that.startInboxSync();
+				}
 				refreshUnreadBadge(that, that.token)
 			}else{
 				that.token = ''
+				that.stopInboxSync();
 				clearUnreadBadge()
 				that.inboxList = []
 				that.chatList = []
@@ -517,6 +524,19 @@
 				if (!this.campusThemeTimer) return
 				clearTimeout(this.campusThemeTimer)
 				this.campusThemeTimer = null
+			},
+			startInboxSync() {
+				this.stopInboxSync()
+				this.inboxSyncTimer = setInterval(() => {
+					if (!this.token || this.type !== 'inbox') return
+					this.getInboxList(false)
+					refreshUnreadBadge(this, this.token)
+				}, 20000)
+			},
+			stopInboxSync() {
+				if (!this.inboxSyncTimer) return
+				clearInterval(this.inboxSyncTimer)
+				this.inboxSyncTimer = null
 			},
 			back(){
 				var that = this;
@@ -695,9 +715,12 @@
 				if(i=="chat" && !that.privateChatEnabled){
 					that.type = "inbox";
 					that.getInboxList(false);
+					that.startInboxSync();
 					return false;
 				}
 				that.type=i;
+				if (i === 'inbox') that.startInboxSync();
+				else that.stopInboxSync();
 				that.messageGeneration++;
 				that.page=1;
 				that.messageTotal = 0;
