@@ -1,5 +1,5 @@
 <template>
-	<view class="campus-page campus-home" :class="[AppStyle, {'campus-night': weatherTheme.isDark}]" :style="weatherThemeStyle">
+	<view class="campus-page campus-home" :class="[AppStyle, {'campus-night': weatherTheme.isDark, 'is-qixi-open': qixiVisible}]" :style="weatherThemeStyle">
 		<view class="home-ambient" :class="{'is-transitioning': themeTransitioning}" aria-hidden="true">
 			<view class="home-ambient-layer" :class="{'is-visible': activeAmbientLayer === 0}" :style="ambientLayerStyles[0]"></view>
 			<view class="home-ambient-layer" :class="{'is-visible': activeAmbientLayer === 1}" :style="ambientLayerStyles[1]"></view>
@@ -8,9 +8,12 @@
 
 		<view class="home-hero" :style="homeHeroStyle">
 			<view class="hero-main">
-				<view class="hero-copy">
+				<view class="hero-copy" :class="{'has-qixi-secret': qixiAvailable}" @tap="handleQixiTap">
 					<text class="hero-greeting">{{greetingText}}</text>
-					<text class="hero-subtitle">{{greetingSubtitle}}</text>
+					<view class="hero-subtitle-line">
+						<text class="hero-subtitle">{{greetingSubtitle}}</text>
+						<text v-if="qixiAvailable" class="qixi-secret-hint cuIcon-magic" aria-hidden="true"></text>
+					</view>
 				</view>
 				<!--  #ifdef H5 || APP-PLUS -->
 				<view class="hero-actions">
@@ -110,6 +113,8 @@
 				<view class="publish-sheet-actions"><view class="publish-action" @tap="postSpace(1)"><image src="../../static/page/square/photo.png" mode="aspectFit"></image><text>发动态</text></view><view class="publish-action" @tap="postSpace(5)"><image src="../../static/page/square/shop.png" mode="aspectFit"></image><text>校园互助</text></view></view>
 			</view></view>
 		</view>
+
+		<QixiEasterEgg :visible="qixiVisible" :night="weatherTheme.isDark" @close="closeQixiEasterEgg"></QixiEasterEgg>
 
 		<view v-if="false" class="header" :style="{overflow: 'hidden', paddingTop: StatusBar + 'px', backgroundColor: 'rgba(244, 248, 248, 0.96)'}">
 
@@ -495,6 +500,8 @@
 	import { bindCampusChromeScroll, handleCampusChromeScroll, resetCampusChromeScroll, unbindCampusChromeScroll, CAMPUS_CHROME_EVENT } from '@/utils/campusChrome.js'
 	import { shuffleQuestions } from '@/utils/questions.js'
 	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
+	import { isQixiEasterEggDate } from '@/utils/qixiEasterEgg.js'
+	import QixiEasterEgg from '@/components/qixi-easter-egg/qixi-easter-egg.vue'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
 	// #endif
@@ -645,10 +652,16 @@
 				lastHomeRefresh: 0,
 				deferredHomeTimer: null,
 				chromeProgress: 0,
+				qixiTapCount: 0,
+				qixiTapTimer: null,
+				qixiVisible: false,
 
 			}
 		},
 		computed: {
+			qixiAvailable() {
+				return isQixiEasterEggDate(new Date(this.themeClock))
+			},
 			homeHeroStyle() {
 				const progress = Math.max(0, Math.min(1, Number(this.chromeProgress) || 0))
 				return {
@@ -717,6 +730,7 @@
 				}
 			},
 			greetingText() {
+				if (this.qixiAvailable) return '七夕快乐。';
 				const hour = this.dongchangfuHour;
 				if (hour < 6) return '夜深了。';
 				if (hour < 11) return '上午好。';
@@ -725,6 +739,7 @@
 				return '晚上好。';
 			},
 			greetingSubtitle() {
+				if (this.qixiAvailable) return '爱自己是终身浪漫的开始';
 				const hour = this.dongchangfuHour;
 				if (hour < 6) return '夜色温柔，注意休息。';
 				if (hour < 11) return '元气满满，开启校园新一天。';
@@ -909,6 +924,7 @@
 			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
 			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopThemeClock();
+			this.resetQixiEasterEgg();
 		},
 		onUnload() {
 			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
@@ -919,8 +935,32 @@
 			this.themeSwapTimer = null;
 			clearTimeout(this.themeTransitionTimer);
 			this.themeTransitionTimer = null;
+			this.resetQixiEasterEgg();
 		},
 		methods: {
+			handleQixiTap() {
+				if (!this.qixiAvailable || this.qixiVisible) return
+				clearTimeout(this.qixiTapTimer)
+				this.qixiTapCount += 1
+				if (this.qixiTapCount >= 7) {
+					this.qixiTapCount = 0
+					this.qixiVisible = true
+					return
+				}
+				this.qixiTapTimer = setTimeout(() => {
+					this.qixiTapCount = 0
+					this.qixiTapTimer = null
+				}, 3000)
+			},
+			closeQixiEasterEgg() {
+				this.qixiVisible = false
+			},
+			resetQixiEasterEgg() {
+				clearTimeout(this.qixiTapTimer)
+				this.qixiTapTimer = null
+				this.qixiTapCount = 0
+				this.qixiVisible = false
+			},
 			unreadNum() {
 				refreshUnreadBadge(this, this.token, (count) => {
 					this.noticeSum = count
@@ -2539,7 +2579,8 @@
 		components: {
 			waves,
 			Tabbar,
-			metas
+			metas,
+			QixiEasterEgg
 		},
 		// #endif
 
@@ -2547,6 +2588,7 @@
 
 		components: {
 			waves,
+			QixiEasterEgg,
 			'metas': {
 				// 组件选项
 			}
@@ -2556,6 +2598,7 @@
 		// #ifdef MP
 		components: {
 			waves,
+			QixiEasterEgg,
 			'metas': {
 				// 组件选项
 			}
@@ -2565,6 +2608,33 @@
 </script>
 
 <style scoped>
+	.hero-subtitle-line {
+		display: flex;
+		align-items: center;
+		gap: 12rpx;
+	}
+
+	.qixi-secret-hint {
+		display: inline-flex;
+		width: 34rpx;
+		height: 34rpx;
+		align-items: center;
+		justify-content: center;
+		color: #d94f78;
+		font-size: 25rpx;
+		text-shadow: 0 0 14rpx rgba(255, 255, 255, 0.74);
+		animation: qixiHintGlow 1.8s ease-in-out infinite alternate;
+	}
+
+	@keyframes qixiHintGlow {
+		from { opacity: 0.62; transform: rotate(-8deg) scale(0.92); }
+		to { opacity: 1; transform: rotate(8deg) scale(1.08); }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.qixi-secret-hint { animation: none; }
+	}
+
 	.qa-home-section {
 		margin: 22rpx 0 8rpx;
 	}
@@ -2833,6 +2903,11 @@
 		overflow-x: hidden;
 	}
 
+	/* Keep the modal above uni-app's root-level H5 tabbar while it is open. */
+	.campus-home.is-qixi-open {
+		z-index: 1001;
+	}
+
 	.home-ambient {
 		position: fixed;
 		inset: 0;
@@ -2909,12 +2984,20 @@
 		transition: color 520ms ease;
 	}
 
+	.hero-copy.has-qixi-secret .hero-greeting {
+		color: #d94f78;
+	}
+
 	.hero-subtitle {
 		margin-top: 24rpx;
 		font-size: 28rpx;
 		line-height: 1.55;
 		color: var(--weather-muted, rgba(23, 39, 42, 0.82));
 		transition: color 520ms ease;
+	}
+
+	.hero-copy.has-qixi-secret .hero-subtitle {
+		color: #a94465;
 	}
 
 	.hero-actions {
