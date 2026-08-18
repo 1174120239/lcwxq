@@ -10,9 +10,11 @@ ARCHIVE=
 EXPECTED_SHA256=
 COMPONENT=
 VERIFY_ONLY=false
+RUN_MIGRATIONS=false
+MIGRATION_014_SHA256=6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271
 
 usage() {
-    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR]"
+    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations]"
     echo "       $0 --verify --component COMPONENT"
 }
 
@@ -23,11 +25,7 @@ while [[ $# -gt 0 ]]; do
         --remote-root) REMOTE_ROOT=${2:-}; shift 2 ;;
         --component) COMPONENT=${2:-}; shift 2 ;;
         --verify) VERIFY_ONLY=true; shift ;;
-        --run-migrations)
-            echo 'Database migrations are not part of the generic deploy entrypoint.' >&2
-            echo 'Use the reviewed migration script from backend/deploy/production separately.' >&2
-            exit 30
-            ;;
+        --run-migrations) RUN_MIGRATIONS=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -66,6 +64,155 @@ validate_jar() {
         echo 'No JAR validator is available on the server.' >&2
         return 2
     fi
+}
+
+read_property() {
+    local key="$1"
+    sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" /opt/application.properties \
+        | tail -n 1 | tr -d '\r'
+}
+
+configure_mysql_014() {
+    local db_url db_target db_hostport db_user db_password escaped_user escaped_password
+    [[ -r /opt/application.properties ]] || {
+        echo 'Production database configuration is not readable.' >&2
+        return 2
+    }
+    db_url=$(read_property 'spring\.datasource\.url')
+    db_user=$(read_property 'spring\.datasource\.username')
+    db_password=$(read_property 'spring\.datasource\.password')
+    [[ "$db_url" == jdbc:mysql://* ]] || { echo 'Unsupported production JDBC URL.' >&2; return 2; }
+    [[ -n "$db_user" ]] || { echo 'Production database username is empty.' >&2; return 2; }
+
+    db_target=${db_url#jdbc:mysql://}
+    db_target=${db_target%%\?*}
+    db_hostport=${db_target%%/*}
+    DB_NAME_014=${db_target#*/}
+    [[ "$DB_NAME_014" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'Unsafe production database name.' >&2; return 2; }
+    if [[ "$db_hostport" == *:* ]]; then
+        DB_HOST_014=${db_hostport%%:*}
+        DB_PORT_014=${db_hostport##*:}
+    else
+        DB_HOST_014=$db_hostport
+        DB_PORT_014=3306
+    fi
+    [[ -n "$DB_HOST_014" && "$DB_PORT_014" =~ ^[0-9]+$ ]] || {
+        echo 'Invalid production database address.' >&2
+        return 2
+    }
+
+    MYSQL_CNF_014="$incoming/mysql-014.cnf"
+    escaped_user=${db_user//\\/\\\\}
+    escaped_user=${escaped_user//\"/\\\"}
+    escaped_password=${db_password//\\/\\\\}
+    escaped_password=${escaped_password//\"/\\\"}
+    umask 077
+    printf '[client]\nuser="%s"\npassword="%s"\n' "$escaped_user" "$escaped_password" > "$MYSQL_CNF_014"
+    MYSQL_BASE_ARGS_014=(
+        "--defaults-extra-file=$MYSQL_CNF_014"
+        --protocol=tcp
+        --host="$DB_HOST_014"
+        --port="$DB_PORT_014"
+    )
+    mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" \
+        --batch --skip-column-names -e 'SELECT 1' >/dev/null
+}
+
+migration_014_valid() {
+    local table_count engine_count config_count unique_count unique_columns public_columns receiver_columns
+    table_count=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_lost_found_items','starfree_lost_found_actions','starfree_lost_found_comments','starfree_lost_found_contact_grants','starfree_lost_found_config')")
+    [[ "$table_count" == 5 ]] || return 1
+    engine_count=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND engine='InnoDB' AND table_name IN ('starfree_lost_found_items','starfree_lost_found_actions','starfree_lost_found_comments','starfree_lost_found_contact_grants','starfree_lost_found_config')")
+    [[ "$engine_count" == 5 ]] || return 1
+    config_count=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        'SELECT COUNT(*) FROM starfree_lost_found_config WHERE id=1')
+    [[ "$config_count" == 1 ]] || return 1
+    unique_count=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='starfree_lost_found_contact_grants' AND index_name='uk_lost_found_contact_grant' AND non_unique=0")
+    [[ "$unique_count" == 4 ]] || return 1
+    unique_columns=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='starfree_lost_found_contact_grants' AND index_name='uk_lost_found_contact_grant' AND non_unique=0")
+    [[ "$unique_columns" == item_id,comment_id,sender_uid,receiver_uid ]] || return 1
+    public_columns=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='starfree_lost_found_items' AND index_name='idx_lost_found_public'")
+    [[ "$public_columns" == status,kind,category,modified ]] || return 1
+    receiver_columns=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='starfree_lost_found_contact_grants' AND index_name='idx_lost_found_contact_receiver'")
+    [[ "$receiver_columns" == receiver_uid,item_id,created ]]
+}
+
+backup_migration_014() {
+    MIGRATION_014_EXISTING=()
+    mapfile -t MIGRATION_014_EXISTING < <(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_lost_found_items','starfree_lost_found_actions','starfree_lost_found_comments','starfree_lost_found_contact_grants','starfree_lost_found_config') ORDER BY table_name")
+    if (( ${#MIGRATION_014_EXISTING[@]} > 0 )); then
+        printf '%s\n' "${MIGRATION_014_EXISTING[@]}" \
+            > "$backup_dir/migration-014-preexisting-tables.txt"
+        mysqldump "${MYSQL_BASE_ARGS_014[@]}" --single-transaction --skip-lock-tables \
+            "$DB_NAME_014" "${MIGRATION_014_EXISTING[@]}" \
+            > "$backup_dir/migration-014-existing-tables.sql"
+        [[ -s "$backup_dir/migration-014-existing-tables.sql" ]] || {
+            echo 'Migration 014 database backup is empty.' >&2
+            return 2
+        }
+        sha256sum "$backup_dir/migration-014-existing-tables.sql" \
+            > "$backup_dir/migration-014-existing-tables.sql.sha256"
+    else
+        : > "$backup_dir/migration-014-preexisting-tables.txt"
+        touch "$backup_dir/migration-014.no-existing-tables"
+    fi
+}
+
+rollback_migration_014() {
+    echo 'Migration 014 failed validation; restoring its exact pre-migration table set.' >&2
+    mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -e \
+        'DROP TABLE IF EXISTS starfree_lost_found_contact_grants,starfree_lost_found_comments,starfree_lost_found_actions,starfree_lost_found_items,starfree_lost_found_config'
+    if [[ -s "$backup_dir/migration-014-existing-tables.sql" ]]; then
+        mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" \
+            < "$backup_dir/migration-014-existing-tables.sql"
+    fi
+    echo 'migration_014_rollback=success' >&2
+}
+
+apply_migration_014() {
+    local migration_file="$incoming/014_lost_and_found.sql" migration_hash existing_count
+    for required in mysql mysqldump sha256sum; do
+        command -v "$required" >/dev/null 2>&1 || {
+            echo "Required migration command not found: $required" >&2
+            return 2
+        }
+    done
+    [[ -r "$migration_file" ]] || { echo 'Migration 014 is missing from the release.' >&2; return 2; }
+    migration_hash=$(sha256sum "$migration_file" | awk '{print $1}')
+    [[ "$migration_hash" == "$MIGRATION_014_SHA256" ]] || {
+        echo 'Migration 014 SHA-256 mismatch.' >&2
+        return 2
+    }
+    configure_mysql_014 || return
+    existing_count=$(mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" -Nse \
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_lost_found_items','starfree_lost_found_actions','starfree_lost_found_comments','starfree_lost_found_contact_grants','starfree_lost_found_config')")
+    [[ "$existing_count" =~ ^[0-5]$ ]] || {
+        echo "Unexpected campus mutual-aid table count: $existing_count" >&2
+        return 2
+    }
+    backup_migration_014 || return
+    if [[ "$existing_count" == 5 ]] && migration_014_valid; then
+        echo 'migration_014=already_present'
+        echo "migration_014_backup=$backup_dir"
+        return 0
+    fi
+    if ! mysql "${MYSQL_BASE_ARGS_014[@]}" "$DB_NAME_014" < "$migration_file"; then
+        rollback_migration_014
+        return 20
+    fi
+    if ! migration_014_valid; then
+        rollback_migration_014
+        return 21
+    fi
+    echo 'migration_014=applied'
+    echo "migration_014_backup=$backup_dir"
 }
 
 wait_for_component() {
@@ -136,11 +283,22 @@ case "$COMPONENT" in
     replacement-backend|legacy-api|admin|all) ;;
     *) echo "Unsupported component: $COMPONENT" >&2; exit 22 ;;
 esac
+if [[ "$RUN_MIGRATIONS" == true && "$COMPONENT" != replacement-backend ]]; then
+    echo 'Migration 014 is only allowed for replacement-backend.' >&2
+    exit 30
+fi
 release_dir="$REMOTE_ROOT/releases/$COMMIT/$COMPONENT"
 backup_dir="$REMOTE_ROOT/backups/$(date +%Y%m%d-%H%M%S)-$COMMIT-$COMPONENT"
 mkdir -p "$release_dir" "$backup_dir"
 cp -p "$ARCHIVE" "$release_dir/release.tgz"
 printf '%s  release.tgz\n' "$actual_sha256" > "$release_dir/SHA256SUMS"
+
+if [[ "$RUN_MIGRATIONS" == true ]]; then
+    if ! apply_migration_014; then
+        echo "backup=$backup_dir" >&2
+        exit 25
+    fi
+fi
 
 rollback_component() {
     local component="$1"

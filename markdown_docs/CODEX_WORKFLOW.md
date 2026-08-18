@@ -107,7 +107,7 @@ setx LCXQY_SSH_KEY "$env:USERPROFILE\.ssh\lcxqy_deploy"
 .\deploy\verify-feature-baseline.ps1
 ```
 
-数据库迁移不属于普通一键发布。只有先按 `DEPLOYMENT_GUIDE.md` 审查迁移和备份数据库后，才可在独立维护任务中执行；发布参数 `-RunMigrations` 会故意中止并提醒维护者，不会静默修改数据库。
+数据库迁移不属于普通一键发布。只有先按 `DEPLOYMENT_GUIDE.md` 审查迁移和备份数据库后，才可在独立维护任务中执行。当前 `-RunMigrations` 仅对白名单中的校园互助迁移 014 和 `replacement-backend` 生效；入口会固定校验 SQL SHA-256、备份已有互助表并验证结构。任何其他组件或迁移请求都会在生产变更前中止。
 
 ## GitHub Actions
 

@@ -11,6 +11,7 @@ param(
     [switch]$DryRun,
     [switch]$ConfirmProduction,
     [switch]$RunMigrations,
+    [switch]$UseExistingArtifact,
     [switch]$BootstrapServer
 )
 
@@ -18,6 +19,9 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $serverEntrypoint = Join-Path $PSScriptRoot 'server/lcxqy-deploy.sh'
 $rollbackEntrypoint = Join-Path $PSScriptRoot 'server/lcxqy-rollback.sh'
+$mutualAidCommit = '8f60799892cd5568dce98504a14246d3183300cf'
+$mutualAidJarSha256 = '56ec4591466d5ccef862c48dbf14d90f2ddc1fd6799780609f6ee28cab60041b'
+$migration014Sha256 = '6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271'
 
 function Invoke-Git([string[]]$Arguments) {
     $result = & git -C $repoRoot @Arguments 2>&1
@@ -73,8 +77,11 @@ if ($remoteCommit -ne $commit) {
     throw "The release commit must already be pushed to origin/$branch. local=$commit, remote=$remoteCommit"
 }
 
-if ($RunMigrations) {
-    throw 'Database migrations are not supported by the generic deploy. Follow DEPLOYMENT_GUIDE.md in a separate maintenance task.'
+if ($RunMigrations -and $Component -ne 'replacement-backend') {
+    throw 'Migration 014 is only allowed with Component=replacement-backend.'
+}
+if ($UseExistingArtifact -and $Component -ne 'replacement-backend') {
+    throw 'UseExistingArtifact is only allowed with Component=replacement-backend.'
 }
 if (-not $DryRun -and -not $ConfirmProduction) {
     $DryRun = $true
@@ -102,6 +109,19 @@ try {
         $utf8NoBom
     )
 
+    if ($RunMigrations) {
+        $migration = Join-Path $repoRoot 'backend/database/migrations/014_lost_and_found.sql'
+        if (-not (Test-Path -LiteralPath $migration -PathType Leaf)) {
+            throw "Migration 014 is missing: $migration"
+        }
+        $migrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $migration).Hash.ToLowerInvariant()
+        if ($migrationHash -ne $migration014Sha256) {
+            throw "Migration 014 SHA-256 mismatch: $migrationHash"
+        }
+        Copy-Item -LiteralPath $migration -Destination (Join-Path $stage '014_lost_and_found.sql')
+        Write-Host "migration_014_sha256=$migrationHash"
+    }
+
     $effectiveComponents = if ($Component -eq 'all') {
         @('replacement-backend', 'legacy-api', 'admin')
     } else {
@@ -110,22 +130,37 @@ try {
     foreach ($item in $effectiveComponents) {
         switch ($item) {
             'replacement-backend' {
-                $maven = Resolve-Maven
                 $backend = Join-Path $repoRoot 'backend/starfree-replacement'
-                Push-Location $backend
-                try {
-                    Write-Host 'Running replacement backend tests...'
-                    & $maven -q test
-                    if ($LASTEXITCODE -ne 0) { throw 'Replacement backend tests failed.' }
-                    & $maven -q package -DskipTests
-                    if ($LASTEXITCODE -ne 0) { throw 'Replacement backend package failed.' }
-                } finally {
-                    Pop-Location
+                if ($UseExistingArtifact) {
+                    $backendChanges = Invoke-Git @(
+                        'diff', '--name-only', "$mutualAidCommit..$commit", '--',
+                        'backend/starfree-replacement'
+                    )
+                    if ($backendChanges) {
+                        throw "The prebuilt JAR cannot be reused because backend sources changed after $mutualAidCommit.`n$backendChanges"
+                    }
+                } else {
+                    $maven = Resolve-Maven
+                    Push-Location $backend
+                    try {
+                        Write-Host 'Running replacement backend tests...'
+                        & $maven -q test
+                        if ($LASTEXITCODE -ne 0) { throw 'Replacement backend tests failed.' }
+                        & $maven -q package -DskipTests
+                        if ($LASTEXITCODE -ne 0) { throw 'Replacement backend package failed.' }
+                    } finally {
+                        Pop-Location
+                    }
                 }
                 $jar = Get-ChildItem (Join-Path $backend 'target/*.jar') |
                     Where-Object { $_.Name -notmatch 'original' } |
                     Select-Object -First 1
                 if (-not $jar) { throw 'Replacement backend JAR not found.' }
+                $jarHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $jar.FullName).Hash.ToLowerInvariant()
+                if ($UseExistingArtifact -and $jarHash -ne $mutualAidJarSha256) {
+                    throw "Prebuilt replacement JAR SHA-256 mismatch: $jarHash"
+                }
+                Write-Host "replacement_jar_sha256=$jarHash"
                 Copy-Item $jar.FullName (Join-Path $stage 'replacement-backend.jar')
             }
             'legacy-api' {
@@ -184,11 +219,25 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Bootstrap deploy entrypoint upload failed.' }
         & scp @scpOptions $rollbackEntrypoint "$remote`:/tmp/lcxqy-rollback.sh"
         if ($LASTEXITCODE -ne 0) { throw 'Bootstrap rollback entrypoint upload failed.' }
-        & ssh @sshOptions $remote 'sudo install -m 0755 /tmp/lcxqy-deploy.sh /usr/local/sbin/lcxqy-deploy && sudo install -m 0755 /tmp/lcxqy-rollback.sh /usr/local/sbin/lcxqy-rollback'
+        $bootstrapCommand = @'
+set -e
+sudo bash -n /tmp/lcxqy-deploy.sh
+sudo bash -n /tmp/lcxqy-rollback.sh
+stamp=$(date +%Y%m%d-%H%M%S)
+backup=/srv/lcxqy/backups/control-entry-$stamp
+sudo mkdir -p "$backup"
+sudo cp -p /usr/local/sbin/lcxqy-deploy "$backup/lcxqy-deploy" 2>/dev/null || true
+sudo cp -p /usr/local/sbin/lcxqy-rollback "$backup/lcxqy-rollback" 2>/dev/null || true
+sudo install -m 0755 /tmp/lcxqy-deploy.sh /usr/local/sbin/lcxqy-deploy
+sudo install -m 0755 /tmp/lcxqy-rollback.sh /usr/local/sbin/lcxqy-rollback
+echo "control_entry_backup=$backup"
+'@
+        & ssh @sshOptions $remote $bootstrapCommand
         if ($LASTEXITCODE -ne 0) { throw 'Bootstrap installation failed.' }
     }
 
-    & ssh @sshOptions $remote "sudo /usr/local/sbin/lcxqy-deploy --archive $remoteName --expected-sha256 $archiveHash --remote-root $RemoteRoot"
+    $migrationArgument = if ($RunMigrations) { ' --run-migrations' } else { '' }
+    & ssh @sshOptions $remote "sudo /usr/local/sbin/lcxqy-deploy --archive $remoteName --expected-sha256 $archiveHash --remote-root $RemoteRoot$migrationArgument"
     if ($LASTEXITCODE -ne 0) { throw 'Server deployment failed; inspect server output and backup path.' }
     & ssh @sshOptions $remote "rm -f $remoteName"
     if ($LASTEXITCODE -ne 0) { Write-Warning "Deployment succeeded, but the temporary upload remains at $remoteName" }

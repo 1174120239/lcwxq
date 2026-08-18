@@ -11,6 +11,8 @@
 | `deploy/install.sh` | PHP 语法检查、备份和发布脚本 |
 | `deploy/nginx-admin.conf` | Nginx 示例配置，证书和 PHP-FPM 版本需按服务器调整 |
 
+后台“功能设置 → 校园互助”位于 `source/admin/mutualAid.php`，读取迁移 014 的共享表并提供配置、审核和状态管理；它不展示联系方式，也不会替代迁移脚本。
+
 服务器导出的程序文件不包含真实 `Config_DB.php`、`.user.ini`、日志、缓存或用户上传内容。后台程序原有版权和许可证文件位于 `source/README.md` 与 `source/LICENSE.md`，二次开发必须遵守其中条款。
 
 ## 运行要求

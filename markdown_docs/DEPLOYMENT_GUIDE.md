@@ -1,6 +1,6 @@
 # 生产部署与回滚手册
 
-> 更新日期：2026-08-15
+> 更新日期：2026-08-16
 >
 > 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
@@ -58,7 +58,16 @@
 
 专用用户初始化脚本为 `deploy/server/bootstrap-deploy-user.sh`，它只接受 Ed25519 公钥文件，并在 `/etc/sudoers.d/lcxqy-deploy` 中写入受限规则。必须先在第二个终端验证新账号可登录，再考虑关闭旧的 root 密码登录；不要在同一个操作里同时改账号、防火墙和服务部署。
 
-通用发布入口不执行数据库迁移，也不修改 Nginx。传入 `-RunMigrations` 会在任何生产变更前中止；迁移继续按本手册的对应章节单独审查、备份和执行。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+通用发布入口默认不执行数据库迁移，也不修改 Nginx。当前唯一例外是经过明确授权的校园互助迁移 014：只允许 `-Component replacement-backend -RunMigrations`，入口校验固定 SQL SHA-256、定向备份已有 `starfree_lost_found_%` 表、执行或识别已完成迁移，并核对五张 InnoDB 表、配置行、联系方式唯一键和列表/接收者索引。其他组件或其他迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+
+~~~powershell
+.\deploy\publish-to-server.ps1 `
+  -Component replacement-backend `
+  -ConfirmProduction `
+  -RunMigrations
+~~~
+
+`-UseExistingArtifact` 只用于已经在同一维护任务中完成测试和构建、且 SHA-256 与发布脚本固定值一致的互助 JAR。入口同时确认 `8f60799892cd5568dce98504a14246d3183300cf` 之后没有后端源码变化；它不能作为日常跳过构建的通用参数。
 
 ## 3. 从 GitHub 全新部署
 
@@ -124,6 +133,12 @@ curl -fsS http://127.0.0.1:8081/
 
 安装脚本会再次校验 JAR、备份旧 JAR、安装 systemd unit、拒绝 `CHANGE_ME` 配置，并确保旧 API 只监听 `127.0.0.1:8081`。首次运行若配置文件不存在，会只创建模板并退出，填完配置后再次运行即可。
 
+若生产已运行仓库核验哈希对应的 `/opt/StarFreeApi.jar`，但仍是从 `/opt` 以
+`java -jar StarFreeApi.jar` 手工启动，可使用 `deploy/server/adopt-legacy-service.sh` 接管。
+该脚本只接受仓库内已审查的 start/unit 文件，不覆盖 JAR 或配置；它先备份 JAR、已有服务文件和
+原进程信息，再向唯一精确匹配进程发送 SIGTERM。systemd 启动或健康检查失败时会恢复原文件并按
+原工作目录重新启动旧 JAR。
+
 ### 3.5 部署 PHP admin
 
 先填写模板：
@@ -142,6 +157,8 @@ sudo TARGET_DIR=/www/wwwroot/admin.lcxqy.cn bash admin/starfree-admin/deploy/ins
 - `$api_key` 与旧 API 的 `webinfo.key` 完全相同。
 - `$db_prefix`、`$redis_prefix` 与现有数据库和 Redis 数据一致。
 - `$ADMIN_PATH` 与后台访问路径一致。
+
+迁移 014 已执行后，后台菜单“功能设置 → 校园互助”由 `admin/mutualAid.php` 提供配置和互助信息运营操作。该页面随 `admin` 组件发布，不执行数据库迁移；发布后应在登录态下检查菜单、设置读取和一条只读列表筛选。审核、解决、重开和关闭按钮只在明确的状态转换下出现，并把操作写入互助审计表。
 
 生产站点的 `.user.ini` 可能带 immutable 属性。admin 安装脚本会保留目标目录中已有的
 `.user.ini`，在复制文件前用 `lsattr` 检查属性；写入 PHP 会话安全配置时会临时执行
@@ -176,8 +193,9 @@ curl -skI https://admin.example.com/
 4. 新后端 `/health` 和 `/health/live`。
 5. API 域名匿名读取接口。
 6. 一个登录态读取接口。
-7. 后台登录、帖子读取和一个可回滚的设置读取。
-8. 查看 systemd、PHP-FPM、Nginx 日志，没有持续错误后再放量。
+7. 后台登录、帖子读取和一个可回滚的设置读取；同时检查“校园互助”页面配置读取和互助列表筛选。
+8. 生产验收不创建测试信息、评论或联系方式授权。
+9. 查看 systemd、PHP-FPM、Nginx 日志，没有持续错误后再放量。
 
 ## 4. 服务器文件
 
@@ -252,6 +270,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 011 | 011_dynamic_core_extensions.sql | 用户可选资料、动态投票、AI 审核配置/队列和动态分析事件表 |
 | 012 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和展示时效字段及索引 |
 | 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
+| 014 | 014_lost_and_found.sql | 校园互助信息、评论、QQ 定向授权、审核日志和功能配置 |
 
 规则：
 
@@ -305,6 +324,14 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 并把旧动态 AI 记录复制到统一历史。上线顺序必须是定向备份 `starfree_ai_moderation_config`、
 `starfree_space_ai_reviews`、`starfree_space` 和三张问答表，执行 013，再同时发布 replacement JAR、
 PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空上线后产生的审核历史。
+
+014 新增五张独立 InnoDB 表，不修改旧商城、订单、积分或用户表。执行前查询并定向备份已存在的
+`starfree_lost_found_%` 表；执行后核对配置行 `id=1`、联系方式授权唯一键和列表/接收者索引，再部署
+匹配的 replacement JAR 与 App。先在本机 18082 验证公开列表、Lv 门槛、审核、评论删除撤销授权和
+接收者专属 QQ 投影，最后运行 `promote-mutual-aid-routes.sh` 切换 16 条精确路由。回滚 JAR 或 Nginx
+时保留新增表以及上线后产生的互助、评论和审计数据；普通开发或组件发布不得顺带执行 014。
+受控入口只在迁移执行或结构验收本身失败时删除这五张隔离表并恢复本次定向备份；迁移成功后若 JAR
+健康检查失败，只回滚 JAR 并保留 014 表。发布输出中的 `migration_014_backup` 是数据库定向备份路径。
 
 001 可使用：
 
@@ -364,7 +391,7 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 - 先验证本机 18082，再切公网。
 - 所有修改先备份 include，执行 nginx -t 后才能 reload。
 
-仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
+仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；校园互助的 16 个 `SFreeLostFound/*` 接口使用 `promote-mutual-aid-routes.sh`，且必须先完成迁移 014、replacement JAR 和 App 验证；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
 ### 9.2 安全版本切流
 
