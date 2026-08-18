@@ -40,6 +40,14 @@
 								<text class="publish-option-arrow cuIcon-right"></text>
 							</view>
 						</view>
+						<view class="publish-option publish-option-mutual-aid" @tap.stop="goPublish('/pages/user/addshop')">
+							<view class="publish-option-icon mutual-aid-icon"><text class="cuIcon-friendadd"></text></view>
+							<view class="publish-option-copy">
+								<text class="publish-option-label">发布求助信息</text>
+								<text class="publish-option-desc">寻找帮助，也可以主动提供帮助</text>
+							</view>
+							<text class="publish-option-arrow cuIcon-right"></text>
+						</view>
 						<text class="publish-option-hint">匿名动态不展示真实身份，请遵守社区规范</text>
 					</view>
 					</view>
@@ -570,6 +578,25 @@
 		text-align: center;
 	}
 
+	.publish-option-mutual-aid {
+		display: grid;
+		grid-template-columns: 64rpx minmax(0, 1fr) 28rpx;
+		align-items: center;
+		gap: 18rpx;
+		min-height: 112rpx;
+		margin-top: 16rpx;
+		padding: 16rpx 22rpx 16rpx 18rpx;
+		border-color: rgba(139, 195, 162, 0.7);
+		background: #f1f8f4;
+		transition-delay: 220ms;
+	}
+
+	.publish-option-mutual-aid .publish-option-icon {
+		width: 64rpx;
+		height: 64rpx;
+		font-size: 30rpx;
+	}
+
 	.publish-option-grid .publish-option-secondary:first-child {
 		transition-delay: 110ms;
 	}
@@ -614,6 +641,12 @@
 		border-color: rgba(218, 188, 128, 0.76);
 		background: rgba(255, 245, 226, 0.96);
 		color: #b88b4d;
+	}
+
+	.publish-option-icon.mutual-aid-icon {
+		border-color: rgba(109, 184, 141, 0.7);
+		background: rgba(224, 245, 233, 0.94);
+		color: #287f5d;
 	}
 
 	.publish-option-copy {
@@ -719,6 +752,11 @@
 		border-color: rgba(113, 177, 151, 0.28);
 		background: #263a35;
 		box-shadow: 0 14rpx 32rpx rgba(0, 0, 0, 0.2);
+	}
+
+	.publish-system.is-night .publish-option-mutual-aid {
+		border-color: rgba(104, 169, 132, 0.28);
+		background: #26352f;
 	}
 
 	.publish-system.is-night .publish-option-icon {
