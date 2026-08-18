@@ -184,9 +184,9 @@ form_post("SFreeUsers/userRegister", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；问答通知额外返回 `answerId`，`qaComment` 返回 `commentId`，可从消息中心直接定位到回答和评论；动态点赞不产生站内信。 |
+| `SFreeUsers/inbox` | GET/POST / token | `type,page,limit` | 公网新 | 读取不会自动设为已读；`spaceComment` 表示动态作者收到的评论或评论回复，`value` 是原动态 id，`cid` 是新动态评论 id；问答通知额外返回 `answerId`，`qaComment` 返回 `commentId`，可从消息中心直接定位到回答和评论；`lostFoundComment` 表示校园互助评论/回复，`lostFoundContact` 表示有人定向分享了联系方式，二者的 `value` 是互助信息 id、`cid` 是评论 id，并可从消息中心打开互助详情；动态点赞不产生站内信。 |
 | `SFreeUsers/unreadNum` | GET/POST / token | `token` | 公网新 | 不包括旧聊天未读数。 |
-| `SFreeUsers/setRead` | GET/POST / token | `id,type` | 公网新 | 传 `id` 时只标记当前用户的该条通知；未传 `id` 时支持 `all/comment/finance/system/fan` 批量已读，`comment` 同时标记文章评论和动态评论（`spaceComment`）；chat 为历史兼容，返回 0；可重复调用。 |
+| `SFreeUsers/setRead` | GET/POST / token | `id,type` | 公网新 | 传 `id` 时只标记当前用户的该条通知；未传 `id` 时支持 `all/comment/finance/system/fan` 批量已读，`comment` 同时标记文章评论、动态评论（`spaceComment`）和校园互助评论/联系方式提醒（`lostFoundComment`、`lostFoundContact`）；chat 为历史兼容，返回 0；可重复调用。 |
 | `SFreeUsers/sendUser` | GET/POST / administrator | `uid,text` | 代码新/公网旧 | 写持久化 system inbox，不保证调用推送厂商。 |
 | `SFreeUsers/follow` | GET/POST / token | `touid,type` | 旧端 | `type=1` 关注、`0` 取消；首次关注写粉丝通知。 |
 | `SFreeUsers/isFollow` | GET/POST / token | `touid` | 旧端 | 已关注为 `code=1`，未关注为 `code=0`，不是 `data` 布尔值。 |
@@ -453,9 +453,9 @@ form_post("SFreeSpace/spaceList", {
 | `SFreeLostFound/itemManage` | GET/POST / token | `token,status,uid,page,limit` | 代码新 | 普通用户强制只读自己的数据；staff 可按 uid/status 管理。 |
 | `SFreeLostFound/itemAudit` | GET/POST / staff | `token,id,action=approve/reject,reason` | 代码新 | 通过只接受待审/已拒绝，拒绝只接受待审/进行中且理由必填；状态变化写 append-only audit，并尽力发送站内通知。 |
 | `SFreeLostFound/commentList` | GET/POST / 无 | `itemId` | 代码新 | 公开树形评论；响应永不包含 QQ、邮箱或联系方式授权状态。 |
-| `SFreeLostFound/commentAdd` | GET/POST / Lv 门槛 | `token,itemId,parentId,text` | 代码新 | 只允许未过期 active 信息；评论 2..1000 字，10 秒重复拦截。 |
+| `SFreeLostFound/commentAdd` | GET/POST / Lv 门槛 | `token,itemId,parentId,text` | 代码新 | 只允许未过期 active 信息；评论 2..1000 字，10 秒重复拦截；成功后向互助发布者发送站内消息、UniPush（已配置时）和邮件（SMTP 已配置时），回复还通知被回复评论者。 |
 | `SFreeLostFound/commentDelete` | GET/POST / owner/staff | `token,commentId` | 代码新 | 软删除评论，同时撤销附着在该评论上的联系方式授权。 |
-| `SFreeLostFound/contactShare` | GET/POST / Lv 门槛 | `token,itemId,commentId` | 代码新 | 单向授权；发布者和该评论作者之间有效。QQ 从发送者绑定的 `@qq.com` 邮箱解析，不接受客户端 QQ/receiverUid。 |
+| `SFreeLostFound/contactShare` | GET/POST / Lv 门槛 | `token,itemId,commentId` | 代码新 | 单向授权；发布者和该评论作者之间有效。QQ 从发送者绑定的 `@qq.com` 邮箱解析，不接受客户端 QQ/receiverUid；成功后仅向接收者发送站内消息、UniPush（已配置时）和不含 QQ 明文的邮件提醒。 |
 | `SFreeLostFound/contactAccess` | GET/POST / Lv 门槛 | `token,itemId` | 代码新 | 只向当前接收者返回收到的 QQ；发送者投影仅含“已发送”，不回显 QQ。其他用户无权读取。 |
 | `SFreeLostFound/configManage` | GET/POST / staff | `token` | 代码新 | 管理端读取完整互助设置。 |
 | `SFreeLostFound/configSave` | GET/POST / administrator | `token,params` | 代码新 | 设置开关、最低等级、审核、QQ 授权、每日上限和有效期；完全免费与私密可见性不是可配置项。 |
