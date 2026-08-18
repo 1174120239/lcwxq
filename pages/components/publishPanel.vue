@@ -40,7 +40,7 @@
 								<text class="publish-option-arrow cuIcon-right"></text>
 							</view>
 						</view>
-						<view class="publish-option publish-option-mutual-aid" @tap.stop="goPublish('/pages/user/addshop')">
+						<view class="publish-option publish-option-mutual-aid" @tap.stop="goPublish('/pages/user/addshop?returnTo=mutualAidList')">
 							<view class="publish-option-icon mutual-aid-icon"><text class="cuIcon-friendadd"></text></view>
 							<view class="publish-option-copy">
 								<text class="publish-option-label">发布求助信息</text>

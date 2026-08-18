@@ -121,6 +121,7 @@
 				showCategorySheet: false,
 				showExitModal: false,
 				submitSuccess: false,
+				returnToMutualAidList: false,
 				hud: { visible: false, type: 'loading', text: '' },
 				form: { kind: 1, category: 1, title: '', location: '', imageUrl: '', description: '' }
 			}
@@ -136,6 +137,7 @@
 			}
 			this.editing = options.type === 'edit'
 			this.id = Number(options.id || 0)
+			this.returnToMutualAidList = options.returnTo === 'mutualAidList' || getCurrentPages().length <= 1
 			if (this.editing && !this.id) {
 				uni.showToast({ title: '原商城内容已停用', icon: 'none' })
 				this.submitSuccess = true
@@ -255,7 +257,11 @@
 							that.submitSuccess = true
 							that.showHud(res.data.msg || '提交成功', 'success')
 							var itemId = res.data.data && res.data.data.id ? res.data.data.id : that.id
-							setTimeout(function() { uni.redirectTo({ url: '/pages/contents/shopinfo?id=' + itemId }) }, 1100)
+							setTimeout(function() {
+								var detailUrl = '/pages/contents/shopinfo?id=' + itemId
+								if (that.returnToMutualAidList) detailUrl += '&returnTo=mutualAidList'
+								uni.redirectTo({ url: detailUrl })
+							}, 1100)
 						} else that.showHud(res.data.msg || '提交失败', 'error')
 					},
 					fail: function() { that.showHud('网络不太好哦~', 'error') },

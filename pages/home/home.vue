@@ -1312,7 +1312,7 @@
 					});
 				} else if (type == 5) {
 					uni.navigateTo({
-						url: '/pages/user/addshop?isSpace=1'
+						url: '/pages/user/addshop?isSpace=1&returnTo=mutualAidList'
 					});
 				} else {
 					uni.navigateTo({
