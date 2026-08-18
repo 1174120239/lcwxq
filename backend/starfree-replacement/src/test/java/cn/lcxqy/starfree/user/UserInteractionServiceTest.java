@@ -77,6 +77,8 @@ class UserInteractionServiceTest {
         assertThat(changed).isEqualTo(3);
         verify(jdbc).update(contains("'spaceComment'"), eq(7L));
         verify(jdbc).update(contains("'qaComment'"), eq(7L));
+        verify(jdbc).update(contains("'lostFoundComment'"), eq(7L));
+        verify(jdbc).update(contains("'lostFoundContact'"), eq(7L));
     }
 
     @Test
@@ -127,6 +129,38 @@ class UserInteractionServiceTest {
 
         verify(jdbc).queryForObject(contains("'spaceComment'"), eq(Integer.class), any());
         verify(jdbc).queryForObject(contains("'qaComment'"), eq(Integer.class), any());
+        verify(jdbc).queryForObject(contains("'lostFoundComment'"), eq(Integer.class), any());
+        verify(jdbc).queryForObject(contains("'lostFoundContact'"), eq(Integer.class), any());
+    }
+
+    @Test
+    void inboxEnrichesMutualAidNotificationWithItemReference() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        LegacyTokenService tokens = mock(LegacyTokenService.class);
+        when(tokens.userId("valid-token")).thenReturn(8L);
+        when(tokens.publicUserById(7L)).thenReturn(Collections.<String, Object>singletonMap("name", "评论者"));
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any())).thenReturn(1);
+
+        Map<String, Object> row = row(
+                "id", 3L, "type", "lostFoundContact", "uid", 7L,
+                "text", "有人向你定向分享了联系方式，请打开互助详情查看。", "touid", 8L,
+                "isread", 0, "value", 44L, "created", 1700000000L, "cid", 55L);
+        when(jdbc.queryForList(startsWith("SELECT id,type,uid,text,touid,isread,value,created,cid"),
+                any(Object.class))).thenReturn(Collections.singletonList(row));
+        when(jdbc.queryForList(startsWith("SELECT id,title,status FROM starfree_lost_found_items"),
+                eq(44L))).thenReturn(Collections.singletonList(row(
+                        "id", 44L, "title", "寻找校园卡", "status", 1)));
+
+        Map<String, String> request = new HashMap<>();
+        request.put("token", "valid-token");
+
+        Map<String, Object> notification = new UserInteractionService(jdbc, tokens)
+                .inbox(request).getData().get(0);
+
+        assertThat(notification).containsEntry("type", "lostFoundContact");
+        assertThat((Map<String, Object>) notification.get("lostFoundInfo"))
+                .containsEntry("title", "寻找校园卡")
+                .containsEntry("status", 1);
     }
 
     @Test

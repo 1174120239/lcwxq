@@ -113,6 +113,20 @@
 			// 点击系统通知的推送跳转到消息中心
 			plus.push.addEventListener("click", function(msg) {
 				var payload = campusPushPayload(msg);
+				if (typeof payload === 'string' && payload.indexOf('lostFound:') === 0) {
+					var mutualAidParts = payload.split(':');
+					var mutualAidId = parseInt(mutualAidParts[2], 10);
+					var mutualAidCommentId = parseInt(mutualAidParts[3], 10);
+					if (mutualAidId > 0) {
+						setTimeout(function() {
+							var url = '/pages/contents/shopinfo?id=' + mutualAidId;
+							if (mutualAidCommentId > 0) url += '&commentId=' + mutualAidCommentId;
+							uni.navigateTo({ url: url });
+						}, 1000);
+						plus.push.clear();
+						return;
+					}
+				}
 				if (typeof payload === 'string' && payload.indexOf('qa:') === 0) {
 					var questionId = parseInt(payload.substring(3), 10);
 					if (questionId > 0) {

@@ -2,10 +2,16 @@ package cn.lcxqy.starfree.lostfound;
 
 import cn.lcxqy.starfree.security.LegacyTokenService;
 import cn.lcxqy.starfree.security.StaffAccess;
+import cn.lcxqy.starfree.notify.EmailNotificationService;
+import cn.lcxqy.starfree.push.UniPushService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,18 +29,30 @@ import java.util.Map;
 @Service
 public class LostFoundCommentService {
     private static final ZoneId CAMPUS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final Logger LOG = LoggerFactory.getLogger(LostFoundCommentService.class);
 
     private final JdbcTemplate jdbc;
     private final StaffAccess access;
     private final LegacyTokenService tokens;
     private final LostFoundConfigService config;
+    private final UniPushService push;
+    private final EmailNotificationService email;
 
     public LostFoundCommentService(JdbcTemplate jdbc, StaffAccess access,
                                    LegacyTokenService tokens, LostFoundConfigService config) {
+        this(jdbc, access, tokens, config, null, null);
+    }
+
+    @Autowired
+    public LostFoundCommentService(JdbcTemplate jdbc, StaffAccess access,
+                                   LegacyTokenService tokens, LostFoundConfigService config,
+                                   UniPushService push, EmailNotificationService email) {
         this.jdbc = jdbc;
         this.access = access;
         this.tokens = tokens;
         this.config = config;
+        this.push = push;
+        this.email = email;
     }
 
     public List<Map<String, Object>> comments(long itemId) {
@@ -74,9 +92,10 @@ public class LostFoundCommentService {
             throw new IllegalArgumentException("评论不能超过1000个字");
         }
         long rootId = 0;
+        Map<String, Object> parentComment = null;
         if (parentId > 0) {
-            Map<String, Object> parent = requireComment(parentId, itemId);
-            rootId = number(rowValue(parent, "root_id"));
+            parentComment = requireComment(parentId, itemId);
+            rootId = number(rowValue(parentComment, "root_id"));
             if (rootId <= 0) {
                 rootId = parentId;
             }
@@ -92,6 +111,8 @@ public class LostFoundCommentService {
                         + "(item_id,uid,parent_id,root_id,text,status,created,modified) "
                         + "VALUES(?,?,?,?,?,1,?,?)",
                 itemId, actor.getUid(), parentId, rootId, text, now, now);
+        notifyComment(item, actor.getUid(), parentId > 0 ? parentComment : null,
+                itemId, id, text);
         return comment(id);
     }
 
@@ -136,25 +157,32 @@ public class LostFoundCommentService {
             throw new IllegalArgumentException("当前账号未绑定有效的QQ邮箱");
         }
         long dayStart = LocalDate.now(CAMPUS_ZONE).atStartOfDay(CAMPUS_ZONE).toEpochSecond();
+        Integer existing = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_lost_found_contact_grants "
+                        + "WHERE item_id=? AND comment_id=? AND sender_uid=? AND receiver_uid=?",
+                Integer.class, itemId, commentId, actor.getUid(), receiverUid);
+        if (existing != null && existing > 0) {
+            return contactResult(commentId, receiverUid);
+        }
         Integer sentToday = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_lost_found_contact_grants "
                         + "WHERE sender_uid=? AND created>=?", Integer.class, actor.getUid(), dayStart);
         if (sentToday != null && sentToday >= settings.getDailyContactLimit()) {
             throw new IllegalArgumentException("今天发送联系方式的次数已达上限");
         }
+        boolean inserted = false;
         try {
             jdbc.update("INSERT INTO starfree_lost_found_contact_grants"
                             + "(item_id,comment_id,sender_uid,receiver_uid,created,viewed) "
                             + "VALUES(?,?,?,?,?,0)",
                     itemId, commentId, actor.getUid(), receiverUid,
                     Instant.now().getEpochSecond());
+            inserted = true;
         } catch (DuplicateKeyException ignored) {
             // Repeated taps are idempotent and never consume another daily quota.
         }
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("commentId", commentId);
-        result.put("receiverUid", receiverUid);
-        result.put("sent", 1);
-        return result;
+        if (inserted) {
+            notifyContactShare(actor.getUid(), receiverUid, itemId, commentId);
+        }
+        return contactResult(commentId, receiverUid);
     }
 
     @Transactional
@@ -248,6 +276,83 @@ public class LostFoundCommentService {
     private Map<String, Object> comment(long id) {
         Map<String, Object> row = requireComment(id, 0);
         return normalize(row);
+    }
+
+    private void notifyComment(Map<String, Object> item, long actorUid, Map<String, Object> parent,
+                               long itemId, long commentId, String commentText) {
+        long ownerUid = number(rowValue(item, "uid"));
+        long parentUid = parent == null ? 0 : number(rowValue(parent, "uid"));
+        if (ownerUid > 0 && ownerUid != actorUid) {
+            notifyRecipient("lostFoundComment", actorUid, ownerUid, itemId, commentId,
+                    parentUid > 0 && parentUid == ownerUid
+                            ? "回复了你的互助评论：" + previewText(commentText)
+                            : "评论了你的互助信息：" + previewText(commentText),
+                    parentUid > 0 && parentUid == ownerUid
+                            ? "互助评论收到回复" : "互助信息收到新评论");
+        }
+        if (parentUid > 0 && parentUid != actorUid && parentUid != ownerUid) {
+            notifyRecipient("lostFoundComment", actorUid, parentUid, itemId, commentId,
+                    "回复了你的互助评论：" + previewText(commentText), "互助评论收到回复");
+        }
+    }
+
+    private void notifyContactShare(long senderUid, long receiverUid, long itemId, long commentId) {
+        notifyRecipient("lostFoundContact", senderUid, receiverUid, itemId, commentId,
+                "有人向你定向分享了联系方式，请打开互助详情查看。", "收到互助联系方式");
+    }
+
+    private void notifyRecipient(String type, long fromUid, long toUid, long itemId, long referenceId,
+                                 String text, String title) {
+        if (toUid <= 0 || fromUid == toUid) {
+            return;
+        }
+        long now = Instant.now().getEpochSecond();
+        try {
+            jdbc.update("INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
+                            + "VALUES(?,?,?,?,0,?,?,?)",
+                    type, fromUid, text, toUid, itemId, now, referenceId);
+        } catch (DataAccessException error) {
+            // The comment/contact grant is already committed; each notification channel is best effort.
+            LOG.warn("Could not write mutual-aid notification for uid {}", toUid, error);
+        }
+        try {
+            if (push != null) {
+                push.sendComment(toUid, title, text,
+                        "lostFound:" + type + ":" + itemId + ":" + referenceId);
+            }
+        } catch (RuntimeException error) {
+            LOG.warn("Mutual-aid push notification failed for uid {}", toUid, error);
+        }
+        try {
+            if (email != null) {
+                email.sendDynamicNotice(mailOf(toUid), "【聊一校园】" + title, text);
+            }
+        } catch (RuntimeException error) {
+            LOG.warn("Mutual-aid email notification failed for uid {}", toUid, error);
+        }
+    }
+
+    private Map<String, Object> contactResult(long commentId, long receiverUid) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("commentId", commentId);
+        result.put("receiverUid", receiverUid);
+        result.put("sent", 1);
+        return result;
+    }
+
+    private String mailOf(long uid) {
+        try {
+            Map<String, Object> user = tokens.userById(uid);
+            return user == null ? "" : text(user.get("mail"));
+        } catch (DataAccessException error) {
+            LOG.warn("Could not resolve email for mutual-aid notification uid {}", uid, error);
+            return "";
+        }
+    }
+
+    private String previewText(String value) {
+        String text = value == null ? "" : value.replace("\r", " ").replace("\n", " ").trim();
+        return text.length() > 120 ? text.substring(0, 120) + "..." : text;
     }
 
     private Map<String, Object> normalize(Map<String, Object> row) {

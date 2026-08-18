@@ -77,7 +77,8 @@ public class UserInteractionService {
         }
         if ("comment".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 "
-                    + "AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment')", uid);
+                    + "AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment',"
+                    + " 'lostFoundComment', 'lostFoundContact')", uid);
         }
         if ("finance".equals(type) || "system".equals(type) || "fan".equals(type)) {
             return jdbc.update("UPDATE starfree_inbox SET isread = 1 WHERE touid = ? AND isread = 0 AND type = ?",
@@ -189,6 +190,14 @@ public class UserInteractionService {
             long questionId = number(row.get("value"));
             enrichQuestionReference(result, questionId);
             enrichQaTarget(result, row, questionId);
+        }
+        if ("lostFoundComment".equals(type) || "lostFoundContact".equals(type)) {
+            List<Map<String, Object>> items = jdbc.queryForList(
+                    "SELECT id,title,status FROM starfree_lost_found_items WHERE id=? LIMIT 1",
+                    number(row.get("value")));
+            if (!items.isEmpty()) {
+                result.put("lostFoundInfo", new LinkedHashMap<>(items.get(0)));
+            }
         }
         return result;
     }
@@ -320,7 +329,8 @@ public class UserInteractionService {
             return "";
         }
         if ("comment".equals(type)) {
-            return " AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment')";
+            return " AND type IN ('comment', 'postComment', 'spaceComment', 'spaceLike', 'qaAnswer', 'qaComment',"
+                    + " 'lostFoundComment', 'lostFoundContact')";
         }
         filters.add(type);
         return " AND type = ?";

@@ -257,6 +257,7 @@
 					{ key: 'all', label: '全部', icon: 'cuIcon-list' },
 					{ key: 'dynamic', label: '动态互动', icon: 'cuIcon-comment' },
 					{ key: 'qa', label: '问答互动', icon: 'cuIcon-question' },
+					{ key: 'mutualAid', label: '校园互助', icon: 'cuIcon-friend' },
 					{ key: 'system', label: '系统与财务', icon: 'cuIcon-notice' }
 				],
 				zb_info:0,
@@ -451,6 +452,7 @@
 			messageCategory(item) {
 				var type = item && item.type ? String(item.type) : ''
 				if (type === 'qaAnswer' || type === 'qaComment') return 'qa'
+				if (type === 'lostFoundComment' || type === 'lostFoundContact') return 'mutualAid'
 				if (type === 'system' || type === 'finance' || type === 'fan') return 'system'
 				return 'dynamic'
 			},
@@ -464,6 +466,8 @@
 				if (type === 'spaceComment') return this.isReplyNotice(item) ? '回复了你的动态评论' : '评论了你的动态'
 				if (type === 'qaAnswer') return '回答了你的问题'
 				if (type === 'qaComment') return this.isReplyNotice(item) ? '回复了你的问答评论' : '评论了你的回答'
+				if (type === 'lostFoundContact') return '向你分享了联系方式'
+				if (type === 'lostFoundComment') return this.isReplyNotice(item) ? '回复了你的互助评论' : '评论了你的互助信息'
 				if (type === 'comment' || type === 'postComment') return '评论了你的内容'
 				if (type === 'finance') return '财务通知'
 				if (type === 'fan') return '关注了你'
@@ -471,7 +475,7 @@
 			},
 			messageBody(item) {
 				var value = item && item.text ? String(item.text) : ''
-				return value.replace(/^(评论了你的动态|回复了你的动态评论|回复了你的动态|回答了问题|回答了你的问题|评论了你的回答|回复了你的问答评论|回复了你的评论|评论了你的内容|赞了你的动态|点赞了你的动态)[：:]\s*/i, '').trim()
+				return value.replace(/^(评论了你的动态|回复了你的动态评论|回复了你的动态|回答了问题|回答了你的问题|评论了你的回答|回复了你的问答评论|回复了你的评论|评论了你的内容|评论了你的互助信息|回复了你的互助评论|有人向你定向分享了联系方式|赞了你的动态|点赞了你的动态)[：:，,。]?\s*/i, '').trim()
 			},
 			messageContext(item) {
 				if (!item) return ''
@@ -485,6 +489,9 @@
 					if (item.questionState === 'deleted') return '原问题已删除'
 					if (item.questionState === 'hidden') return '原问题已停用'
 					return '问题：' + (item.questionInfo && item.questionInfo.title ? item.questionInfo.title : '查看问答')
+				}
+				if (type === 'lostFoundComment' || type === 'lostFoundContact') {
+					return '互助：' + (item.lostFoundInfo && item.lostFoundInfo.title ? item.lostFoundInfo.title : '查看互助详情')
 				}
 				if (type === 'comment' || type === 'postComment') return item.contenTitle ? '内容：' + item.contenTitle : ''
 				return ''
@@ -599,6 +606,11 @@
 				}
 				if((data.type=="qaAnswer" || data.type=="qaComment") && data.questionState && data.questionState!="visible"){
 					uni.showToast({ title: data.questionState=="deleted" ? '原问题已删除' : '原问题已停用', icon: 'none' });
+				}
+				if(data.type=="lostFoundComment" || data.type=="lostFoundContact"){
+					clearInterval(that.chatLoading);
+					that.chatLoading = null;
+					uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + data.value + '&commentId=' + (data.cid || 0) });
 				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);
