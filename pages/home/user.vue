@@ -106,7 +106,7 @@
 					  <text :style="isvip ? 'color: #db3287ed' : ''">{{name}}</text>
 					 
 					</view>
-					<view class="grade" @click="copyUid">
+					<view class="grade" @tap="copyUid">
 						<view style="margin-right: 10upx;color: #454545ed;">{{appname}}: {{uid}}</view>
 					</view>
 					<view class="grade" style="margin-top: 10upx;">
@@ -428,6 +428,15 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 				 
 				},
 		methods: {
+			copyUid() {
+				if (!this.uid) return
+				uni.setClipboardData({
+					data: String(this.uid),
+					success: function() {
+						uni.showToast({ title: 'UID已复制', icon: 'none' })
+					}
+				})
+			},
 			handleSigninUpdated() {
 				this.isClock = 1;
 				this.getUserData();

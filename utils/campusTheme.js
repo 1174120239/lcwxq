@@ -55,15 +55,19 @@ export function applyCampusThemeShell(mode, time) {
 		})
 	}
 
-	try {
-		uni.setBackgroundColor({
-			backgroundColor: backgroundColor,
-			backgroundColorTop: backgroundColor,
-			backgroundColorBottom: backgroundColor,
-			fail() {}
-		})
-	} catch (error) {
-		// Some H5 and mini-program runtimes do not expose this API.
+	// H5 and preview runtimes may expose this method while still reporting it as
+	// unimplemented. Their document/body styles above already cover the shell.
+	if (typeof plus !== 'undefined' && typeof uni.setBackgroundColor === 'function') {
+		try {
+			uni.setBackgroundColor({
+				backgroundColor: backgroundColor,
+				backgroundColorTop: backgroundColor,
+				backgroundColorBottom: backgroundColor,
+				fail() {}
+			})
+		} catch (error) {
+			// Native runtimes can still reject the API on unsupported pages.
+		}
 	}
 
 	try {
