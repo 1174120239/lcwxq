@@ -298,7 +298,7 @@ article = form_post("SFreeContents/contentsAdd", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds,poll` | 公网新 | type 仅 0..5；type=0 无图片时正文去除首尾空白后至少 4 字，有图片时正文可为空或不足 4 字；可带 JSON `poll` 创建 2--6 个不重复选项的单选或限项多选，投票可作为无正文动态的主体；type=3 是评论/回复，正文至少 1 字且 `toid` 指向被回复的动态或评论，同一用户 20 秒内对同一目标提交相同正文按重复请求处理而不重复落库；`topicIds` 是最多 3 个话题 mid，逗号分隔；type=6 插件明确拒绝；开启审核则 status=0。 |
+| `SFreeSpace/addSpace` | GET/POST / token | `text,pic,type,toid,onlyMe,topicIds,poll` | 公网新 | type 仅 0..5；正文允许受限 Markdown 和 `[color]`/`[align]`/`[u]` 扩展标记，详情按安全富文本渲染；最多 9 张图片按 `pic` 的 `||` 顺序保存。其余校验、投票和审核规则不变。 |
 | `SFreeSpace/editSpace` | GET/POST / 作者或 staff | `id,text` 和可选字段，含 `topicIds` | 公网新 | 类型不可变；staff 编辑保留作者，不重复发经验；传 `topicIds=0` 表示清空该动态的话题。 |
 | `SFreeSpace/spaceInfo` | GET/POST / 可选 token | `id,token` | 公网新 | 统一执行私密、待审、锁定可见性；返回对象含 `topics`、`featured`、当前有效的 `pinType`、配置值 `pinConfiguredType` 及置顶顺序/时间；成功读取会增加浏览量。 |
 | `SFreeSpace/spaceList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,isManage` | 公网新 | `isManage` 只对 staff 有效；普通列表默认排除 type=3 回复；兼容单个 `topicId`，`topicIds` 可传数组或逗号分隔 id，去重后最多 3 个并按 AND 匹配。`searchParams.featured=0/1` 可筛选精华，`excludePresented=1` 排除当前有效的列表/横幅置顶，用于首页去重。 |
@@ -334,7 +334,7 @@ AI 风险审核由原 `starfree_apiconfig.spaceAudit` 作为总门控。总开�
 | 接口 | 方法/权限 | 参数 | 落点 | 说明 |
 |---|---|---|---|---|
 | `SFreeQa/questionList` | GET/POST / 无 | `page,limit,keyword,recommended` | 代码新/公网旧 | 只返回已发布问题；`recommended=1` 只返回首页推荐问答，主页不得回退混入普通问答；推荐、排序值和更新时间共同决定顺序。 |
-| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，话题最多 80 字；忽略客户端伪造的管理字段。审核总开关关闭时直接发布；开启时先隐藏，提问 AI 子开关开启且 AI 通过后自动发布，否则等待人工复核。20 秒内相同标题和说明拒绝重复提交。 |
+| `SFreeQa/questionAdd` | POST / token | `params={title,description,topic,imageUrls}` | 代码新/公网旧 | 标题 4-160 字，说明最多 5000 字，说明允许受限 Markdown；`imageUrls` 最多 9 个并按数组顺序保存，首图兼容回填 `coverUrl`。审核和重复提交规则不变。需先执行迁移 015。 |
 | `SFreeQa/questionInfo` | GET/POST / 可选 token | `id,token` | 代码新/公网旧 | 普通用户只能读取已发布问题；staff 可预览停用问题。 |
 | `SFreeQa/answerList` | GET/POST / 可选 token | `questionId,page,limit,sort,token` | 代码新/公网旧 | `sort=latest` 按时间，其他值按点赞和时间；登录时返回 `isLiked`。 |
 | `SFreeQa/answerAdd` | POST / token | `params={questionId,text}` | 代码新/公网旧 | 回答至少 4 字、最多 5000 字；20 秒内相同回答拒绝重复提交。 |
@@ -446,7 +446,7 @@ form_post("SFreeSpace/spaceList", {
 | `SFreeLostFound/config` | GET/POST / 可选 token | `token` | 代码新 | 公开配置；带 token 时返回 `currentLevel/eligible`。默认最低 Lv2。 |
 | `SFreeLostFound/itemList` | GET/POST / 无 | `kind,category,state,keyword,page,limit` | 代码新 | 只列出审核通过且未过期的信息；kind 1 求助、2 提供帮助，category 1..5。 |
 | `SFreeLostFound/itemInfo` | GET/POST / 可选 token | `id,token` | 代码新 | 公开 active/resolved；待审、拒绝和关闭仅 owner/staff 可读。 |
-| `SFreeLostFound/itemAdd` | GET/POST / Lv 门槛 | `token,params` | 代码新 | uid/status/review 字段服务端派生；重复提交 20 秒拦截；免费且无经济副作用。 |
+| `SFreeLostFound/itemAdd` | GET/POST / Lv 门槛 | `token,params={kind,category,title,description,imageUrl,imageUrls,location,occurredAt}` | 代码新 | 说明允许受限 Markdown；`imageUrls` 最多 9 个并按数组顺序保存，首图兼容回填 `imageUrl`；uid/status/review 字段服务端派生。需先执行迁移 015。 |
 | `SFreeLostFound/itemEdit` | GET/POST / owner/staff | `token,params.id` 与内容字段 | 代码新 | 普通用户编辑后按配置重新审核；不能修改 uid 或伪造状态。 |
 | `SFreeLostFound/itemStatus` | GET/POST / owner/staff | `token,id,action=resolve/reopen` | 代码新 | 只有 active 可解决、resolved 可重开；重开按审核配置进入 active/pending。 |
 | `SFreeLostFound/itemDelete` | GET/POST / owner/staff | `token,id` | 代码新 | 软关闭为 status=4，不物理删除信息和审计记录。 |

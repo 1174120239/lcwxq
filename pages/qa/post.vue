@@ -32,8 +32,11 @@
 					<text class="qa-post-label">问题说明</text>
 					<text class="qa-post-count">{{description.length}}/5000</text>
 				</view>
-				<textarea class="qa-post-description-input" v-model="description" maxlength="5000"
-					placeholder="补充背景、已经尝试过的方法或希望得到的答案"></textarea>
+				<rich-composer v-model="description" :maxlength="5000" :night="campusNight"
+					placeholder="补充背景、已经尝试过的方法或希望得到的答案" :show-status="false" @media="chooseImage"></rich-composer>
+				<view class="qa-post-media" v-if="imageUrls.length">
+					<view class="qa-post-media-item" v-for="(url,index) in imageUrls" :key="url"><image :src="url" mode="aspectFill"></image><text class="media-index">{{index+1}}</text><text class="media-remove cuIcon-close" @tap="removeImage(index)"></text><view class="media-move"><text class="cuIcon-back" @tap="moveImage(index,-1)"></text><text class="cuIcon-right" @tap="moveImage(index,1)"></text></view></view>
+				</view>
 			</view>
 
 			<view class="qa-post-field">
@@ -62,8 +65,10 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import RichComposer from '@/components/rich-composer/rich-composer'
 
 	export default {
+		components: { RichComposer },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -72,6 +77,8 @@
 				token: '',
 				title: '',
 				description: '',
+				imageUrls: [],
+				uploadingImages: false,
 				topic: '',
 				submitting: false,
 				submitted: false,
@@ -83,7 +90,7 @@
 				return resolveCampusNight(this.campusThemeMode, isDongchangfuNight(this.themeClock))
 			},
 			canSubmit() {
-				return !this.submitting && !this.submitted && this.title.trim().length >= 4
+				return !this.submitting && !this.submitted && !this.uploadingImages && this.title.trim().length >= 4
 			}
 		},
 		onLoad() {
@@ -101,6 +108,15 @@
 			// #endif
 		},
 		methods: {
+			chooseImage() {
+				if (!this.token || this.uploadingImages || this.imageUrls.length >= 9) return
+				uni.chooseImage({ count: 9 - this.imageUrls.length, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: (res) => {
+					this.uploadingImages = true
+					Promise.all((res.tempFilePaths || []).map(path => new Promise((resolve, reject) => uni.uploadFile({ url: this.$API.upload(), filePath: path, name: 'file', formData: { token: this.token }, success: r => { try { const body = JSON.parse(r.data); body.code === 1 && body.data && body.data.url ? resolve(body.data.url) : reject(body.msg || '上传失败') } catch (e) { reject(e) } }, fail: reject }))).then(urls => { this.imageUrls = this.imageUrls.concat(urls) }).catch(() => uni.showToast({ title: '部分图片上传失败', icon: 'none' })).then(() => { this.uploadingImages = false })
+				})
+			},
+			removeImage(index) { this.imageUrls.splice(index, 1) },
+			moveImage(index, offset) { const target = index + offset; if (target < 0 || target >= this.imageUrls.length) return; const next = this.imageUrls.slice(); const item = next.splice(index, 1)[0]; next.splice(target, 0, item); this.imageUrls = next },
 			loadTheme() {
 				this.campusThemeMode = getCampusThemeMode()
 				this.themeClock = Date.now()
@@ -123,7 +139,8 @@
 						params: JSON.stringify({
 							title: this.title.trim(),
 							description: this.description.trim(),
-							topic: this.topic.trim()
+								topic: this.topic.trim(),
+								imageUrls: this.imageUrls
 						})
 					},
 					header: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -325,6 +342,13 @@
 	.qa-post-description-input {
 		height: 340rpx;
 	}
+	.qa-post-media { display:grid; grid-template-columns:repeat(3,1fr); gap:12rpx; margin-top:16rpx; }
+	.qa-post-media-item { position:relative; aspect-ratio:1; overflow:hidden; border-radius:10rpx; background:#edf2f0; }
+	.qa-post-media-item image { width:100%; height:100%; }
+	.qa-post-media-item .media-index { position:absolute; left:8rpx; top:8rpx; padding:2rpx 8rpx; border-radius:8rpx; background:rgba(20,35,31,.72); color:#fff; font-size:20rpx; }
+	.qa-post-media-item .media-remove { position:absolute; right:8rpx; top:8rpx; color:#fff; font-size:24rpx; }
+	.qa-post-media-item .media-move { position:absolute; bottom:8rpx; left:8rpx; display:flex; gap:6rpx; }
+	.qa-post-media-item .media-move text { display:flex; align-items:center; justify-content:center; width:42rpx; height:42rpx; border-radius:50%; background:rgba(20,35,31,.72); color:#fff; }
 
 	.qa-post-topic-input {
 		height: 72rpx;

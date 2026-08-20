@@ -104,11 +104,11 @@ public class LostFoundService {
         int status = actor.isStaff() || !config.config().isAuditRequired()
                 ? STATUS_ACTIVE : STATUS_PENDING;
         long id = insertKey("INSERT INTO starfree_lost_found_items"
-                        + "(uid,kind,category,title,description,image_url,location,occurred_at,status,"
+                        + "(uid,kind,category,title,description,image_url,image_urls,location,occurred_at,status,"
                         + "review_reason,reviewed_by,reviewed_at,created,modified) "
-                        + "VALUES(?,?,?,?,?,?,?,?,?,'',0,0,?,?)",
+                        + "VALUES(?,?,?,?,?,?,?,?,?,?,'',0,0,?,?)",
                 actor.getUid(), values.kind, values.category, values.title, values.description,
-                values.imageUrl, values.location, values.occurredAt, status, now, now);
+                values.imageUrl, values.imageUrls, values.location, values.occurredAt, status, now, now);
         audit(id, actor.getUid(), status, status, "create", "");
         return itemInfo(id, token);
     }
@@ -129,9 +129,9 @@ public class LostFoundService {
                 : (config.config().isAuditRequired() ? STATUS_PENDING : STATUS_ACTIVE);
         long now = Instant.now().getEpochSecond();
         int changed = jdbc.update("UPDATE starfree_lost_found_items SET kind=?,category=?,title=?,"
-                        + "description=?,image_url=?,location=?,occurred_at=?,status=?,review_reason='',"
+                        + "description=?,image_url=?,image_urls=?,location=?,occurred_at=?,status=?,review_reason='',"
                         + "reviewed_by=0,reviewed_at=0,modified=? WHERE id=?",
-                values.kind, values.category, values.title, values.description, values.imageUrl,
+                values.kind, values.category, values.title, values.description, values.imageUrl, values.imageUrls,
                 values.location, values.occurredAt, nextStatus, now, id);
         if (changed != 1) {
             throw new IllegalArgumentException("信息不存在");
@@ -249,7 +249,7 @@ public class LostFoundService {
     }
 
     private String select() {
-        return "SELECT i.id,i.uid,i.kind,i.category,i.title,i.description,i.image_url,"
+        return "SELECT i.id,i.uid,i.kind,i.category,i.title,i.description,i.image_url,i.image_urls,"
                 + "i.location,i.occurred_at,i.status,i.review_reason,i.reviewed_by,"
                 + "i.reviewed_at,i.created,i.modified FROM starfree_lost_found_items i";
     }
@@ -274,6 +274,7 @@ public class LostFoundService {
         result.put("title", text(value(row, "title")));
         result.put("description", text(value(row, "description")));
         result.put("imageUrl", text(value(row, "image_url")));
+		result.put("imageUrls", splitImages(text(value(row, "image_urls")), text(value(row, "image_url"))));
         result.put("location", text(value(row, "location")));
         result.put("occurredAt", number(value(row, "occurred_at")));
         result.put("status", number(value(row, "status")));
@@ -314,7 +315,8 @@ public class LostFoundService {
                 "标题至少需要4个字", "标题不能超过120个字");
         String description = required(body.get("description"), 5, 5000,
                 "请补充物品特征", "详细说明不能超过5000个字");
-        String imageUrl = optional(body.get("imageUrl"), 500, "图片地址不能超过500个字");
+		List<String> imageList = imageUrls(body.get("imageUrls"), body.get("imageUrl"));
+		String imageUrl = imageList.isEmpty() ? "" : imageList.get(0);
         String location = required(body.get("location"), 2, 120,
                 "请填写丢失或拾取地点", "地点不能超过120个字");
         long occurredAt = number(body.get("occurredAt"));
@@ -322,7 +324,7 @@ public class LostFoundService {
         if (occurredAt < 0 || occurredAt > now + 86400) {
             throw new IllegalArgumentException("时间参数错误");
         }
-        return new Values(kind, category, title, description, imageUrl, location, occurredAt);
+		return new Values(kind, category, title, description, imageUrl, String.join("||", imageList), location, occurredAt);
     }
 
     private void updateStatus(long id, long operatorUid, int oldStatus, int nextStatus,
@@ -426,6 +428,32 @@ public class LostFoundService {
         return value;
     }
 
+	private List<String> imageUrls(Object raw, Object fallback) {
+		List<String> result = new ArrayList<String>();
+		if (raw instanceof List<?>) {
+			for (Object item : (List<?>) raw) addImageUrl(result, item);
+		} else if (raw != null && !text(raw).trim().isEmpty()) {
+			for (String item : text(raw).split("\\|\\|")) addImageUrl(result, item);
+		} else if (fallback != null) {
+			for (String item : text(fallback).split("\\|\\|")) addImageUrl(result, item);
+		}
+		if (result.size() > 9) throw new IllegalArgumentException("最多上传9张图片");
+		return result;
+	}
+
+	private List<String> splitImages(String raw, String fallback) {
+		return imageUrls(raw, fallback);
+	}
+
+	private void addImageUrl(List<String> target, Object raw) {
+		String url = text(raw).trim();
+		if (url.isEmpty()) return;
+		if (url.length() > 500 || !url.matches("https?://[^\\s]+")) {
+			throw new IllegalArgumentException("图片地址不合法");
+		}
+		target.add(url);
+	}
+
     private int bounded(int requested) {
         return Math.max(1, Math.min(requested, MAX_PAGE_SIZE));
     }
@@ -464,16 +492,18 @@ public class LostFoundService {
         private final String title;
         private final String description;
         private final String imageUrl;
+		private final String imageUrls;
         private final String location;
         private final long occurredAt;
 
         private Values(int kind, int category, String title, String description,
-                       String imageUrl, String location, long occurredAt) {
+                       String imageUrl, String imageUrls, String location, long occurredAt) {
             this.kind = kind;
             this.category = category;
             this.title = title;
             this.description = description;
             this.imageUrl = imageUrl;
+			this.imageUrls = imageUrls;
             this.location = location;
             this.occurredAt = occurredAt;
         }

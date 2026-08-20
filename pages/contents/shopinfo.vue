@@ -10,7 +10,7 @@
 		<view :style="[{paddingTop: NavBar + 'px'}]"></view>
 
 		<view v-if="item" class="detail-content">
-			<image v-if="item.imageUrl" class="detail-image" :src="item.imageUrl" mode="widthFix" @tap="previewImage"></image>
+			<view v-if="item.imageUrls && item.imageUrls.length" class="detail-images"><image v-for="url in item.imageUrls" :key="url" :src="url" mode="aspectFill" @tap="previewImage(url)"></image></view>
 			<view class="detail-main">
 				<view class="detail-labels">
 					<text :class="['kind-label', item.kind === 1 ? 'kind-request' : 'kind-offer']">{{ item.kind === 1 ? '寻求帮助' : '提供帮助' }}</text>
@@ -30,7 +30,7 @@
 
 				<view class="detail-section">
 					<view class="section-title">详细说明</view>
-					<text class="description-text" selectable>{{ item.description }}</text>
+					<rich-content :value="item.description"></rich-content>
 				</view>
 
 				<view class="publisher" @tap="openPublisher">
@@ -86,7 +86,9 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import RichContent from '@/components/rich-content/rich-content'
 	export default {
+		components: { RichContent },
 		data() {
 			return {
 				StatusBar: this.StatusBar, CustomBar: this.CustomBar, NavBar: this.StatusBar + this.CustomBar,
@@ -171,7 +173,7 @@
 				var that = this
 				that.$Net.request({ url: that.$API.lostFoundContactAccess(), data: { itemId: that.id, token: that.token() }, method: 'get', dataType: 'json', success: function(res) { if (res.data.code === 1) that.contactAccess = res.data.data || { received: [], sent: [] } } })
 			},
-			previewImage() { uni.previewImage({ urls: [this.item.imageUrl], current: this.item.imageUrl }) },
+			previewImage(url) { uni.previewImage({ urls: this.item.imageUrls || [url || this.item.imageUrl], current: url || this.item.imageUrl }) },
 			categoryName(category) { return this.categoryLabels[Number(category)] || '其他帮助' },
 			formatDate(timestamp) { return timestamp ? this.$API.formatDate(timestamp) : '时间待补充' },
 			openPublisher() { var user = this.publisher; uni.navigateTo({ url: '/pages/contents/userinfo?title=' + encodeURIComponent((user.name || '校园用户') + '的信息') + '&name=' + encodeURIComponent(user.name || '') + '&uid=' + this.item.uid + '&avatar=' + encodeURIComponent(user.avatar || '') }) },
@@ -217,6 +219,8 @@
 	.detail-page { min-height: 100vh; padding-bottom: 132rpx; background: #f2f5f6; color: #17212b; }
 	.detail-content { background: #fff; }
 	.detail-image { display: block; width: 100%; max-height: 760rpx; background: #e9eef0; animation: imageIn .3s ease; }
+	.detail-images { display:grid; grid-template-columns:repeat(3,1fr); gap:12rpx; padding:14rpx; background:#fff; }
+	.detail-images image { width:100%; aspect-ratio:1; border-radius:10rpx; background:#e9eef0; }
 	.detail-main { padding: 30rpx 28rpx 34rpx; }
 	.detail-labels { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; }
 	.kind-label, .category-label, .free-label, .resolved-label, .expired-label { padding: 5rpx 12rpx; border-radius: 6rpx; font-size: 23rpx; }

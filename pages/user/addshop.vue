@@ -19,10 +19,9 @@
 			</view>
 
 			<view class="form-section image-section">
-				<view v-if="form.imageUrl" class="cover-preview" @tap="chooseImage">
-					<image :src="form.imageUrl" mode="aspectFill"></image>
-					<view class="cover-replace"><text class="cuIcon-camera"></text>更换图片</view>
-					<view class="image-remove" @tap.stop="form.imageUrl = ''"><text class="cuIcon-close"></text></view>
+				<view v-if="form.imageUrls.length" class="cover-grid">
+					<view v-for="(url,index) in form.imageUrls" :key="url" class="cover-item"><image :src="url" mode="aspectFill"></image><text class="cover-index">{{index+1}}</text><text class="image-remove cuIcon-close" @tap="removeImage(index)"></text><view class="cover-move"><text class="cuIcon-back" @tap="moveImage(index,-1)"></text><text class="cuIcon-right" @tap="moveImage(index,1)"></text></view></view>
+					<view v-if="form.imageUrls.length < 9" class="cover-add cover-add-small" @tap="chooseImage"><text class="cuIcon-add"></text></view>
 				</view>
 				<view v-else class="cover-add" @tap="chooseImage">
 					<view class="cover-icon"><text class="cuIcon-cameraadd"></text></view>
@@ -56,7 +55,7 @@
 
 			<view class="form-section">
 				<view class="field-label">详细说明</view>
-				<textarea v-model="form.description" maxlength="5000" placeholder="说明具体情况、希望获得的帮助或你能提供的帮助。请勿公开QQ号、证件号码等个人信息。" />
+				<rich-composer v-model="form.description" :maxlength="5000" :night="AppStyle === 'campus-night'" :show-status="false" placeholder="说明具体情况、希望获得的帮助或你能提供的帮助。请勿公开QQ号、证件号码等个人信息。" @media="chooseImage"></rich-composer>
 				<view class="description-count">{{ form.description.length }}/5000</view>
 			</view>
 
@@ -102,7 +101,9 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import RichComposer from '@/components/rich-composer/rich-composer'
 	export default {
+		components: { RichComposer },
 		data() {
 			var now = new Date()
 			return {
@@ -123,7 +124,8 @@
 				submitSuccess: false,
 				returnToMutualAidList: false,
 				hud: { visible: false, type: 'loading', text: '' },
-				form: { kind: 1, category: 1, title: '', location: '', imageUrl: '', description: '' }
+				form: { kind: 1, category: 1, title: '', location: '', imageUrl: '', imageUrls: [], description: '' },
+				uploadingImages: false,
 			}
 		},
 		onLoad(options) {
@@ -200,7 +202,7 @@
 					success: function(res) {
 						if (res.data.code !== 1) { uni.showToast({ title: res.data.msg, icon: 'none' }); return }
 						var item = res.data.data
-						that.form = { kind: Number(item.kind), category: Number(item.category), title: item.title || '', location: item.location || '', imageUrl: item.imageUrl || '', description: item.description || '' }
+						that.form = { kind: Number(item.kind), category: Number(item.category), title: item.title || '', location: item.location || '', imageUrl: item.imageUrl || '', imageUrls: item.imageUrls || (item.imageUrl ? [item.imageUrl] : []), description: item.description || '' }
 						if (item.occurredAt) {
 							var occurred = new Date(Number(item.occurredAt) * 1000)
 							that.date = that.dateString(occurred)
@@ -213,8 +215,16 @@
 			},
 			chooseImage() {
 				var that = this
-				uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: function(res) { that.uploadImage(res.tempFilePaths[0]) } })
+				uni.chooseImage({ count: 9 - this.form.imageUrls.length, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: function(res) { that.uploadImages(res.tempFilePaths || []) } })
 			},
+			uploadImages(filePaths) {
+				if (!filePaths.length) return
+				this.uploadingImages = true
+				this.showHud('上传中...', 'loading')
+				Promise.all(filePaths.map(path => new Promise((resolve, reject) => uni.uploadFile({ url: this.$API.upload(), filePath: path, name: 'file', formData: { token: this.token() }, success: response => { try { const data = JSON.parse(response.data); data.code === 1 && data.data && data.data.url ? resolve(data.data.url) : reject(data.msg || '上传失败') } catch (e) { reject(e) } }, fail: reject })))).then(urls => { this.form.imageUrls = this.form.imageUrls.concat(urls); this.form.imageUrl = this.form.imageUrls[0] || ''; this.showHud('上传完成', 'success') }).catch(() => this.showHud('图片上传失败', 'error')).then(() => { this.uploadingImages = false })
+			},
+			removeImage(index) { this.form.imageUrls.splice(index, 1); this.form.imageUrl = this.form.imageUrls[0] || '' },
+			moveImage(index, offset) { const target=index+offset; if(target<0||target>=this.form.imageUrls.length)return; const next=this.form.imageUrls.slice(); const item=next.splice(index,1)[0]; next.splice(target,0,item); this.form.imageUrls=next; this.form.imageUrl=next[0]||'' },
 			uploadImage(filePath) {
 				var that = this
 				that.showHud('上传中...', 'loading')
@@ -239,11 +249,11 @@
 				return ''
 			},
 			submit() {
-				if (this.submitting) return
+				if (this.submitting || this.uploadingImages) return
 				var validation = this.validate()
 				if (validation) { uni.showToast({ title: validation, icon: 'none' }); return }
 				var occurredAt = Math.floor(new Date(this.date.replace(/-/g, '/') + ' ' + this.time + ':00').getTime() / 1000)
-				var params = Object.assign({}, this.form, { occurredAt: occurredAt })
+				var params = Object.assign({}, this.form, { occurredAt: occurredAt, imageUrls: this.form.imageUrls, imageUrl: this.form.imageUrls[0] || '' })
 				if (this.editing) params.id = this.id
 				var that = this
 				that.submitting = true
@@ -295,6 +305,13 @@
 	.cover-title { color: #34434b; font-size: 28rpx; font-weight: 600; }
 	.cover-subtitle { margin-top: 8rpx; color: #8b989e; font-size: 22rpx; }
 	.cover-preview image { width: 100%; height: 100%; }
+	.cover-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12rpx; padding:18rpx; }
+	.cover-item { position:relative; aspect-ratio:1; overflow:hidden; border-radius:10rpx; background:#edf2f0; }
+	.cover-item image { width:100%; height:100%; }
+	.cover-index { position:absolute; left:8rpx; top:8rpx; padding:2rpx 8rpx; border-radius:8rpx; background:rgba(20,35,31,.72); color:#fff; font-size:20rpx; }
+	.cover-move { position:absolute; bottom:8rpx; left:8rpx; display:flex; gap:6rpx; }
+	.cover-move text { display:flex; align-items:center; justify-content:center; width:42rpx; height:42rpx; border-radius:50%; background:rgba(20,35,31,.72); color:#fff; }
+	.cover-add-small { min-height:0; aspect-ratio:1; }
 	.cover-replace { position: absolute; left: 0; right: 0; bottom: 0; padding: 44rpx 0 18rpx; text-align: center; color: #fff; font-size: 23rpx; background: linear-gradient(to top, rgba(18, 28, 33, .72), transparent); }
 	.cover-replace text { margin-right: 8rpx; }
 	.image-remove { position: absolute; top: 16rpx; right: 16rpx; width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; background: rgba(20, 28, 32, .72); }

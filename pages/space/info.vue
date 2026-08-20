@@ -47,7 +47,7 @@
 					</view>
 				</view>
 				<view class="text-content break-all space-detail-text">
-					<rich-text :nodes="markHtml(spaceInfo.text)"></rich-text>
+					<rich-content :value="spaceInfo.text"></rich-content>
 				</view>
 				
 				<block  v-if="spaceInfo.type==0">
@@ -301,6 +301,7 @@
 	import { copyText } from '@/utils/clipboard.js'
 	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
+	import RichContent from '@/components/rich-content/rich-content'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -311,7 +312,7 @@
 	var owo = [];
 	// #endif
 	export default {
-		components: { SpacePoll, SpaceReportSheet },
+		components: { SpacePoll, SpaceReportSheet, RichContent },
 		data() {
 			return {
 				StatusBar: this.StatusBar,

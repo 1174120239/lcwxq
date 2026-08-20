@@ -28,18 +28,13 @@
 		</view>
 		<form>
 			<view class="post-compose">
-				<view class="post-editor-surface">
-					<textarea class="post-editor-input" :maxlength="maxTextLength" v-model="text" placeholder="分享校园里的新鲜事…" @input="limitTextInput"></textarea>
-					<view class="post-editor-status" :class="{'is-error': publishReason && !isUploading && !isSubmitting}">
-						<text>{{textCount}}/{{maxTextLength}}</text>
-						<text>{{publishReason}}</text>
-					</view>
-				</view>
+				<rich-composer v-model="text" :maxlength="maxTextLength" placeholder="分享校园里的新鲜事…"
+					:night="campusNight" :show-component="postType=='add' && !anonymousMode && type==0"
+					:status="publishReason" @emoji="OwO" @media="chooseMedia" @component="openComponentPicker"></rich-composer>
 
 				<!--  #ifdef H5 || APP-PLUS -->
-				<view class="comments-owo space-owo">
-					<text class="cuIcon-emoji" :class="{'is-active': isOwO}" @tap="OwO"></text>
-					<view class="owo" v-if="isOwO">
+				<view class="comments-owo space-owo" v-if="isOwO">
+					<view class="owo">
 						<scroll-view class="owo-list" scroll-y>
 							<view class="owo-main">
 								<view class="owo-lit-box" v-for="(item,index) in owoList" @tap="setOwO(item)" :key="index">
@@ -73,7 +68,7 @@
 						<text class="media-section-count" v-if="type==0">{{picList.length + pendingUploads.length}}/9</text>
 					</view>
 					<view class="media-grid">
-						<view class="media-image" :class="{'is-failed': item.failed, 'is-uploading': item.uploading}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.uploading ? 'uploading-' : item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path">
+						<view class="media-image" :class="{'is-failed': item.failed, 'is-uploading': item.uploading}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.uploading ? 'uploading-' : item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path" @longpress="enableMediaOrder(item)">
 							<view class="media-uploading-mask" v-if="item.uploading">
 								<view class="media-uploading-spinner"></view>
 								<text>{{item.progress}}%</text>
@@ -82,6 +77,7 @@
 								<text class="cuIcon-refresh"></text><text>上传失败，重试</text>
 							</view>
 							<text class="cuIcon-close media-remove" v-if="!item.uploading" @tap.stop="item.failed ? removeFailedUpload(item.source) : picClose(item.path)"></text>
+							<view v-if="mediaOrderMode && !item.uploading && !item.failed" class="media-order-controls"><text class="cuIcon-back" @tap.stop="movePic(item.path, -1)"></text><text class="cuIcon-right" @tap.stop="movePic(item.path, 1)"></text></view>
 						</view>
 						<view class="media-video" v-if="type==4 && pic">
 							<video class="media-video-preview" :src="videoPreviewPath || pic" :controls="false" :show-center-play-btn="false" object-fit="cover"></video>
@@ -257,6 +253,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import RichComposer from '@/components/rich-composer/rich-composer'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -267,6 +264,7 @@
 	var owo = [];
 	// #endif
 	export default {
+		components: { RichComposer },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -296,6 +294,7 @@
 				uploadCurrentLabel:'',
 				failedUploads:[],
 				imageOrder:{},
+				mediaOrderMode:false,
 				nextUploadOrder:0,
 				token:"",
 				currencyName:"",
@@ -1398,6 +1397,21 @@
 				this.picList = this.picList.filter(pic => pic !== item)
 				this.$delete(this.imageOrder, item)
 			},
+			enableMediaOrder(item) {
+				if (item.uploading || item.failed || this.picList.length < 2) return
+				this.mediaOrderMode = true
+				uni.showToast({ title: '使用左右按钮调整图片顺序', icon: 'none' })
+			},
+			movePic(path, offset) {
+				const index = this.picList.indexOf(path)
+				const target = index + offset
+				if (index < 0 || target < 0 || target >= this.picList.length) return
+				const next = this.picList.slice()
+				next.splice(index, 1)
+				next.splice(target, 0, path)
+				this.picList = next
+				this.initializeImageOrder()
+			},
 			sortPicList() {
 				this.picList = this.picList.slice().sort((left, right) =>
 					Number(this.imageOrder[left] || 0) - Number(this.imageOrder[right] || 0))
@@ -2103,6 +2117,27 @@
 		background: rgba(24, 38, 35, 0.72);
 		color: #ffffff !important;
 		font-size: 23rpx !important;
+	}
+
+	.media-order-controls {
+		position: absolute;
+		z-index: 3;
+		bottom: 8rpx;
+		left: 8rpx;
+		display: flex;
+		gap: 6rpx;
+	}
+
+	.media-order-controls text {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 42rpx;
+		height: 42rpx;
+		border-radius: 50%;
+		background: rgba(27, 46, 41, .72);
+		color: #fff;
+		font-size: 23rpx;
 	}
 
 	.post-policy-popup {

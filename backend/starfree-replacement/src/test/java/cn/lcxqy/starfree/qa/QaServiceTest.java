@@ -125,8 +125,10 @@ class QaServiceTest {
         verify(statement).setObject(1, "校园里哪里适合安静自习？");
         verify(statement).setObject(2, "希望晚上也开放");
         verify(statement).setObject(3, "学习");
-        verify(statement).setObject(4, 1);
-        verify(statement).setObject(5, 7L);
+        verify(statement).setObject(4, "");
+        verify(statement).setObject(5, "");
+        verify(statement).setObject(6, 1);
+        verify(statement).setObject(7, 7L);
     }
 
     @Test
