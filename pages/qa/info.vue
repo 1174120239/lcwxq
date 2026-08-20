@@ -14,8 +14,8 @@
 				<text v-if="question.topic" class="qa-topic">{{question.topic}}</text>
 			</view>
 			<text class="qa-question-title" user-select>{{question.title}}</text>
-			<text v-if="question.description" class="qa-question-description" user-select>{{question.description}}</text>
-			<image v-if="question.coverUrl" class="qa-question-cover" :src="question.coverUrl" mode="widthFix"></image>
+			<rich-content v-if="question.description" :value="question.description"></rich-content>
+			<view v-if="question.imageUrls && question.imageUrls.length" class="qa-question-images"><image v-for="url in question.imageUrls" :key="url" :src="url" mode="aspectFill" @tap="previewQuestionImage(url)"></image></view>
 		</view>
 
 		<view class="qa-answer-toolbar" v-if="question.id">
@@ -89,8 +89,10 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import RichContent from '@/components/rich-content/rich-content'
 
 	export default {
+		components: { RichContent },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -164,6 +166,7 @@
 			this.loadAnswers(true);
 		},
 		methods: {
+			previewQuestionImage(url) { uni.previewImage({ urls: this.question.imageUrls || [url], current: url }) },
 			loadTheme() {
 				this.campusThemeMode = getCampusThemeMode();
 				this.themeClock = Date.now();
@@ -489,6 +492,8 @@
 	.qa-question-title { display: block; font-size: 42rpx; font-weight: 700; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
 	.qa-question-description { display: block; margin-top: 22rpx; color: #56645f; font-size: 29rpx; line-height: 1.72; white-space: pre-wrap; word-break: break-word; }
 	.qa-question-cover { width: 100%; margin-top: 26rpx; border-radius: 14rpx; background: #edf1ef; }
+	.qa-question-images { display:grid; grid-template-columns:repeat(3,1fr); gap:12rpx; margin-top:26rpx; }
+	.qa-question-images image { width:100%; aspect-ratio:1; border-radius:10rpx; background:#edf1ef; }
 	.qa-answer-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 28rpx 30rpx 18rpx; }
 	.qa-answer-count { font-size: 29rpx; font-weight: 600; }
 	.qa-sort { display: flex; align-items: center; gap: 8rpx; padding: 5rpx; border-radius: 12rpx; background: #e9eeec; }

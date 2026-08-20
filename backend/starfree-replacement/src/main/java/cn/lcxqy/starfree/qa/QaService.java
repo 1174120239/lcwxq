@@ -88,6 +88,8 @@ public class QaService {
                 "问题标题至少需要4个字", "问题标题不能超过160个字");
         String description = optionalText(body.get("description"), 5000, "问题说明不能超过5000个字");
         String topic = optionalText(body.get("topic"), 80, "话题不能超过80个字");
+		List<String> imageUrls = imageUrls(body.get("imageUrls"));
+		String coverUrl = imageUrls.isEmpty() ? "" : imageUrls.get(0);
         long now = Instant.now().getEpochSecond();
         rejectBanned(actor, now);
         Integer duplicate = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_qa_questions "
@@ -99,9 +101,9 @@ public class QaService {
         boolean auditEnabled = aiModeration != null && aiModeration.globalAuditEnabled();
         int initialStatus = auditEnabled ? 0 : 1;
         long id = insertKey("INSERT INTO starfree_qa_questions"
-                        + "(title,description,topic,cover_url,status,recommended,sort_order,created_by,created,modified) "
-                        + "VALUES(?,?,?,'',?,0,0,?,?,?)",
-                title, description, topic, initialStatus, actor.getUid(), now, now);
+                        + "(title,description,topic,cover_url,image_urls,status,recommended,sort_order,created_by,created,modified) "
+                        + "VALUES(?,?,?,?,?, ?,0,0,?,?,?)",
+                title, description, topic, coverUrl, joinImages(imageUrls), initialStatus, actor.getUid(), now, now);
         int status = initialStatus;
         AiModerationService.Decision decision = null;
         if (auditEnabled && aiModeration.enabledForQuestion()) {
@@ -369,7 +371,10 @@ public class QaService {
         String title = validateText(body.get("title"), 4, 160, "问题标题至少需要4个字", "问题标题不能超过160个字");
         String description = optionalText(body.get("description"), 5000, "问题说明不能超过5000个字");
         String topic = optionalText(body.get("topic"), 80, "话题不能超过80个字");
-        String coverUrl = optionalText(body.get("coverUrl"), 500, "封面地址不能超过500个字");
+		String requestedCoverUrl = optionalText(body.get("coverUrl"), 500, "封面地址不能超过500个字");
+		List<String> imageUrls = body.containsKey("imageUrls")
+				? imageUrls(body.get("imageUrls")) : splitImages("", requestedCoverUrl);
+		String coverUrl = imageUrls.isEmpty() ? requestedCoverUrl : imageUrls.get(0);
         int recommended = flag(body.get("recommended"));
         int status = flagDefault(body.get("status"), 1);
         int sortOrder = integer(body.get("sortOrder"), 0);
@@ -383,8 +388,8 @@ public class QaService {
             }
             oldStatus = (int) number(value(existing.get(0), "status"));
             int changed = jdbc.update("UPDATE starfree_qa_questions SET title=?,description=?,topic=?,"
-                            + "cover_url=?,recommended=?,status=?,sort_order=?,modified=? WHERE id=?",
-                    title, description, topic, coverUrl, recommended, status, sortOrder, now, id);
+							+ "cover_url=?,image_urls=?,recommended=?,status=?,sort_order=?,modified=? WHERE id=?",
+                    title, description, topic, coverUrl, joinImages(imageUrls), recommended, status, sortOrder, now, id);
             if (changed != 1) {
                 throw new IllegalArgumentException("问题不存在");
             }
@@ -394,9 +399,9 @@ public class QaService {
             }
         } else {
             id = insertKey("INSERT INTO starfree_qa_questions"
-                            + "(title,description,topic,cover_url,status,recommended,sort_order,created_by,created,modified) "
-                            + "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    title, description, topic, coverUrl, status, recommended, sortOrder,
+							+ "(title,description,topic,cover_url,image_urls,status,recommended,sort_order,created_by,created,modified) "
+                            + "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    title, description, topic, coverUrl, joinImages(imageUrls), status, recommended, sortOrder,
                     actor.getUid(), now, now);
         }
         return managedQuestion(id);
@@ -430,14 +435,14 @@ public class QaService {
     }
 
     private String questionSelect() {
-        return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.status,q.recommended,"
+		return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.image_urls,q.status,q.recommended,"
                 + "q.sort_order,q.created_by,q.created,q.modified,"
                 + "(SELECT COUNT(*) FROM starfree_qa_answers a WHERE a.question_id=q.id AND a.status=1) AS answer_count "
                 + "FROM starfree_qa_questions q";
     }
 
     private String questionManageSelect() {
-        return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.status,q.recommended,"
+		return "SELECT q.id,q.title,q.description,q.topic,q.cover_url,q.image_urls,q.status,q.recommended,"
                 + "q.sort_order,q.created_by,q.created,q.modified,"
                 + "(SELECT COUNT(*) FROM starfree_qa_answers a WHERE a.question_id=q.id AND a.status=1) AS answer_count,"
                 + "(SELECT r.ai_decision FROM starfree_ai_moderation_reviews r "
@@ -468,6 +473,7 @@ public class QaService {
         result.put("description", text(value(row, "description")));
         result.put("topic", text(value(row, "topic")));
         result.put("coverUrl", text(value(row, "cover_url")));
+		result.put("imageUrls", splitImages(text(value(row, "image_urls")), text(value(row, "cover_url"))));
         result.put("status", number(value(row, "status")));
         result.put("recommended", number(value(row, "recommended")));
         result.put("sortOrder", number(value(row, "sort_order")));
@@ -712,6 +718,34 @@ public class QaService {
         }
         return value;
     }
+
+	private List<String> imageUrls(Object raw) {
+		List<String> result = new ArrayList<String>();
+		if (raw instanceof List<?>) {
+			for (Object item : (List<?>) raw) addImageUrl(result, item);
+		} else if (raw != null) {
+			for (String item : String.valueOf(raw).split("\\|\\|")) addImageUrl(result, item);
+		}
+		if (result.size() > 9) throw new IllegalArgumentException("最多上传9张图片");
+		return result;
+	}
+
+	private void addImageUrl(List<String> target, Object raw) {
+		String url = raw == null ? "" : String.valueOf(raw).trim();
+		if (url.isEmpty()) return;
+		if (url.length() > 500 || !url.matches("https?://[^\\s]+")) {
+			throw new IllegalArgumentException("图片地址不合法");
+		}
+		target.add(url);
+	}
+
+	private String joinImages(List<String> urls) { return String.join("||", urls); }
+
+	private List<String> splitImages(String raw, String fallback) {
+		if (raw != null && !raw.trim().isEmpty()) return imageUrls(raw);
+		return fallback == null || fallback.trim().isEmpty()
+				? new ArrayList<String>() : imageUrls(fallback);
+	}
 
     private int flag(Object value) {
         return number(value) == 1 ? 1 : 0;
