@@ -1,34 +1,47 @@
 <template>
 	<view class="rich-composer" :class="{'is-night': night}">
-		<textarea class="rich-composer-input" :value="value" :maxlength="maxlength" :placeholder="placeholder"
-			:cursor="cursor" :focus="focus" :auto-height="autoHeight" :adjust-position="true" :cursor-spacing="24"
-			@input="onInput" @cursor="onCursor" @selectionchange="onSelectionChange"></textarea>
+		<editor id="rich-editor" class="rich-composer-input" :placeholder="placeholder" :read-only="false"
+			:show-img-size="false" :show-img-toolbar="false" :show-img-resize="false"
+			@ready="onEditorReady" @input="onEditorInput" @statuschange="onStatusChange"></editor>
 		<view v-if="showStatus" class="rich-composer-status"><text>{{textLength}}/{{maxlength}}</text><text>{{status}}</text></view>
 		<view class="rich-composer-toolbar">
 			<text class="cuIcon-emoji toolbar-button" @tap="$emit('emoji')"></text>
 			<text class="cuIcon-pic toolbar-button" @tap="$emit('media')"></text>
 			<text class="toolbar-button toolbar-text" :class="{'is-active': formatOpen}" @tap="formatOpen=!formatOpen">T</text>
 			<text v-if="showComponent" class="cuIcon-add toolbar-button" @tap="$emit('component')"></text>
-			<text class="cuIcon-back toolbar-button toolbar-history" :class="{'is-disabled': historyIndex<=0}" @tap="undo"></text>
-			<text class="cuIcon-forward toolbar-button toolbar-history" :class="{'is-disabled': historyIndex>=history.length-1}" @tap="redo"></text>
+			<text class="cuIcon-back toolbar-button toolbar-history" :class="{'is-disabled': !canUndo}" @tap="undo"></text>
+			<text class="cuIcon-forward toolbar-button toolbar-history" :class="{'is-disabled': !canRedo}" @tap="redo"></text>
 		</view>
 		<view v-if="formatOpen" class="rich-format-panel">
 			<view class="format-row format-headings">
-				<text @tap="linePrefix('# ')">H1</text><text @tap="linePrefix('## ')">H2</text><text @tap="linePrefix('### ')">H3</text><text class="is-selected" @tap="linePrefix('')">正文</text>
+				<text :class="{'is-selected': activeBlock==='h1'}" @tap="setBlock(1)">H1</text>
+				<text :class="{'is-selected': activeBlock==='h2'}" @tap="setBlock(2)">H2</text>
+				<text :class="{'is-selected': activeBlock==='h3'}" @tap="setBlock(3)">H3</text>
+				<text :class="{'is-selected': activeBlock==='paragraph'}" @tap="setBlock(false)">正文</text>
 			</view>
 			<view class="format-row">
-				<text class="cuIcon-list" @tap="linePrefix('- ')"></text><text class="cuIcon-list" @tap="linePrefix('1. ')"></text>
-				<text class="cuIcon-sort" @tap="wrap('[align=left]','[/align]')"></text><text class="cuIcon-sort" @tap="wrap('[align=center]','[/align]')"></text><text class="cuIcon-sort" @tap="wrap('[align=right]','[/align]')"></text>
+				<text class="format-list" :class="{'is-selected': formats.list==='bullet'}" @tap="setFormat('list','bullet')">• 列表</text>
+				<text class="format-list" :class="{'is-selected': formats.list==='ordered'}" @tap="setFormat('list','ordered')">1. 列表</text>
+				<text class="cuIcon-sort" :class="{'is-selected': !formats.align || formats.align==='left'}" @tap="setFormat('align','left')"></text>
+				<text class="cuIcon-sort" :class="{'is-selected': formats.align==='center'}" @tap="setFormat('align','center')"></text>
+				<text class="cuIcon-sort" :class="{'is-selected': formats.align==='right'}" @tap="setFormat('align','right')"></text>
 			</view>
 			<view class="format-row">
-				<text class="format-color" @tap="wrap('[color=#e05650]','[/color]')">A 颜色</text><text @tap="wrap('**','**')">B</text><text class="format-italic" @tap="wrap('*','*')">I</text><text class="format-underline" @tap="wrap('[u]','[/u]')">U</text><text class="format-strike" @tap="wrap('~~','~~')">S</text>
+				<text class="format-color" :class="{'is-selected': colorPickerOpen || formats.color}" :style="formats.color ? {color: formats.color} : {}" @tap="toggleColorPicker">A 颜色</text>
+				<text :class="{'is-selected': formats.bold}" @tap="toggleFormat('bold')">B</text>
+				<text class="format-italic" :class="{'is-selected': formats.italic}" @tap="toggleFormat('italic')">I</text>
+				<text class="format-underline" :class="{'is-selected': formats.underline}" @tap="toggleFormat('underline')">U</text>
+				<text class="format-strike" :class="{'is-selected': formats.strike}" @tap="toggleFormat('strike')">S</text>
+			</view>
+			<view v-if="colorPickerOpen" class="format-color-picker">
+				<text v-for="color in colors" :key="color" class="format-color-swatch" :style="{backgroundColor: color}" @tap="applyColor(color)"></text>
 			</view>
 		</view>
 	</view>
 </template>
 
 <script>
-	import { insertRichToken, plainText } from '@/utils/richContent.js'
+	import { containsMarkdownFormatting, deltaHasFormatting, deltaToRichContent, plainText, renderRichContent } from '@/utils/richContent.js'
 	export default {
 		name: 'richComposer',
 		props: {
@@ -36,48 +49,91 @@
 			focus: { type: Boolean, default: false }, night: { type: Boolean, default: false }, showStatus: { type: Boolean, default: true },
 			showComponent: { type: Boolean, default: false }, autoHeight: { type: Boolean, default: false }, status: { type: String, default: '' }
 		},
-		data() { return { cursor: 0, selectionStart: 0, selectionEnd: 0, formatOpen: false, history: [this.value || ''], historyIndex: 0 } },
-		computed: { textLength() { return plainText(this.value).length } },
+		data() { return { editorContext: null, editorReady: false, applyingContents: false, internalValue: this.value || '', formatOpen: false, colorPickerOpen: false, activeBlock: 'paragraph', formats: {}, canUndo: false, canRedo: false, colors: ['#d94841','#dc7d22','#b68b10','#20845f','#167a9e','#3158b8','#7046b5','#b13f75','#263934','#66756f'] } },
+		computed: {
+			textLength() { return plainText(this.internalValue).length }
+		},
 		watch: {
 			value(next) {
-				if (next === this.history[this.historyIndex]) return
-				this.history = this.history.slice(0, this.historyIndex + 1).concat([next])
-				if (this.history.length > 40) this.history.shift()
-				this.historyIndex = this.history.length - 1
+				if (next === this.internalValue) return
+				this.internalValue = String(next || '')
+				this.setEditorContents(this.internalValue)
 			}
 		},
 		methods: {
-			onInput(event) { this.$emit('input', event.detail.value) },
-			onCursor(event) {
-				this.cursor = Number(event.detail.cursor) || 0
-				if (this.selectionStart === this.selectionEnd) this.selectionStart = this.selectionEnd = this.cursor
+			onEditorReady() {
+				uni.createSelectorQuery().in(this).select('#rich-editor').context(result => {
+					this.editorContext = result && result.context
+					this.editorReady = Boolean(this.editorContext)
+					this.setEditorContents(this.internalValue)
+					if (this.focus && this.editorContext) this.editorContext.focus()
+				}).exec()
 			},
-			onSelectionChange(event) {
+			setEditorContents(value) {
+				if (!this.editorReady || !this.editorContext) return
+				this.applyingContents = true
+				this.editorContext.setContents({
+					html: renderRichContent(value),
+					complete: () => { this.$nextTick(() => { this.applyingContents = false }) }
+				})
+			},
+			onEditorInput(event) {
+				if (this.applyingContents) return
 				const detail = event && event.detail ? event.detail : {}
-				this.selectionStart = Math.max(0, Number(detail.selectionStart == null ? detail.start : detail.selectionStart) || 0)
-				this.selectionEnd = Math.max(this.selectionStart, Number(detail.selectionEnd == null ? detail.end : detail.selectionEnd) || this.selectionStart)
-				this.cursor = this.selectionStart
-			},
-			apply(result) { this.cursor = result.cursor; this.$emit('input', result.value) },
-			wrap(before, after) {
-				const result = insertRichToken(this.value, this.selectionStart, before, after, this.selectionEnd)
-				this.selectionStart = result.selectionStart
-				this.selectionEnd = result.selectionEnd
-				this.apply(result)
-			},
-			linePrefix(prefix) {
-				const source = String(this.value || ''), cursor = Math.max(0, Math.min(this.selectionStart, source.length)), end = Math.max(cursor, Math.min(this.selectionEnd, source.length))
-				const start = source.lastIndexOf('\n', cursor - 1) + 1
-				const selectedEnd = source.indexOf('\n', end) < 0 ? source.length : source.indexOf('\n', end)
-				const lines = source.slice(start, selectedEnd).split('\n').map(line => prefix + line.replace(/^(# |## |### |- |\d+\. )/, ''))
-				const next = source.slice(0, start) + lines.join('\n') + source.slice(selectedEnd)
-				this.selectionStart = start
-				this.selectionEnd = start + lines.join('\n').length
-				this.cursor = this.selectionEnd
+				const rawText = String(detail.text || '').replace(/\n$/, '')
+				if (!deltaHasFormatting(detail.delta) && containsMarkdownFormatting(rawText)) {
+					this.internalValue = rawText
+					this.$emit('input', rawText)
+					this.setEditorContents(rawText)
+					return
+				}
+				const next = deltaToRichContent(detail.delta)
+				if (plainText(next).length > this.maxlength) {
+					this.setEditorContents(this.internalValue)
+					uni.showToast({ title: '最多输入' + this.maxlength + '个字', icon: 'none' })
+					return
+				}
+				this.internalValue = next
+				this.canUndo = true
+				this.canRedo = false
 				this.$emit('input', next)
 			},
-			undo() { if (this.historyIndex <= 0) return; this.historyIndex--; this.cursor = this.history[this.historyIndex].length; this.$emit('input', this.history[this.historyIndex]) },
-			redo() { if (this.historyIndex >= this.history.length - 1) return; this.historyIndex++; this.cursor = this.history[this.historyIndex].length; this.$emit('input', this.history[this.historyIndex]) }
+			onStatusChange(event) {
+				const detail = event && event.detail ? event.detail : {}
+				this.formats = Object.assign({}, detail.formats || detail)
+				const header = this.formats.header
+				this.activeBlock = header === 1 || header === '1' ? 'h1' : header === 2 || header === '2' ? 'h2' : header === 3 || header === '3' ? 'h3' : 'paragraph'
+			},
+			setFormat(name, value) {
+				if (!this.editorContext) return
+				this.editorContext.format(name, value)
+			},
+			toggleFormat(name) {
+				this.setFormat(name, this.formats[name] ? false : true)
+			},
+			setBlock(level) {
+				this.setFormat('header', level)
+				this.activeBlock = level ? 'h' + level : 'paragraph'
+			},
+			toggleColorPicker() {
+				this.colorPickerOpen = !this.colorPickerOpen
+			},
+			applyColor(color) {
+				this.colorPickerOpen = false
+				this.setFormat('color', color)
+			},
+			undo() {
+				if (!this.editorContext || !this.canUndo) return
+				this.editorContext.undo()
+				this.canUndo = false
+				this.canRedo = true
+			},
+			redo() {
+				if (!this.editorContext || !this.canRedo) return
+				this.editorContext.redo()
+				this.canUndo = true
+				this.canRedo = false
+			}
 		}
 	}
 </script>
@@ -85,6 +141,9 @@
 <style scoped>
 	.rich-composer { border-bottom: 1rpx solid #e5ece9; background: #fff; }
 	.rich-composer-input { display:block; width:100%; min-height:300rpx; padding:28rpx 0 16rpx; box-sizing:border-box; color:#263934; font-size:31rpx; line-height:1.72; }
+	.rich-composer-input /deep/ .ql-container { min-height:300rpx; font-size:31rpx; line-height:1.72; }
+	.rich-composer-input /deep/ .ql-editor { min-height:300rpx; padding:0; color:#263934; line-height:1.72; }
+	.rich-composer-input /deep/ .ql-editor.ql-blank::before { left:0; color:#89958f; font-style:normal; }
 	.rich-composer-status { display:flex; justify-content:space-between; padding:10rpx 0 14rpx; color:#7e9089; font-size:21rpx; }
 	.rich-composer-toolbar { display:flex; align-items:center; gap:42rpx; min-height:76rpx; border-top:1rpx solid #e5ece9; }
 	.toolbar-button { min-width:34rpx; color:#24332f; font-size:32rpx; text-align:center; }
@@ -99,11 +158,16 @@
 	.format-headings { grid-template-columns:repeat(4,1fr); }
 	.format-row .is-selected { color:#287d70; background:#e7f3ee; }
 	.format-color { font-size:22rpx !important; color:#c94d4a !important; }
+	.format-list { font-size:21rpx !important; }
+	.format-color-picker { display:flex; flex-wrap:wrap; gap:18rpx; padding:18rpx 4rpx 0; }
+	.format-color-swatch { width:42rpx; height:42rpx; border:4rpx solid #fff; border-radius:50%; box-shadow:0 0 0 1rpx #d2ddd8; }
 	.format-italic { font-family:serif; font-style:italic; font-size:34rpx !important; }
 	.format-underline { text-decoration:underline; }
 	.format-strike { text-decoration:line-through; }
 	.is-night { border-color:#2d4039; background:#18231f; }
 	.is-night .rich-composer-input,.is-night .toolbar-button { color:#e5eeea; }
+	.is-night .rich-composer-input /deep/ .ql-editor { color:#e5eeea; }
+	.is-night .rich-composer-input /deep/ .ql-editor.ql-blank::before { color:#84928c; }
 	.is-night .rich-composer-toolbar,.is-night .rich-format-panel { border-color:#2d4039; background:#151f1b; }
 	.is-night .format-row text { background:#26342f; color:#dce8e2; }
 	.is-night .format-row .is-selected { background:#25483d; color:#9bd0bb; }
