@@ -1,6 +1,6 @@
 # 生产部署与回滚手册
 
-> 更新日期：2026-08-16
+> 更新日期：2026-08-21
 >
 > 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
@@ -58,13 +58,14 @@
 
 专用用户初始化脚本为 `deploy/server/bootstrap-deploy-user.sh`，它只接受 Ed25519 公钥文件，并在 `/etc/sudoers.d/lcxqy-deploy` 中写入受限规则。必须先在第二个终端验证新账号可登录，再考虑关闭旧的 root 密码登录；不要在同一个操作里同时改账号、防火墙和服务部署。
 
-通用发布入口默认不执行数据库迁移，也不修改 Nginx。当前唯一例外是经过明确授权的校园互助迁移 014：只允许 `-Component replacement-backend -RunMigrations`，入口校验固定 SQL SHA-256、定向备份已有 `starfree_lost_found_%` 表、执行或识别已完成迁移，并核对五张 InnoDB 表、配置行、联系方式唯一键和列表/接收者索引。其他组件或其他迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+通用发布入口默认不执行数据库迁移，也不修改 Nginx。经过明确授权后，replacement-backend 可用 `-RunMigrations -Migration 014` 或 `-RunMigrations -Migration 015` 执行单个受控迁移；入口校验固定 SQL SHA-256、备份受影响表/列、执行幂等检查并在结构验收失败时回滚本次新增结构。其他组件或未明确指定的迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
 
 ~~~powershell
 .\deploy\publish-to-server.ps1 `
   -Component replacement-backend `
   -ConfirmProduction `
-  -RunMigrations
+  -RunMigrations `
+  -Migration 015
 ~~~
 
 `-UseExistingArtifact` 只用于已经在同一维护任务中完成测试和构建、且 SHA-256 与发布脚本固定值一致的互助 JAR。入口同时确认 `8f60799892cd5568dce98504a14246d3183300cf` 之后没有后端源码变化；它不能作为日常跳过构建的通用参数。
@@ -271,6 +272,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 012 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和展示时效字段及索引 |
 | 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
 | 014 | 014_lost_and_found.sql | 校园互助信息、评论、QQ 定向授权、审核日志和功能配置 |
+| 015 | 015_publish_rich_media.sql | 为校园问答和互助发布增加有序多图字段，保留首图兼容字段 |
 
 规则：
 
@@ -332,6 +334,12 @@ PHP admin 与 App。回滚代码时保留 013 的新增列和表，禁止清空�
 时保留新增表以及上线后产生的互助、评论和审计数据；普通开发或组件发布不得顺带执行 014。
 受控入口只在迁移执行或结构验收本身失败时删除这五张隔离表并恢复本次定向备份；迁移成功后若 JAR
 健康检查失败，只回滚 JAR 并保留 014 表。发布输出中的 `migration_014_backup` 是数据库定向备份路径。
+
+015 以幂等方式为 `starfree_qa_questions` 和 `starfree_lost_found_items` 增加 `image_urls` 文本列，
+用于保存发布页图片顺序；现有 `cover_url`/`image_url` 继续作为首图兼容字段。执行前定向备份两张
+受影响表，确认问答和互助表已存在；执行后核对两列均为 `text`，再部署匹配的 replacement JAR。
+迁移失败时受控入口只删除本次新增列，迁移成功后回滚 JAR 不得覆盖上线后的图片数据。发布输出中的
+`migration_015_backup` 是两张受影响表的备份路径。
 
 001 可使用：
 

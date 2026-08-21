@@ -222,6 +222,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { renderRichContent } from '@/utils/richContent.js'
 	export default {
 		data() {
 			return {
@@ -401,20 +402,7 @@
 			    return num >= 1e3 && num < 1e4 ? (num / 1e3).toFixed(1) + 'k' : num >= 1e4 ? (num / 1e4).toFixed(1) + 'w' : num
 			},
 			markHtml(text){
-				var that = this;
-				text = that.replaceAll(text,"<","&lt;");
-				text = that.replaceAll(text,">","&gt;");
-				var owoList=that.owoList;
-				for(var i in owoList){
-				
-					if(that.replaceSpecialChar(text).indexOf(owoList[i].data) != -1){
-						text = that.replaceAll(that.replaceSpecialChar(text),owoList[i].data,"<img src='/"+owoList[i].icon+"' class='tImg' />")
-						
-					}
-				}
-				text = that.replaceAll(text,"/r/n","<br>");
-				text = that.TransferString(text);
-				return text;
+				return renderRichContent(this.replaceSpecialChar(String(text || '')), { emojiList: this.owoList || [] })
 			},
 			TransferString(content)
 			{  

@@ -11,6 +11,8 @@ param(
     [switch]$DryRun,
     [switch]$ConfirmProduction,
     [switch]$RunMigrations,
+    [ValidateSet('014', '015')]
+    [string]$Migration = '',
     [switch]$UseExistingArtifact,
     [switch]$BootstrapServer
 )
@@ -22,6 +24,7 @@ $rollbackEntrypoint = Join-Path $PSScriptRoot 'server/lcxqy-rollback.sh'
 $mutualAidCommit = '8f60799892cd5568dce98504a14246d3183300cf'
 $mutualAidJarSha256 = '56ec4591466d5ccef862c48dbf14d90f2ddc1fd6799780609f6ee28cab60041b'
 $migration014Sha256 = '6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271'
+$migration015Sha256 = '9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8'
 
 function Invoke-Git([string[]]$Arguments) {
     $result = & git -C $repoRoot @Arguments 2>&1
@@ -78,7 +81,13 @@ if ($remoteCommit -ne $commit) {
 }
 
 if ($RunMigrations -and $Component -ne 'replacement-backend') {
-    throw 'Migration 014 is only allowed with Component=replacement-backend.'
+    throw 'Database migrations are only allowed with Component=replacement-backend.'
+}
+if ($RunMigrations -and -not $Migration) {
+    throw 'RunMigrations requires an explicit -Migration value (014 or 015).'
+}
+if ($Migration -and -not $RunMigrations) {
+    throw '-Migration requires -RunMigrations.'
 }
 if ($UseExistingArtifact -and $Component -ne 'replacement-backend') {
     throw 'UseExistingArtifact is only allowed with Component=replacement-backend.'
@@ -110,16 +119,18 @@ try {
     )
 
     if ($RunMigrations) {
-        $migration = Join-Path $repoRoot 'backend/database/migrations/014_lost_and_found.sql'
+        $migrationName = if ($Migration -eq '014') { '014_lost_and_found.sql' } else { '015_publish_rich_media.sql' }
+        $expectedMigrationHash = if ($Migration -eq '014') { $migration014Sha256 } else { $migration015Sha256 }
+        $migration = Join-Path $repoRoot (Join-Path 'backend/database/migrations' $migrationName)
         if (-not (Test-Path -LiteralPath $migration -PathType Leaf)) {
-            throw "Migration 014 is missing: $migration"
+            throw "Migration $Migration is missing: $migration"
         }
         $migrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $migration).Hash.ToLowerInvariant()
-        if ($migrationHash -ne $migration014Sha256) {
-            throw "Migration 014 SHA-256 mismatch: $migrationHash"
+        if ($migrationHash -ne $expectedMigrationHash) {
+            throw "Migration $Migration SHA-256 mismatch: $migrationHash"
         }
-        Copy-Item -LiteralPath $migration -Destination (Join-Path $stage '014_lost_and_found.sql')
-        Write-Host "migration_014_sha256=$migrationHash"
+        Copy-Item -LiteralPath $migration -Destination (Join-Path $stage $migrationName)
+        Write-Host "migration_${Migration}_sha256=$migrationHash"
     }
 
     $effectiveComponents = if ($Component -eq 'all') {
@@ -236,7 +247,7 @@ echo "control_entry_backup=$backup"
         if ($LASTEXITCODE -ne 0) { throw 'Bootstrap installation failed.' }
     }
 
-    $migrationArgument = if ($RunMigrations) { ' --run-migrations' } else { '' }
+    $migrationArgument = if ($RunMigrations) { " --run-migrations --migration $Migration" } else { '' }
     & ssh @sshOptions $remote "sudo /usr/local/sbin/lcxqy-deploy --archive $remoteName --expected-sha256 $archiveHash --remote-root $RemoteRoot$migrationArgument"
     if ($LASTEXITCODE -ne 0) { throw 'Server deployment failed; inspect server output and backup path.' }
     & ssh @sshOptions $remote "rm -f $remoteName"

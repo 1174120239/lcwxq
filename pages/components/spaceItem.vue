@@ -154,6 +154,7 @@
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
+	import { renderRichContent } from '@/utils/richContent.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -387,23 +388,7 @@
 				return userlvStyle;
 			},
 			markHtml(text){
-				var that = this;
-				text = that.replaceAll(text,"<","&lt;");
-				text = that.replaceAll(text,">","&gt;");
-				var owoList=that.owoList;
-				for(var i in owoList){
-				
-					if(that.replaceSpecialChar(text).indexOf(owoList[i].data) != -1){
-						text = that.replaceAll(that.replaceSpecialChar(text),owoList[i].data,"<img src='/"+owoList[i].icon+"' class='tImg' />")
-						
-					}
-				}
-				text = that.replaceAll(text,"/r/n","<br>");
-				text = that.replaceAll(text,"||rn||","<br>");
-				text = that.replaceAll(text,"\\r\\n","<br>");
-				text = that.replaceAll(text,"\\n","<br>");
-				text = that.TransferString(text);
-				return text;
+				return renderRichContent(this.replaceSpecialChar(String(text || '')), { emojiList: this.owoList })
 			},
 			TransferString(content)
 			{  

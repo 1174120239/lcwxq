@@ -299,6 +299,7 @@
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
 	import { normalizeUser } from '@/utils/avatar.js'
 	import { copyText } from '@/utils/clipboard.js'
+	import { renderRichContent } from '@/utils/richContent.js'
 	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
 	import RichContent from '@/components/rich-content/rich-content'
@@ -757,23 +758,7 @@
 				return rankList[i];
 			},
 			markHtml(text){
-				var that = this;
-				text = that.replaceAll(text,"<","&lt;");
-				text = that.replaceAll(text,">","&gt;");
-				var owoList=that.owoList;
-				for(var i in owoList){
-				
-					if(that.replaceSpecialChar(text).indexOf(owoList[i].data) != -1){
-						text = that.replaceAll(that.replaceSpecialChar(text),owoList[i].data,"<img src='/"+owoList[i].icon+"' class='tImg' />")
-						
-					}
-				}
-				text = that.replaceAll(text,"/r/n","<br>");
-				text =that.replaceAll(text,"||rn||","<br>");
-				text = that.replaceAll(text,"\\r\\n","<br>");
-				text = that.replaceAll(text,"\\n","<br>");
-				text = that.TransferString(text);
-				return text;
+				return renderRichContent(this.replaceSpecialChar(String(text || '')), { emojiList: this.owoList })
 			},
 			TransferString(content)
 			{  

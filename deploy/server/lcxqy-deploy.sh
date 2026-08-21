@@ -11,10 +11,12 @@ EXPECTED_SHA256=
 COMPONENT=
 VERIFY_ONLY=false
 RUN_MIGRATIONS=false
+MIGRATION=
 MIGRATION_014_SHA256=6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271
+MIGRATION_015_SHA256=9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8
 
 usage() {
-    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations]"
+    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015]"
     echo "       $0 --verify --component COMPONENT"
 }
 
@@ -26,6 +28,7 @@ while [[ $# -gt 0 ]]; do
         --component) COMPONENT=${2:-}; shift 2 ;;
         --verify) VERIFY_ONLY=true; shift ;;
         --run-migrations) RUN_MIGRATIONS=true; shift ;;
+        --migration) MIGRATION=${2:-}; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -215,6 +218,71 @@ apply_migration_014() {
     echo "migration_014_backup=$backup_dir"
 }
 
+configure_mysql_015() {
+    local db_url db_target db_hostport db_user db_password escaped_user escaped_password
+    [[ -r /opt/application.properties ]] || { echo 'Production database configuration is not readable.' >&2; return 2; }
+    db_url=$(read_property 'spring\.datasource\.url')
+    db_user=$(read_property 'spring\.datasource\.username')
+    db_password=$(read_property 'spring\.datasource\.password')
+    [[ "$db_url" == jdbc:mysql://* ]] || { echo 'Unsupported production JDBC URL.' >&2; return 2; }
+    [[ -n "$db_user" ]] || { echo 'Production database username is empty.' >&2; return 2; }
+    db_target=${db_url#jdbc:mysql://}; db_target=${db_target%%\?*}; db_hostport=${db_target%%/*}
+    DB_NAME_015=${db_target#*/}; [[ "$DB_NAME_015" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'Unsafe production database name.' >&2; return 2; }
+    if [[ "$db_hostport" == *:* ]]; then DB_HOST_015=${db_hostport%%:*}; DB_PORT_015=${db_hostport##*:}; else DB_HOST_015=$db_hostport; DB_PORT_015=3306; fi
+    [[ -n "$DB_HOST_015" && "$DB_PORT_015" =~ ^[0-9]+$ ]] || { echo 'Invalid production database address.' >&2; return 2; }
+    MYSQL_CNF_015="$incoming/mysql-015.cnf"
+    escaped_user=${db_user//\\/\\\\}
+    escaped_user=${escaped_user//"/\\"}
+    escaped_password=${db_password//\\/\\\\}
+    escaped_password=${escaped_password//"/\\"}
+    umask 077; printf '[client]\nuser="%s"\npassword="%s"\n' "$escaped_user" "$escaped_password" > "$MYSQL_CNF_015"
+    MYSQL_BASE_ARGS_015=("--defaults-extra-file=$MYSQL_CNF_015" --protocol=tcp --host="$DB_HOST_015" --port="$DB_PORT_015")
+    mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" --batch --skip-column-names -e 'SELECT 1' >/dev/null
+}
+
+migration_015_valid() {
+    local column_count
+    column_count=$(mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND ((table_name='starfree_qa_questions' AND column_name='image_urls') OR (table_name='starfree_lost_found_items' AND column_name='image_urls'))")
+    [[ "$column_count" == 2 ]] || return 1
+    mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND column_name='image_urls' AND data_type='text'" | grep -qx '2'
+}
+
+backup_migration_015() {
+    MIGRATION_015_EXISTING=()
+    mapfile -t MIGRATION_015_EXISTING < <(mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT CONCAT(table_name,'.',column_name) FROM information_schema.columns WHERE table_schema=DATABASE() AND column_name='image_urls' AND table_name IN ('starfree_qa_questions','starfree_lost_found_items') ORDER BY table_name")
+    printf '%s\n' "${MIGRATION_015_EXISTING[@]}" > "$backup_dir/migration-015-preexisting-columns.txt"
+    mysqldump "${MYSQL_BASE_ARGS_015[@]}" --single-transaction --skip-lock-tables "$DB_NAME_015" starfree_qa_questions starfree_lost_found_items > "$backup_dir/migration-015-affected-tables.sql"
+    [[ -s "$backup_dir/migration-015-affected-tables.sql" ]] || { echo 'Migration 015 database backup is empty.' >&2; return 2; }
+    sha256sum "$backup_dir/migration-015-affected-tables.sql" > "$backup_dir/migration-015-affected-tables.sql.sha256"
+}
+
+rollback_migration_015() {
+    echo 'Migration 015 failed validation; removing only columns created by this migration.' >&2
+    local table
+    for table in starfree_qa_questions starfree_lost_found_items; do
+        if ! grep -qx "$table.image_urls" "$backup_dir/migration-015-preexisting-columns.txt"; then
+            mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -e "ALTER TABLE \`$table\` DROP COLUMN \`image_urls\`" || true
+        fi
+    done
+    echo 'migration_015_rollback=success' >&2
+}
+
+apply_migration_015() {
+    local migration_file="$incoming/015_publish_rich_media.sql" migration_hash table_count
+    for required in mysql mysqldump sha256sum; do command -v "$required" >/dev/null 2>&1 || { echo "Required migration command not found: $required" >&2; return 2; }; done
+    [[ -r "$migration_file" ]] || { echo 'Migration 015 is missing from the release.' >&2; return 2; }
+    migration_hash=$(sha256sum "$migration_file" | awk '{print $1}')
+    [[ "$migration_hash" == "$MIGRATION_015_SHA256" ]] || { echo 'Migration 015 SHA-256 mismatch.' >&2; return 2; }
+    configure_mysql_015 || return
+    table_count=$(mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_qa_questions','starfree_lost_found_items')")
+    [[ "$table_count" == 2 ]] || { echo 'Migration 015 requires the existing Q&A and mutual-aid tables.' >&2; return 2; }
+    backup_migration_015 || return
+    if migration_015_valid; then echo 'migration_015=already_present'; echo "migration_015_backup=$backup_dir"; return 0; fi
+    if ! mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" < "$migration_file"; then rollback_migration_015; return 20; fi
+    if ! migration_015_valid; then rollback_migration_015; return 21; fi
+    echo 'migration_015=applied'; echo "migration_015_backup=$backup_dir"
+}
+
 wait_for_component() {
     local component="$1"
     local timeout_seconds="${2:-60}"
@@ -284,7 +352,15 @@ case "$COMPONENT" in
     *) echo "Unsupported component: $COMPONENT" >&2; exit 22 ;;
 esac
 if [[ "$RUN_MIGRATIONS" == true && "$COMPONENT" != replacement-backend ]]; then
-    echo 'Migration 014 is only allowed for replacement-backend.' >&2
+    echo 'Database migrations are only allowed for replacement-backend.' >&2
+    exit 30
+fi
+if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 ]]; then
+    echo 'Run migrations requires --migration 014 or 015.' >&2
+    exit 30
+fi
+if [[ "$RUN_MIGRATIONS" == false && -n "$MIGRATION" ]]; then
+    echo '--migration requires --run-migrations.' >&2
     exit 30
 fi
 release_dir="$REMOTE_ROOT/releases/$COMMIT/$COMPONENT"
@@ -294,7 +370,12 @@ cp -p "$ARCHIVE" "$release_dir/release.tgz"
 printf '%s  release.tgz\n' "$actual_sha256" > "$release_dir/SHA256SUMS"
 
 if [[ "$RUN_MIGRATIONS" == true ]]; then
-    if ! apply_migration_014; then
+    if [[ "$MIGRATION" == 014 ]]; then
+        migration_status=apply_migration_014
+    else
+        migration_status=apply_migration_015
+    fi
+    if ! $migration_status; then
         echo "backup=$backup_dir" >&2
         exit 25
     fi

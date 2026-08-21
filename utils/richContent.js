@@ -14,7 +14,7 @@ export function plainText(value) {
 
 // Only Markdown typed by the user is parsed. Raw HTML is escaped before parsing so a
 // legacy client cannot turn a formatted post into script or event-handler markup.
-export function renderRichContent(value) {
+export function renderRichContent(value, options) {
 	let source = String(value || '')
 	const escape = (text) => String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 	const tokens = []
@@ -23,11 +23,17 @@ export function renderRichContent(value) {
 		tokens.push({ id, html })
 		return id
 	}
+	const emojiList = options && Array.isArray(options.emojiList) ? options.emojiList : []
+	emojiList.forEach((emoji) => {
+		if (emoji && emoji.data && emoji.icon) {
+			source = source.split(emoji.data).join(token('<img src="/' + String(emoji.icon).replace(/^\/+/, '') + '" class="tImg" />'))
+		}
+	})
 	source = source.replace(COLOR_TOKEN, (all, color, text) => token('<span style="color:' + color + '">' + escape(text) + '</span>'))
 	source = source.replace(ALIGN_TOKEN, (all, align, text) => token('<span style="display:block;text-align:' + align + '">' + escape(text) + '</span>'))
 	source = source.replace(UNDERLINE_TOKEN, (all, text) => token('<span style="text-decoration:underline">' + escape(text) + '</span>'))
 	source = source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-	let html = marked(source)
+	let html = marked(source, { breaks: true })
 	tokens.forEach((item) => {
 		const escaped = item.id.replace(/_/g, '_')
 		html = html.split(escaped).join(item.html)
