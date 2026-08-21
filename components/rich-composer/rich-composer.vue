@@ -22,9 +22,9 @@
 			<view class="format-row">
 				<text class="format-list" :class="{'is-selected': formats.list==='bullet'}" @tap="setFormat('list','bullet')">• 列表</text>
 				<text class="format-list" :class="{'is-selected': formats.list==='ordered'}" @tap="setFormat('list','ordered')">1. 列表</text>
-				<text class="cuIcon-sort" :class="{'is-selected': !formats.align || formats.align==='left'}" @tap="setFormat('align','left')"></text>
-				<text class="cuIcon-sort" :class="{'is-selected': formats.align==='center'}" @tap="setFormat('align','center')"></text>
-				<text class="cuIcon-sort" :class="{'is-selected': formats.align==='right'}" @tap="setFormat('align','right')"></text>
+				<view class="format-align format-align-left" :class="{'is-selected': !formats.align || formats.align==='left'}" aria-label="左对齐" @tap="setFormat('align','left')"><text></text><text></text><text></text></view>
+				<view class="format-align format-align-center" :class="{'is-selected': formats.align==='center'}" aria-label="居中对齐" @tap="setFormat('align','center')"><text></text><text></text><text></text></view>
+				<view class="format-align format-align-right" :class="{'is-selected': formats.align==='right'}" aria-label="右对齐" @tap="setFormat('align','right')"><text></text><text></text><text></text></view>
 			</view>
 			<view class="format-row">
 				<text class="format-color" :class="{'is-selected': colorPickerOpen || formats.color}" :style="formats.color ? {color: formats.color} : {}" @tap="toggleColorPicker">A 颜色</text>
@@ -155,6 +155,13 @@
 	.format-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8rpx; margin-top:12rpx; }
 	.format-row:first-child { margin-top:0; }
 	.format-row text { display:flex; align-items:center; justify-content:center; height:64rpx; border-radius:8rpx; background:#fff; color:#293733; font-size:27rpx; }
+	.format-row .format-align { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:5rpx; height:64rpx; padding:0 30rpx; box-sizing:border-box; border-radius:8rpx; background:#fff; }
+	.format-row .format-align text { display:block; height:4rpx; padding:0; border-radius:3rpx; background:#1d3b55; }
+	.format-align text:nth-child(1) { width:34rpx; }
+	.format-align text:nth-child(2) { width:48rpx; }
+	.format-align text:nth-child(3) { width:40rpx; }
+	.format-align-center { align-items:center !important; }
+	.format-align-right { align-items:flex-end !important; }
 	.format-headings { grid-template-columns:repeat(4,1fr); }
 	.format-row .is-selected { color:#287d70; background:#e7f3ee; }
 	.format-color { font-size:22rpx !important; color:#c94d4a !important; }
@@ -170,5 +177,7 @@
 	.is-night .rich-composer-input /deep/ .ql-editor.ql-blank::before { color:#84928c; }
 	.is-night .rich-composer-toolbar,.is-night .rich-format-panel { border-color:#2d4039; background:#151f1b; }
 	.is-night .format-row text { background:#26342f; color:#dce8e2; }
+	.is-night .format-row .format-align { background:#26342f; }
+	.is-night .format-row .format-align text { background:#dce8e2; }
 	.is-night .format-row .is-selected { background:#25483d; color:#9bd0bb; }
 </style>
