@@ -29,8 +29,8 @@
 		<form>
 			<view class="post-compose">
 				<rich-composer ref="richComposer" v-model="text" :maxlength="maxTextLength" placeholder="分享校园里的新鲜事…"
-					:night="campusNight" :show-component="postType=='add' && !anonymousMode && type==0"
-					:status="publishReason" @emoji="OwO" @media="chooseMedia" @component="openComponentPicker"></rich-composer>
+					:night="campusNight" :show-media="false" :show-component="false"
+					:status="publishReason" @emoji="toggleEmojiDrawer" @format-toggle="onFormatToggle"></rich-composer>
 
 				<!--  #ifdef H5 || APP-PLUS -->
 				<view class="comments-owo space-owo" v-if="isOwO">
@@ -130,7 +130,7 @@
 				<view class="topic-editor">
 					<view class="topic-editor-head">
 						<text class="topic-editor-title">话题</text>
-						<text class="topic-editor-toggle" @tap="showTopicPicker=!showTopicPicker">
+						<text class="topic-editor-toggle" @tap="toggleTopicPicker">
 							{{showTopicPicker ? '收起' : '添加话题'}}
 						</text>
 					</view>
@@ -487,11 +487,36 @@
 			
 		},
 		methods: {
-			openComponentPicker() { this.componentPickerVisible = true },
+			onFormatToggle(open) {
+				if (open) this.closeTransientPanels('format')
+			},
+			closeTransientPanels(except) {
+				if (except !== 'emoji') this.isOwO = false
+				if (except !== 'format' && this.$refs.richComposer) this.$refs.richComposer.closeFormatPanel()
+				if (except !== 'topic') this.showTopicPicker = false
+				if (except !== 'component') this.componentPickerVisible = false
+				if (except !== 'poll') this.pollEditorVisible = false
+			},
+			toggleEmojiDrawer() {
+				const next = !this.isOwO
+				this.closeTransientPanels(next ? 'emoji' : '')
+				this.isOwO = next
+				if (this.$refs.richComposer) this.$refs.richComposer.setEmojiActive(next)
+			},
+			toggleTopicPicker() {
+				const next = !this.showTopicPicker
+				this.closeTransientPanels(next ? 'topic' : '')
+				this.showTopicPicker = next
+			},
+			openComponentPicker() {
+				this.closeTransientPanels('component')
+				this.componentPickerVisible = true
+			},
 			closeComponentPicker() { this.componentPickerVisible = false },
 			selectPollComponent() { this.componentPickerVisible = false; this.openPollEditor() },
 			blankPollDraft() { return { title:'', description:'', options:['',''], multiple:false, maxChoices:1 } },
 			openPollEditor() {
+				this.closeTransientPanels('poll')
 				this.pollDraft = this.poll ? JSON.parse(JSON.stringify(this.poll)) : this.blankPollDraft()
 				this.pollEditorVisible = true
 			},
@@ -721,6 +746,7 @@
 			},
 			chooseMedia() {
 				if (this.isUploading) return
+				this.closeTransientPanels()
 				uni.showActionSheet({
 					itemList: ['选择图片', '选择视频'],
 						success: ({ tapIndex }) => {
@@ -801,10 +827,6 @@
 				var text = data.data;
 				if (that.$refs.richComposer && that.$refs.richComposer.insertText(text)) return;
 				that.text = (that.text + text).slice(0, that.maxTextLength);
-			},
-			OwO(){
-				var that = this;
-				that.isOwO = !that.isOwO;
 			},
 			getForwardInfo(toid){
 				var that = this;

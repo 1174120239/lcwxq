@@ -5,9 +5,9 @@
 			@ready="onEditorReady" @input="onEditorInput" @statuschange="onStatusChange"></editor>
 		<view v-if="showStatus" class="rich-composer-status"><text>{{textLength}}/{{maxlength}}</text><text>{{status}}</text></view>
 		<view class="rich-composer-toolbar">
-			<text class="cuIcon-emoji toolbar-button" @tap="$emit('emoji')"></text>
-			<text class="cuIcon-pic toolbar-button" @tap="$emit('media')"></text>
-			<text class="toolbar-button toolbar-text" :class="{'is-active': formatOpen}" @tap="formatOpen=!formatOpen">T</text>
+			<text class="cuIcon-emoji toolbar-button" :class="{'is-active': formatOpen === false && emojiActive}" @tap="$emit('emoji')"></text>
+			<text v-if="showMedia" class="cuIcon-pic toolbar-button" @tap="$emit('media')"></text>
+			<text class="toolbar-button toolbar-text" :class="{'is-active': formatOpen}" @tap="toggleFormatPanel">T</text>
 			<text v-if="showComponent" class="cuIcon-add toolbar-button" @tap="$emit('component')"></text>
 			<text class="cuIcon-back toolbar-button toolbar-history" :class="{'is-disabled': !canUndo}" @tap="undo"></text>
 			<text class="cuIcon-forward toolbar-button toolbar-history" :class="{'is-disabled': !canRedo}" @tap="redo"></text>
@@ -49,9 +49,9 @@
 		props: {
 			value: { type: String, default: '' }, placeholder: { type: String, default: '' }, maxlength: { type: Number, default: 5000 },
 			focus: { type: Boolean, default: false }, night: { type: Boolean, default: false }, showStatus: { type: Boolean, default: true },
-			showComponent: { type: Boolean, default: false }, autoHeight: { type: Boolean, default: false }, status: { type: String, default: '' }
+			showComponent: { type: Boolean, default: false }, showMedia: { type: Boolean, default: true }, autoHeight: { type: Boolean, default: false }, status: { type: String, default: '' }
 		},
-		data() { return { editorContext: null, editorReady: false, applyingContents: false, internalValue: this.value || '', formatOpen: false, colorPickerOpen: false, activeBlock: 'paragraph', formats: {}, canUndo: false, canRedo: false, colors: ['#d94841','#dc7d22','#b68b10','#20845f','#167a9e','#3158b8','#7046b5','#b13f75','#263934','#66756f'] } },
+		data() { return { editorContext: null, editorReady: false, applyingContents: false, internalValue: this.value || '', formatOpen: false, colorPickerOpen: false, emojiActive: false, activeBlock: 'paragraph', formats: {}, canUndo: false, canRedo: false, colors: ['#d94841','#dc7d22','#b68b10','#20845f','#167a9e','#3158b8','#7046b5','#b13f75','#263934','#66756f'] } },
 		computed: {
 			textLength() { return plainText(this.internalValue).length }
 		},
@@ -63,6 +63,18 @@
 			}
 		},
 		methods: {
+			toggleFormatPanel() {
+				this.formatOpen = !this.formatOpen
+				if (!this.formatOpen) this.colorPickerOpen = false
+				this.emojiActive = false
+				this.$emit('format-toggle', this.formatOpen)
+			},
+			closeFormatPanel() {
+				this.formatOpen = false
+				this.colorPickerOpen = false
+				this.emojiActive = false
+			},
+			setEmojiActive(active) { this.emojiActive = Boolean(active) },
 			insertText(text) {
 				const value = String(text || '')
 				if (!value || !this.editorContext) return false
