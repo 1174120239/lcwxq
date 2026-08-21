@@ -63,6 +63,15 @@
 			}
 		},
 		methods: {
+			insertText(text) {
+				const value = String(text || '')
+				if (!value || !this.editorContext) return false
+				this.editorContext.insertText({
+					text: value,
+					complete: () => { this.$nextTick(() => { this.editorContext && this.editorContext.focus() }) }
+				})
+				return true
+			},
 			onEditorReady() {
 				uni.createSelectorQuery().in(this).select('#rich-editor').context(result => {
 					this.editorContext = result && result.context

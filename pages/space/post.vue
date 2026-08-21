@@ -28,7 +28,7 @@
 		</view>
 		<form>
 			<view class="post-compose">
-				<rich-composer v-model="text" :maxlength="maxTextLength" placeholder="分享校园里的新鲜事…"
+				<rich-composer ref="richComposer" v-model="text" :maxlength="maxTextLength" placeholder="分享校园里的新鲜事…"
 					:night="campusNight" :show-component="postType=='add' && !anonymousMode && type==0"
 					:status="publishReason" @emoji="OwO" @media="chooseMedia" @component="openComponentPicker"></rich-composer>
 
@@ -767,6 +767,15 @@
 							this.modelVisible = false;
 						},
 			back(){
+				if (this.postType === 'add' && (this.text.trim() || this.picList.length || this.pendingUploads.length || this.failedUploads.length || this.pic || this.selectedTopics.length || this.poll)) {
+					uni.showModal({
+						title: '放弃编辑？',
+						content: '退出后当前内容不会保留。',
+						confirmColor: '#d45555',
+						success: ({ confirm }) => { if (confirm) uni.navigateBack({ delta: 1 }) }
+					})
+					return
+				}
 				uni.navigateBack({
 					delta: 1
 				});
@@ -790,6 +799,7 @@
 			setOwO(data){
 				var that = this;
 				var text = data.data;
+				if (that.$refs.richComposer && that.$refs.richComposer.insertText(text)) return;
 				that.text = (that.text + text).slice(0, that.maxTextLength);
 			},
 			OwO(){
