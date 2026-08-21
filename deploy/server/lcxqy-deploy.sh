@@ -248,9 +248,7 @@ migration_015_valid() {
 }
 
 backup_migration_015() {
-    MIGRATION_015_EXISTING=()
-    mapfile -t MIGRATION_015_EXISTING < <(mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT CONCAT(table_name,'.',column_name) FROM information_schema.columns WHERE table_schema=DATABASE() AND column_name='image_urls' AND table_name IN ('starfree_qa_questions','starfree_lost_found_items') ORDER BY table_name")
-    printf '%s\n' "${MIGRATION_015_EXISTING[@]}" > "$backup_dir/migration-015-preexisting-columns.txt"
+    mysql "${MYSQL_BASE_ARGS_015[@]}" "$DB_NAME_015" -Nse "SELECT CONCAT(table_name,'.',column_name) FROM information_schema.columns WHERE table_schema=DATABASE() AND column_name='image_urls' AND table_name IN ('starfree_qa_questions','starfree_lost_found_items') ORDER BY table_name" > "$backup_dir/migration-015-preexisting-columns.txt"
     mysqldump "${MYSQL_BASE_ARGS_015[@]}" --single-transaction --skip-lock-tables "$DB_NAME_015" starfree_qa_questions starfree_lost_found_items > "$backup_dir/migration-015-affected-tables.sql"
     [[ -s "$backup_dir/migration-015-affected-tables.sql" ]] || { echo 'Migration 015 database backup is empty.' >&2; return 2; }
     sha256sum "$backup_dir/migration-015-affected-tables.sql" > "$backup_dir/migration-015-affected-tables.sql.sha256"
