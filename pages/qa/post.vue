@@ -110,9 +110,35 @@
 		methods: {
 			chooseImage() {
 				if (!this.token || this.uploadingImages || this.imageUrls.length >= 9) return
-				uni.chooseImage({ count: 9 - this.imageUrls.length, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: (res) => {
-					this.uploadingImages = true
-					Promise.all((res.tempFilePaths || []).map(path => new Promise((resolve, reject) => uni.uploadFile({ url: this.$API.upload(), filePath: path, name: 'file', formData: { token: this.token }, success: r => { try { const body = JSON.parse(r.data); body.code === 1 && body.data && body.data.url ? resolve(body.data.url) : reject(body.msg || '上传失败') } catch (e) { reject(e) } }, fail: reject }))).then(urls => { this.imageUrls = this.imageUrls.concat(urls) }).catch(() => uni.showToast({ title: '部分图片上传失败', icon: 'none' })).then(() => { this.uploadingImages = false })
+				uni.chooseImage({
+					count: 9 - this.imageUrls.length,
+					sizeType: ['compressed'],
+					sourceType: ['album', 'camera'],
+					success: (res) => {
+						this.uploadingImages = true
+						const uploads = (res.tempFilePaths || []).map(path => new Promise((resolve, reject) => {
+							uni.uploadFile({
+								url: this.$API.upload(),
+								filePath: path,
+								name: 'file',
+								formData: { token: this.token },
+								success: (r) => {
+									try {
+										const body = JSON.parse(r.data)
+										if (body.code === 1 && body.data && body.data.url) resolve(body.data.url)
+										else reject(body.msg || '上传失败')
+									} catch (e) {
+										reject(e)
+									}
+								},
+								fail: reject
+							})
+						}))
+						Promise.all(uploads)
+							.then(urls => { this.imageUrls = this.imageUrls.concat(urls) })
+							.catch(() => uni.showToast({ title: '部分图片上传失败', icon: 'none' }))
+							.then(() => { this.uploadingImages = false })
+					}
 				})
 			},
 			removeImage(index) { this.imageUrls.splice(index, 1) },
