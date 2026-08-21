@@ -67,8 +67,13 @@
 						</view>
 						<text class="media-section-count" v-if="type==0">{{picList.length + pendingUploads.length}}/9</text>
 					</view>
+					<view v-if="mediaOrderMode" class="media-order-banner">
+						<view class="media-order-banner-copy"><text class="cuIcon-sort"></text><text>正在调整图片顺序</text><text class="media-order-banner-hint">使用左右按钮移动</text></view>
+						<text class="media-order-done" @tap="mediaOrderMode=false">完成</text>
+					</view>
 					<view class="media-grid">
-						<view class="media-image" :class="{'is-failed': item.failed, 'is-uploading': item.uploading}" :style="'background-image:url('+item.path+');'" v-for="item in mediaItems" :key="(item.uploading ? 'uploading-' : item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path" @longpress="enableMediaOrder(item)">
+						<view class="media-image" :class="{'is-failed': item.failed, 'is-uploading': item.uploading}" :style="'background-image:url('+item.path+');'" v-for="(item, mediaIndex) in mediaItems" :key="(item.uploading ? 'uploading-' : item.failed ? 'failed-' : 'uploaded-') + item.order + '-' + item.path" @tap="previewMedia(item)" @longpress="enableMediaOrder(item)">
+							<text v-if="mediaOrderMode && !item.uploading && !item.failed" class="media-order-index">{{mediaIndex + 1}}</text>
 							<view class="media-uploading-mask" v-if="item.uploading">
 								<view class="media-uploading-spinner"></view>
 								<text>{{item.progress}}%</text>
@@ -1400,7 +1405,10 @@
 			enableMediaOrder(item) {
 				if (item.uploading || item.failed || this.picList.length < 2) return
 				this.mediaOrderMode = true
-				uni.showToast({ title: '使用左右按钮调整图片顺序', icon: 'none' })
+			},
+			previewMedia(item) {
+				if (this.mediaOrderMode || !item || item.uploading || item.failed || !item.path) return
+				uni.previewImage({ current: item.path, urls: this.picList.slice() })
 			},
 			movePic(path, offset) {
 				const index = this.picList.indexOf(path)
@@ -3815,4 +3823,40 @@
 		from { opacity: 0; transform: translateY(6rpx); }
 		to { opacity: 1; transform: translateY(0); }
 	}
+
+	/* Publish flow transitions: every optional block enters in the same rhythm. */
+	.media-order-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12rpx;
+		margin: 12rpx 0 10rpx;
+		padding: 12rpx 14rpx;
+		border: 1rpx solid #cce5dc;
+		border-radius: 12rpx;
+		background: #eef8f4;
+		animation: publish-expand-in .22s cubic-bezier(.22,.78,.25,1) both;
+	}
+	.media-order-banner-copy { display:flex; align-items:center; min-width:0; gap:8rpx; color:#287d69; font-size:22rpx; }
+	.media-order-banner-copy > text:first-child { font-size:25rpx; }
+	.media-order-banner-hint { overflow:hidden; color:#78968e; font-size:19rpx; text-overflow:ellipsis; white-space:nowrap; }
+	.media-order-done { flex:0 0 auto; padding:6rpx 12rpx; border-radius:999rpx; background:#d9eee6; color:#287d69; font-size:21rpx; transition:transform .16s ease; }
+	.media-order-done:active { transform:scale(.95); }
+	.media-order-index { position:absolute; left:10rpx; top:10rpx; z-index:4; display:flex; align-items:center; justify-content:center; width:42rpx; height:42rpx; border-radius:50%; background:rgba(19,40,35,.78); color:#fff; font-size:20rpx; font-weight:700; }
+	.media-image,.media-video,.media-upload { transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
+	.media-image:active,.media-upload:active { transform:scale(.97); }
+	.media-order-controls { animation: publish-expand-in .18s ease both; }
+	.media-image:nth-child(2) { animation-delay: .025s; }
+	.media-image:nth-child(3) { animation-delay: .05s; }
+	.media-image:nth-child(4) { animation-delay: .075s; }
+	.component-sheet-layer, .poll-modal-mask { animation: publish-mask-in .22s ease both; }
+	.component-sheet, .poll-modal { animation: publish-sheet-up .3s cubic-bezier(.19,1,.22,1) both; }
+	.topic-picker { overflow:hidden; animation: publish-expand-in .24s cubic-bezier(.22,.78,.25,1) both; }
+	.upload-progress-card { animation: publish-expand-in .24s cubic-bezier(.22,.78,.25,1) both; }
+	.post-submit-button { transition:transform .18s ease, box-shadow .22s ease, filter .22s ease, opacity .2s ease; }
+	.post-submit-button[disabled] { opacity:.48; box-shadow:none; filter:grayscale(.2); }
+
+	@keyframes publish-expand-in { from { opacity:0; transform:translateY(-8rpx); } to { opacity:1; transform:translateY(0); } }
+	@keyframes publish-mask-in { from { opacity:0; } to { opacity:1; } }
+	@keyframes publish-sheet-up { from { opacity:0; transform:translateY(100%); } to { opacity:1; transform:translateY(0); } }
 </style>

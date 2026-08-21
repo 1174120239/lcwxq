@@ -12,6 +12,7 @@
 			<text class="cuIcon-back toolbar-button toolbar-history" :class="{'is-disabled': !canUndo}" @tap="undo"></text>
 			<text class="cuIcon-forward toolbar-button toolbar-history" :class="{'is-disabled': !canRedo}" @tap="redo"></text>
 		</view>
+		<transition name="format-panel">
 		<view v-if="formatOpen" class="rich-format-panel">
 			<view class="format-row format-headings">
 				<text :class="{'is-selected': activeBlock==='h1'}" @tap="setBlock(1)">H1</text>
@@ -37,6 +38,7 @@
 				<text v-for="color in colors" :key="color" class="format-color-swatch" :style="{backgroundColor: color}" @tap="applyColor(color)"></text>
 			</view>
 		</view>
+		</transition>
 	</view>
 </template>
 
@@ -152,9 +154,14 @@
 	.toolbar-history { color:#99a6a1; }
 	.toolbar-history.is-disabled { opacity:.36; }
 	.rich-format-panel { margin:0 -24rpx; padding:16rpx 24rpx 22rpx; border-top:1rpx solid #e5ece9; background:#f6f8f7; }
+	.format-panel-enter-active,.format-panel-leave-active { overflow:hidden; transform-origin:top center; transition:max-height .24s cubic-bezier(.22,.78,.25,1), opacity .18s ease, transform .24s cubic-bezier(.22,.78,.25,1); }
+	.format-panel-enter,.format-panel-leave-to { max-height:0; opacity:0; transform:translateY(-10rpx); }
+	.format-panel-enter-to,.format-panel-leave { max-height:420rpx; opacity:1; transform:translateY(0); }
 	.format-row { display:grid; grid-template-columns:repeat(5,1fr); gap:8rpx; margin-top:12rpx; }
 	.format-row:first-child { margin-top:0; }
 	.format-row text { display:flex; align-items:center; justify-content:center; height:64rpx; border-radius:8rpx; background:#fff; color:#293733; font-size:27rpx; }
+	.format-row text,.format-row .format-align { transition:background-color .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease; }
+	.format-row text:active,.format-row .format-align:active { transform:scale(.96); }
 	.format-row .format-align { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:5rpx; height:64rpx; padding:0 30rpx; box-sizing:border-box; border-radius:8rpx; background:#fff; }
 	.format-row .format-align text { display:block; height:4rpx; padding:0; border-radius:3rpx; background:#1d3b55; }
 	.format-align text:nth-child(1) { width:34rpx; }
@@ -164,6 +171,7 @@
 	.format-align-right { align-items:flex-end !important; }
 	.format-headings { grid-template-columns:repeat(4,1fr); }
 	.format-row .is-selected { color:#287d70; background:#e7f3ee; }
+	.format-row .is-selected { box-shadow:inset 0 0 0 2rpx rgba(40,125,112,.18); }
 	.format-color { font-size:22rpx !important; color:#c94d4a !important; }
 	.format-list { font-size:21rpx !important; }
 	.format-color-picker { display:flex; flex-wrap:wrap; gap:18rpx; padding:18rpx 4rpx 0; }
