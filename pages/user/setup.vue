@@ -79,7 +79,7 @@
 				</view>
 				<view class="action">
 					<text class="text-gray" v-if="Update==0">{{wgtVer}}</text>
-					<text class="update-tips bg-red"  v-if="Update==1">发现新版本</text>
+					<text class="update-tips bg-red"  v-if="Update==1">{{qzgx===1 ? '必须更新' : '发现新版本'}}</text>
 					<text class="cuIcon-right"></text>
 				</view>
 			</view>
@@ -129,6 +129,7 @@
 				wgtVer: '',
 				issqq: 0,
 				Update: 0,
+				qzgx: 0,
 				versionUrl: "",
 				qqlogin: 0,
 				wxlogin: 0,
@@ -297,8 +298,11 @@
 									url: that.$API.GetUpdateUrl(),
 									method: 'get',
 									success: function(res) {
-										var versionCode = res.data.versionCode;
-										that.versionUrl =  res.data.versionUrl;
+										var update = res.data || {};
+										var versionCode = Number(update.versionCode);
+										var currentVersionCode = Number(version);
+										that.versionUrl = update.versionUrl || '';
+										that.qzgx = update.qzgx === true || update.qzgx === 'true' || Number(update.qzgx) === 1 ? 1 : 0;
 										if(Status){
 											uni.showToast({
 												title:"检测完成",
@@ -308,12 +312,12 @@
 											});
 											
 										}
-										if(versionCode > version){
+										if(Number.isFinite(versionCode) && Number.isFinite(currentVersionCode) && versionCode > currentVersionCode){
 											console.log("有更新");
 											that.Update=1;
 											if(Status){
-												if(res.data.versionUrl!=""){
-													plus.runtime.openURL(res.data.versionUrl);  
+												if(that.versionUrl!=""){
+													plus.runtime.openURL(that.versionUrl);
 												}
 											}
 										}

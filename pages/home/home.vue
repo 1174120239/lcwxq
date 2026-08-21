@@ -472,6 +472,22 @@
 			</view>
 		</view>
 
+		<!-- 强制更新不能通过遮罩或关闭按钮跳过。 -->
+		<view class="app-update" v-if="Update===1">
+			<view class="app-update-bg" @tap="dismissUpdate"></view>
+			<view class="app-update-main">
+				<view class="app-update-title">{{qzgx===1 ? '必须更新' : '发现新版本'}}</view>
+				<view class="app-update-version">版本 {{versionTitle || '新版本'}}</view>
+				<view class="app-update-content">
+					<rich-text :nodes="versionIntro || '请更新到最新版本后继续使用。'"></rich-text>
+				</view>
+				<view class="app-update-btn">
+					<button class="cu-btn bg-blue lg" @tap="openUpdate">立即更新</button>
+					<button v-if="qzgx!==1" class="cu-btn app-update-later" @tap="dismissUpdate">稍后再说</button>
+				</view>
+			</view>
+		</view>
+
 		<!--  #ifdef APP-PLUS -->
 		<view class="Startupmap" v-if="!isStart">
 			<view class="Startupmap-close" @tap="toStart">
@@ -2308,11 +2324,13 @@
 						},
 						method: 'get',
 						success: function(res) {
-							var versionCode = res.data.versionCode;
-							that.versionUrl = res.data.versionUrl;
-							that.versionTitle = res.data.version;
-							that.versionIntro = res.data.versionIntro;
-							that.qzgx = res.data.qzgx;
+							var update = res.data || {};
+							var versionCode = Number(update.versionCode);
+							var currentVersionCode = Number(version);
+							that.versionUrl = update.versionUrl || '';
+							that.versionTitle = update.version || '';
+							that.versionIntro = update.versionIntro || '';
+							that.qzgx = update.qzgx === true || update.qzgx === 'true' || Number(update.qzgx) === 1 ? 1 : 0;
 							if (Status) {
 								// uni.showToast({
 								// 	title:"检测完成",
@@ -2322,15 +2340,15 @@
 								// });
 			
 							}
-							if (versionCode > version) {
+							if (Number.isFinite(versionCode) && Number.isFinite(currentVersionCode) && versionCode > currentVersionCode) {
 								console.log("有更新");
 								uni.hideTabBar({
 									animation: true
 								})
 								that.Update = 1;
 								if (Status) {
-									if (res.data.versionUrl != "") {
-										plus.runtime.openURL(res.data.versionUrl);
+									if (that.versionUrl != "") {
+										plus.runtime.openURL(that.versionUrl);
 									}
 								}
 							}
@@ -2342,6 +2360,17 @@
 					})
 			
 				})
+			},
+			dismissUpdate() {
+				if (this.qzgx === 1) return;
+				this.Update = 0;
+			},
+			openUpdate() {
+				if (!this.versionUrl) {
+					uni.showToast({ title: '暂无下载地址', icon: 'none' });
+					return;
+				}
+				plus.runtime.openURL(this.versionUrl);
 			},
 			toImagetoday() {
 				var that = this;
@@ -2608,6 +2637,79 @@
 </script>
 
 <style scoped>
+	.app-update {
+		position: fixed;
+		inset: 0;
+		z-index: 2000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 32rpx;
+		box-sizing: border-box;
+	}
+
+	.app-update-bg {
+		position: absolute;
+		inset: 0;
+		background: rgba(15, 26, 28, 0.58);
+	}
+
+	.app-update-main {
+		position: relative;
+		z-index: 1;
+		width: min(620rpx, 100%);
+		padding: 38rpx 34rpx 30rpx;
+		border: 1rpx solid rgba(255, 255, 255, 0.7);
+		border-radius: 18rpx;
+		background: #fff;
+		box-shadow: 0 24rpx 70rpx rgba(12, 34, 36, 0.28);
+		box-sizing: border-box;
+	}
+
+	.app-update-title {
+		font-size: 38rpx;
+		font-weight: 700;
+		line-height: 1.3;
+		text-align: center;
+		color: #1d3537;
+	}
+
+	.app-update-version {
+		margin-top: 12rpx;
+		font-size: 26rpx;
+		text-align: center;
+		color: #16827e;
+	}
+
+	.app-update-content {
+		max-height: 360rpx;
+		margin: 28rpx 0;
+		padding: 22rpx;
+		overflow: auto;
+		border-radius: 10rpx;
+		background: #f1f7f6;
+		font-size: 28rpx;
+		line-height: 1.65;
+		color: #405452;
+	}
+
+	.app-update-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 14rpx;
+	}
+
+	.app-update-btn button {
+		width: 100%;
+		margin: 0;
+	}
+
+	.app-update-later {
+		background: transparent;
+		color: #71817f;
+	}
+
 	.hero-subtitle-line {
 		display: flex;
 		align-items: center;
