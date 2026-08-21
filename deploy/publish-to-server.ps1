@@ -121,15 +121,15 @@ try {
     if ($RunMigrations) {
         $migrationName = if ($Migration -eq '014') { '014_lost_and_found.sql' } else { '015_publish_rich_media.sql' }
         $expectedMigrationHash = if ($Migration -eq '014') { $migration014Sha256 } else { $migration015Sha256 }
-        $migration = Join-Path $repoRoot (Join-Path 'backend/database/migrations' $migrationName)
-        if (-not (Test-Path -LiteralPath $migration -PathType Leaf)) {
-            throw "Migration $Migration is missing: $migration"
+        $migrationPath = Join-Path $repoRoot (Join-Path 'backend/database/migrations' $migrationName)
+        if (-not (Test-Path -LiteralPath $migrationPath -PathType Leaf)) {
+            throw "Migration $Migration is missing: $migrationPath"
         }
-        $migrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $migration).Hash.ToLowerInvariant()
+        $migrationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $migrationPath).Hash.ToLowerInvariant()
         if ($migrationHash -ne $expectedMigrationHash) {
             throw "Migration $Migration SHA-256 mismatch: $migrationHash"
         }
-        Copy-Item -LiteralPath $migration -Destination (Join-Path $stage $migrationName)
+        Copy-Item -LiteralPath $migrationPath -Destination (Join-Path $stage $migrationName)
         Write-Host "migration_${Migration}_sha256=$migrationHash"
     }
 
