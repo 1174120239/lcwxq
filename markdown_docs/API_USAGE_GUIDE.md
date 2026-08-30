@@ -570,7 +570,7 @@ QQBot 不使用 `webinfo.key` 冒充上传 token。replacement 会为已绑定�
 
 ## 8. PHP admin 专用接口和插件边界
 
-前端还会直接访问 `https://admin.lcxqy.cn/Api/api.php?act=...` 的 PHP 配置接口，例如 `getPlugins`、`usercount`、`appdata`、`opset`、`fenlei`、`vip`、`adimg2`、`logininfo`、`chongzhiset`、`viphide`、`qzxz`、`musicpic`、`likeall`，以及更新、广告、客服/群链接和 mp3 页面。
+前端还会直接访问 `https://admin.lcxqy.cn/Api/api.php?act=...` 的 PHP 配置接口，例如 `getPlugins`、`usercount`、`appdata`、`opset`、`fenlei`、`vip`、`adimg2`、`logininfo`、`chongzhiset`、`viphide`、`qzxz`、`musicpic`、`likeall`，以及更新、广告、客服/群链接和 mp3 页面。独立下载/介绍站使用 `act=versionList` 读取 `*_admin_update` 的公开版本投影；该接口只返回版本名称、版本号、更新描述、下载链接和更新类型，不读取后台账号信息。
 
 这些不是 `api.lcxqy.cn` 的 Spring API，也不在后端重建范围。项目明确不做插件功能：Space `type=6` 不支持；未知插件形态内容由旧端处理，不应猜测表结构或写入格式。
 
