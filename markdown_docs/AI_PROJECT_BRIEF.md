@@ -18,6 +18,7 @@
 - 充值、短信验证码、文件上传、聊天和部分第三方登录仍使用旧后端；邮箱验证码发送已在新后端重建，待精确路由切流。
 - 积分、签到、奖励、提现、旧商城、VIP 和广告经济逻辑已在新后端实现，并保留旧支付入口；客户端原商城入口已替换为完全免费的“校园互助”，不调用余额、积分、库存、订单或购买逻辑。
 - 轻量邀请分享已加入：用户邀请码、注册成功后的积分/经验奖励、分享页和后台软件下载地址配置；不扩展为多级返佣或提现系统。独立下载/介绍站的版本日志通过 PHP admin 的只读 `act=versionList` 投影读取同一张后台版本表，避免与 StarFree 上游版本历史混用。
+- 独立下载/介绍站文案、网页版地址和 PHP API CORS 白名单由“功能设置 → 下载页设置”维护，存储在 `lcxqy_download_site_config`；replacement API 的 CORS 仍由 `CORS_ALLOWED_ORIGIN_PATTERNS` 运行环境控制。
 - 动态已支持浏览量、话题、话题关注、纯文字、纯图片、审核、锁定、删除、精华、列表置顶、横幅置顶和按话题筛选。
 - 后端当前全量测试为 364 个，Failures=0，Errors=0，Skipped=0。
 
@@ -148,6 +149,7 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 012_space_presentation.sql | 动态精华、列表置顶、横幅置顶、排序和生效时间字段 |
 | 013_ai_moderation_complete.sql | 统一动态/提问/评论 AI 审核历史、人工改判日志、每日评论巡检配置和总结 |
 | 014_lost_and_found.sql | 校园互助信息、公开评论、QQ 定向授权、审核日志和管理配置 |
+| 016_download_site_config.sql | 独立下载/介绍站标题、简介、网页版地址和 CORS 白名单 |
 
 ## 5. 请求和响应约定
 
@@ -423,6 +425,7 @@ HBuilderX 编译后至少检查：
 - 首页问答卡片、问题详情、回答排序、点赞、回答评论/回复，以及管理端待审核问题发布、编辑和停用。
 - 桌面宽屏与移动端。
 - 独立下载/介绍站：后台新增版本后，`act=versionList` 与页面必须展示相同的版本名、版本号、描述、下载链接和更新类型；不得读取 `StarFreeSystem/apiNewVersion` 上游日志。
+- 独立下载/介绍站设置：后台修改简介或网页版地址后，`act=downloadSiteConfig` 返回新值；从白名单外来源请求 PHP API 时不应返回 `Access-Control-Allow-Origin`。
 - 日间和夜间主题。
 - 空列表、无权限、token 失效和网络超时。
 

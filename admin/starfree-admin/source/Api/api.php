@@ -20,6 +20,28 @@ if(isset($_GET['update'])){
    echo json_encode($result);
 }
 
+// Public projection for the independent download/introduction site. Keep it
+// uncached so administrator edits become available without waiting for Redis.
+if ($act === 'downloadSiteConfig') {
+    $data = array(
+        'heroKicker' => '聊城一中 · 校园社区',
+        'heroTitle' => '让校园里的每一次连接都有回响',
+        'heroIntro' => '在这里，分享动态、发现同好、互相帮助。聊城一中论坛，把真实的校园生活留在同学们共同的空间里。',
+        'webUrl' => 'https://prev.lcxqy.cn/'
+    );
+    $table = $db_prefix . '_download_site_config';
+    $stmt = @mysqli_prepare($db, 'SELECT hero_kicker,hero_title,hero_intro,web_url FROM `' . str_replace('`', '', $table) . '` WHERE id=1 LIMIT 1');
+    if ($stmt && mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_bind_result($stmt, $kicker, $title, $intro, $webUrl);
+        if (mysqli_stmt_fetch($stmt)) {
+            $data = array('heroKicker' => (string)$kicker, 'heroTitle' => (string)$title, 'heroIntro' => (string)$intro, 'webUrl' => (string)$webUrl);
+        }
+        mysqli_stmt_close($stmt);
+    }
+    echo json_encode(array('code' => 1, 'msg' => '', 'data' => $data), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // Public read-only projection for the independent download/introduction site.
 // Keep this sourced from the same table as the administrator's version manager.
 if ($act === 'versionList') {

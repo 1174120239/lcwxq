@@ -17,7 +17,8 @@
 - 历史版本：`https://admin.lcxqy.cn/Api/api.php?act=versionList`，由后台版本管理表 `*_admin_update` 提供
 - Android 下载：`https://api.lcxqy.cn/SFreeInvitation/config` 的 `androidDownloadUrl`，未配置时回退到当前版本 `versionUrl`
 - 网页版：`https://prev.lcxqy.cn/`
+- 页面标题、简介和网页版地址：`https://admin.lcxqy.cn/Api/api.php?act=downloadSiteConfig`，在后台“功能设置 → 下载页设置”维护
 
 页面会把成功读取的数据按北京时间日期缓存在浏览器中，同一天不重复请求，跨天再更新。首次访问仍需使用允许跨域的部署域名；`file://` 本地打开无法绕过浏览器 CORS 限制。
 
-接口若未配置跨域响应头，浏览器会阻止前端读取数据；部署新域名后，需要在后台 `Api/set.php` 的 CORS 白名单加入该站点来源，或在站点服务器做同源代理。不要把 StarFree 的 `StarFreeSystem/apiNewVersion` 当作本论坛版本源。
+接口若未配置跨域响应头，浏览器会阻止前端读取数据；部署新域名后，在后台“功能设置 → 下载页设置”的白名单中加入站点来源即可。不要把 StarFree 的 `StarFreeSystem/apiNewVersion` 当作本论坛版本源。

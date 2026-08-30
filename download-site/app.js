@@ -37,6 +37,7 @@
       adminVersion: results[2].status === 'fulfilled' ? results[2].value : null,
       versionList: results[3].status === 'fulfilled' ? results[3].value : null,
       download: results[4].status === 'fulfilled' ? results[4].value : null,
+      config: results[5].status === 'fulfilled' ? results[5].value : null,
       successCount: results.filter(function (result) { return result.status === 'fulfilled'; }).length
     };
   }
@@ -47,6 +48,11 @@
     var adminVersion = payload.adminVersion;
     var versionList = payload.versionList;
     var download = payload.download;
+    var config = payload.config && payload.config.data ? payload.config.data : {};
+    if (config.heroKicker) $('#hero-kicker-text').textContent = config.heroKicker;
+    if (config.heroTitle) $('#hero-title').textContent = config.heroTitle;
+    if (config.heroIntro) $('#hero-intro').textContent = config.heroIntro;
+    var webUrl = config.webUrl || API.web;
     $('#user-count').textContent = text(users && users.usercount, '--');
     $('#space-count').textContent = formatNumber(spaces && spaces.total);
     var current = adminVersion && adminVersion.version ? adminVersion : null;
@@ -57,7 +63,7 @@
     renderVersions(latest, data.versions || []);
     var android = download && download.data && download.data.androidDownloadUrl;
     if (!android && current) android = current.versionUrl;
-    setLink('#android-link', android); setLink('#web-link', API.web);
+    setLink('#android-link', android); setLink('#web-link', webUrl); setLink('#hero-web-link', webUrl);
     $('#download-note').textContent = android ? '最新版本：' + text(latest && latest.version, '当前版本') : 'Android 地址暂未配置，请先使用网页版。';
     var ok = Number(payload.successCount) || 0;
     $('#sync-state').textContent = statusText || (ok >= 3 ? '已同步' : '部分同步');
@@ -74,7 +80,8 @@
       fetch(API.replacement + '/SFreeSpace/spaceList?page=1&limit=1').then(function (response) { return response.json(); }),
       fetch(API.admin + '?update=1').then(function (response) { return response.json(); }),
       fetch(API.admin + '?act=versionList').then(function (response) { return response.json(); }),
-      fetch(API.replacement + '/SFreeInvitation/config').then(function (response) { return response.json(); })
+      fetch(API.replacement + '/SFreeInvitation/config').then(function (response) { return response.json(); }),
+      fetch(API.admin + '?act=downloadSiteConfig').then(function (response) { return response.json(); })
     ]);
     var payload = payloadFromResults(results);
     applyPayload(payload);
