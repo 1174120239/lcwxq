@@ -9,7 +9,7 @@ server:
 
 app:
   cors:
-    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://prev.lcxqy.cn,http://localhost:*,https://localhost:*}
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://prev.lcxqy.cn,https://lcyz.site,https://www.lcyz.site,http://localhost:*,https://localhost:*}
 
 spring:
   servlet:

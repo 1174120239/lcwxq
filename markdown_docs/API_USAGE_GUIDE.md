@@ -210,6 +210,7 @@ form_post("SFreeUsers/userRegister", {
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
 | `SFreeInvitation/config` | GET/POST / 无 | 可选 `inviteCode` | 公网新 | 返回 `enabled/rewardPoints/rewardExperience/androidDownloadUrl/iosDownloadUrl`；传有效邀请码时附邀请人公开资料。 |
+| `downloadSiteConfig` | GET / 无 | 无 | 公网旧 PHP | 返回独立下载/介绍站的 `heroKicker/heroTitle/heroIntro/webUrl`；CORS 来源由后台下载页设置维护。 |
 | `SFreeInvitation/me` | GET/POST / token | `token` | 公网新 | 返回当前用户唯一邀请码、成功邀请数、积分/经验累计值和最近记录；服务端从 token 得到 UID。 |
 
 轻量邀请只奖励邀请人的积分和经验，不产生提现或多级返佣。注册时的 `params.inviteCode` 可以是用户邀请码；奖励记录按被邀请人 UID 幂等。

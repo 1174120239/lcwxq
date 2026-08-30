@@ -9,6 +9,22 @@ if ($h5_of == 1) {
     $requestOrigin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
     $originParts = parse_url($requestOrigin);
     $allowedOrigin = $requestOrigin === 'https://prev.lcxqy.cn';
+    $configuredOrigins = array();
+    $configTable = $db_prefix . '_download_site_config';
+    $configResult = @mysqli_query($db, 'SELECT cors_origins FROM `' . str_replace('`', '', $configTable) . '` WHERE id=1 LIMIT 1');
+    if ($configResult) {
+        $configRow = mysqli_fetch_assoc($configResult);
+        if ($configRow && isset($configRow['cors_origins'])) {
+            $configuredOrigins = preg_split('/[\r\n,]+/', (string)$configRow['cors_origins'], -1, PREG_SPLIT_NO_EMPTY);
+        }
+        mysqli_free_result($configResult);
+    }
+    foreach ($configuredOrigins as $configuredOrigin) {
+        if (hash_equals(strtolower(trim($configuredOrigin)), strtolower($requestOrigin))) {
+            $allowedOrigin = true;
+            break;
+        }
+    }
     if (is_array($originParts)
         && isset($originParts['scheme'], $originParts['host'])
         && ($originParts['scheme'] === 'http' || $originParts['scheme'] === 'https')
@@ -39,7 +55,7 @@ $cacheKey = $cacheKeyPrefix . $act;
 $cacheTTL = 86400; 
 
 $cachedData = $redis->get($cacheKey);
-if ($cachedData !== false) {
+if ($cachedData !== false && $act !== 'downloadSiteConfig') {
     header('Content-Type: application/json');
     echo base64_decode($cachedData);
     exit;
