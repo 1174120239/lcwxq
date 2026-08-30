@@ -10,7 +10,7 @@ if ($h5_of == 1) {
     $originParts = parse_url($requestOrigin);
     $allowedOrigin = $requestOrigin === 'https://prev.lcxqy.cn';
     $configuredOrigins = array();
-    $configTable = $db_prefix . '_download_site_config';
+    $configTable = 'lcxqy_download_site_config';
     $configResult = @mysqli_query($db, 'SELECT cors_origins FROM `' . str_replace('`', '', $configTable) . '` WHERE id=1 LIMIT 1');
     if ($configResult) {
         $configRow = mysqli_fetch_assoc($configResult);

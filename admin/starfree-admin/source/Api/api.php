@@ -29,7 +29,7 @@ if ($act === 'downloadSiteConfig') {
         'heroIntro' => '在这里，分享动态、发现同好、互相帮助。聊城一中论坛，把真实的校园生活留在同学们共同的空间里。',
         'webUrl' => 'https://prev.lcxqy.cn/'
     );
-    $table = $db_prefix . '_download_site_config';
+    $table = 'lcxqy_download_site_config';
     $stmt = @mysqli_prepare($db, 'SELECT hero_kicker,hero_title,hero_intro,web_url FROM `' . str_replace('`', '', $table) . '` WHERE id=1 LIMIT 1');
     if ($stmt && mysqli_stmt_execute($stmt)) {
         mysqli_stmt_bind_result($stmt, $kicker, $title, $intro, $webUrl);

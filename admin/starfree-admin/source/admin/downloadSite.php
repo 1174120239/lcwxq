@@ -13,7 +13,7 @@ $settings = array(
     'web_url' => 'https://prev.lcxqy.cn/',
     'cors_origins' => "https://prev.lcxqy.cn\nhttps://lcyz.site\nhttps://www.lcyz.site"
 );
-$table = $db_prefix . '_download_site_config';
+$table = 'lcxqy_download_site_config';
 $query = $connect->prepare('SELECT hero_kicker,hero_title,hero_intro,web_url,cors_origins FROM ' . $table . ' WHERE id=1 LIMIT 1');
 $tableReady = false;
 if ($query && $query->execute()) {

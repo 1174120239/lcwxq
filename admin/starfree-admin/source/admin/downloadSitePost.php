@@ -37,7 +37,7 @@ foreach ($origins as $origin) {
 }
 if (empty($normalized)) download_site_fail('请至少填写一个白名单来源');
 $originsText = implode("\n", array_keys($normalized));
-$table = $db_prefix . '_download_site_config';
+$table = 'lcxqy_download_site_config';
 $stmt = $connect->prepare('INSERT INTO ' . $table . ' (id,hero_kicker,hero_title,hero_intro,web_url,cors_origins,updated_at) VALUES (1,?,?,?,?,?,NOW()) ON DUPLICATE KEY UPDATE hero_kicker=VALUES(hero_kicker),hero_title=VALUES(hero_title),hero_intro=VALUES(hero_intro),web_url=VALUES(web_url),cors_origins=VALUES(cors_origins),updated_at=NOW()');
 if (!$stmt || !$stmt->bind_param('sssss', $kicker, $title, $intro, $webUrl, $originsText) || !$stmt->execute()) {
     if ($stmt) $stmt->close();
