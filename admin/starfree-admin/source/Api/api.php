@@ -20,6 +20,33 @@ if(isset($_GET['update'])){
    echo json_encode($result);
 }
 
+// Public read-only projection for the independent download/introduction site.
+// Keep this sourced from the same table as the administrator's version manager.
+if ($act === 'versionList') {
+    $versions = array();
+    $stmt = mysqli_prepare($db, "SELECT id,version,versionCode,versionIntro,versionUrl,`force` FROM ". $db_prefix ."_admin_update ORDER BY id DESC LIMIT 50");
+    if ($stmt && mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_bind_result($stmt, $id, $rowVersion, $rowVersionCode, $rowVersionIntro, $rowVersionUrl, $rowForce);
+        while (mysqli_stmt_fetch($stmt)) {
+            $versions[] = array(
+                'id' => (int) $id,
+                'version' => (string) $rowVersion,
+                'versionCode' => (int) $rowVersionCode,
+                'versionIntro' => (string) $rowVersionIntro,
+                'versionUrl' => (string) $rowVersionUrl,
+                'force' => (int) $rowForce
+            );
+        }
+        mysqli_stmt_close($stmt);
+    }
+    $current = count($versions) > 0 ? $versions[0] : null;
+    echo json_encode(array('code' => 1, 'msg' => '', 'data' => array(
+        'currentVersion' => $current,
+        'versions' => $versions
+    )));
+    exit;
+}
+
 $musicpic = array(
   $musicpic1,
   $musicpic2,
