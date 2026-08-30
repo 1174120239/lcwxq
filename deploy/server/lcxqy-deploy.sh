@@ -14,9 +14,10 @@ RUN_MIGRATIONS=false
 MIGRATION=
 MIGRATION_014_SHA256=6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271
 MIGRATION_015_SHA256=9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8
+MIGRATION_016_SHA256=__MIGRATION_016_SHA256__
 
 usage() {
-    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015]"
+    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015|016]"
     echo "       $0 --verify --component COMPONENT"
 }
 
@@ -281,9 +282,77 @@ apply_migration_015() {
     echo 'migration_015=applied'; echo "migration_015_backup=$backup_dir"
 }
 
+configure_mysql_016() {
+    local db_url db_target db_hostport db_user db_password escaped_user escaped_password
+    [[ -r /opt/application.properties ]] || { echo 'Production database configuration is not readable.' >&2; return 2; }
+    db_url=$(read_property 'spring\.datasource\.url')
+    db_user=$(read_property 'spring\.datasource\.username')
+    db_password=$(read_property 'spring\.datasource\.password')
+    [[ "$db_url" == jdbc:mysql://* ]] || { echo 'Unsupported production JDBC URL.' >&2; return 2; }
+    [[ -n "$db_user" ]] || { echo 'Production database username is empty.' >&2; return 2; }
+    db_target=${db_url#jdbc:mysql://}; db_target=${db_target%%\?*}; db_hostport=${db_target%%/*}
+    DB_NAME_016=${db_target#*/}; [[ "$DB_NAME_016" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'Unsafe production database name.' >&2; return 2; }
+    if [[ "$db_hostport" == *:* ]]; then DB_HOST_016=${db_hostport%%:*}; DB_PORT_016=${db_hostport##*:}; else DB_HOST_016=$db_hostport; DB_PORT_016=3306; fi
+    [[ -n "$DB_HOST_016" && "$DB_PORT_016" =~ ^[0-9]+$ ]] || { echo 'Invalid production database address.' >&2; return 2; }
+    MYSQL_CNF_016="$incoming/mysql-016.cnf"
+    escaped_user=${db_user//\\/\\\\}; escaped_user=${escaped_user//\"/\\\"}
+    escaped_password=${db_password//\\/\\\\}; escaped_password=${escaped_password//\"/\\\"}
+    umask 077; printf '[client]\nuser="%s"\npassword="%s"\n' "$escaped_user" "$escaped_password" > "$MYSQL_CNF_016"
+    MYSQL_BASE_ARGS_016=("--defaults-extra-file=$MYSQL_CNF_016" --protocol=tcp --host="$DB_HOST_016" --port="$DB_PORT_016")
+    mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" --batch --skip-column-names -e 'SELECT 1' >/dev/null
+}
+
+migration_016_valid() {
+    local table_count engine_count column_count config_count
+    table_count=$(mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='lcxqy_download_site_config'")
+    [[ "$table_count" == 1 ]] || return 1
+    engine_count=$(mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='lcxqy_download_site_config' AND engine='InnoDB'")
+    [[ "$engine_count" == 1 ]] || return 1
+    column_count=$(mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='lcxqy_download_site_config' AND column_name IN ('hero_kicker','hero_title','hero_intro','web_url','cors_origins','updated_at')")
+    [[ "$column_count" == 6 ]] || return 1
+    config_count=$(mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -Nse 'SELECT COUNT(*) FROM lcxqy_download_site_config WHERE id=1')
+    [[ "$config_count" == 1 ]]
+}
+
+backup_migration_016() {
+    local existing_count
+    existing_count=$(mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='lcxqy_download_site_config'")
+    if [[ "$existing_count" == 1 ]]; then
+        mysqldump "${MYSQL_BASE_ARGS_016[@]}" --single-transaction --skip-lock-tables "$DB_NAME_016" lcxqy_download_site_config > "$backup_dir/migration-016-existing-table.sql"
+        [[ -s "$backup_dir/migration-016-existing-table.sql" ]] || { echo 'Migration 016 database backup is empty.' >&2; return 2; }
+        sha256sum "$backup_dir/migration-016-existing-table.sql" > "$backup_dir/migration-016-existing-table.sql.sha256"
+    else
+        touch "$backup_dir/migration-016.no-existing-table"
+    fi
+}
+
+rollback_migration_016() {
+    if [[ -f "$backup_dir/migration-016.no-existing-table" ]]; then
+        mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -e 'DROP TABLE IF EXISTS lcxqy_download_site_config'
+    elif [[ -s "$backup_dir/migration-016-existing-table.sql" ]]; then
+        mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" -e 'DROP TABLE IF EXISTS lcxqy_download_site_config'
+        mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" < "$backup_dir/migration-016-existing-table.sql"
+    fi
+    echo 'migration_016_rollback=success' >&2
+}
+
+apply_migration_016() {
+    local migration_file="$incoming/016_download_site_config.sql" migration_hash
+    for required in mysql mysqldump sha256sum; do command -v "$required" >/dev/null 2>&1 || { echo "Required migration command not found: $required" >&2; return 2; }; done
+    [[ -r "$migration_file" ]] || { echo 'Migration 016 is missing from the release.' >&2; return 2; }
+    migration_hash=$(sha256sum "$migration_file" | awk '{print $1}')
+    [[ "$migration_hash" == "$MIGRATION_016_SHA256" ]] || { echo 'Migration 016 SHA-256 mismatch.' >&2; return 2; }
+    configure_mysql_016 || return
+    backup_migration_016 || return
+    if migration_016_valid; then echo 'migration_016=already_present'; echo "migration_016_backup=$backup_dir"; return 0; fi
+    if ! mysql "${MYSQL_BASE_ARGS_016[@]}" "$DB_NAME_016" < "$migration_file"; then rollback_migration_016; return 20; fi
+    if ! migration_016_valid; then rollback_migration_016; return 21; fi
+    echo 'migration_016=applied'; echo "migration_016_backup=$backup_dir"
+}
+
 wait_for_component() {
     local component="$1"
-    local timeout_seconds="${2:-60}"
+    local timeout_seconds="${2:-180}"
     local deadline=$((SECONDS + timeout_seconds))
     while (( SECONDS < deadline )); do
         if service_check "$component" && health_check "$component"; then
@@ -353,8 +422,8 @@ if [[ "$RUN_MIGRATIONS" == true && "$COMPONENT" != replacement-backend ]]; then
     echo 'Database migrations are only allowed for replacement-backend.' >&2
     exit 30
 fi
-if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 ]]; then
-    echo 'Run migrations requires --migration 014 or 015.' >&2
+if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 && "$MIGRATION" != 016 ]]; then
+    echo 'Run migrations requires --migration 014, 015 or 016.' >&2
     exit 30
 fi
 if [[ "$RUN_MIGRATIONS" == false && -n "$MIGRATION" ]]; then
@@ -370,8 +439,10 @@ printf '%s  release.tgz\n' "$actual_sha256" > "$release_dir/SHA256SUMS"
 if [[ "$RUN_MIGRATIONS" == true ]]; then
     if [[ "$MIGRATION" == 014 ]]; then
         migration_status=apply_migration_014
-    else
+    elif [[ "$MIGRATION" == 015 ]]; then
         migration_status=apply_migration_015
+    else
+        migration_status=apply_migration_016
     fi
     if ! $migration_status; then
         echo "backup=$backup_dir" >&2

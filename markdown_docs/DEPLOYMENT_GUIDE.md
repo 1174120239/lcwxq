@@ -58,7 +58,7 @@
 
 专用用户初始化脚本为 `deploy/server/bootstrap-deploy-user.sh`，它只接受 Ed25519 公钥文件，并在 `/etc/sudoers.d/lcxqy-deploy` 中写入受限规则。必须先在第二个终端验证新账号可登录，再考虑关闭旧的 root 密码登录；不要在同一个操作里同时改账号、防火墙和服务部署。
 
-通用发布入口默认不执行数据库迁移，也不修改 Nginx。经过明确授权后，replacement-backend 可用 `-RunMigrations -Migration 014` 或 `-RunMigrations -Migration 015` 执行单个受控迁移；入口校验固定 SQL SHA-256、备份受影响表/列、执行幂等检查并在结构验收失败时回滚本次新增结构。其他组件或未明确指定的迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
+通用发布入口默认不执行数据库迁移，也不修改 Nginx。经过明确授权后，replacement-backend 可用 `-RunMigrations -Migration 014`、`015` 或 `016` 执行单个受控迁移；入口校验固定 SQL SHA-256、备份受影响表/列、执行幂等检查并在结构验收失败时回滚本次新增结构。其他组件或未明确指定的迁移仍会在生产变更前中止。Nginx 精确路由切换继续使用 `backend/deploy/production/` 下的专用脚本。
 
 ~~~powershell
 .\deploy\publish-to-server.ps1 `
@@ -273,6 +273,7 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 013 | 013_ai_moderation_complete.sql | AI 子开关、统一审核历史、人工改判日志、每日评论巡检和总结 |
 | 014 | 014_lost_and_found.sql | 校园互助信息、评论、QQ 定向授权、审核日志和功能配置 |
 | 015 | 015_publish_rich_media.sql | 为校园问答和互助发布增加有序多图字段，保留首图兼容字段 |
+| 016 | 016_download_site_config.sql | 独立下载/介绍站标题、简介、网页版地址和 CORS 白名单 |
 
 规则：
 
