@@ -461,7 +461,7 @@ rollback_component() {
                 fi
                 install -m 0644 "$backup_dir/starfree-replacement.jar" /opt/starfree-replacement/starfree-replacement.jar
                 systemctl start starfree-replacement.service || true
-                wait_for_component replacement-backend 60 || true
+                wait_for_component replacement-backend 180 || true
             elif [[ -f "$backup_dir/replacement-backend.no-previous" ]]; then
                 if ! systemctl stop starfree-replacement.service; then
                     echo 'Could not stop replacement backend before rollback.' >&2
@@ -543,7 +543,7 @@ deploy_replacement() {
         rollback_component replacement-backend
         return 20
     fi
-    if ! wait_for_component replacement-backend 60; then
+    if ! wait_for_component replacement-backend 180; then
         rollback_component replacement-backend
         return 21
     fi
