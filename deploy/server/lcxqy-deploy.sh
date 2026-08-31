@@ -42,7 +42,15 @@ health_check() {
     case "$1" in
         replacement-backend) curl -fsS --max-time 15 http://127.0.0.1:18082/health >/dev/null ;;
         legacy-api) curl -fsS --max-time 15 http://127.0.0.1:8081/ >/dev/null ;;
-        admin) curl -fsS --max-time 20 "${ADMIN_HEALTH_URL:-https://admin.lcxqy.cn/}" >/dev/null ;;
+        admin)
+            if [[ -n "${ADMIN_HEALTH_URL:-}" ]]; then
+                curl -fsS --max-time 20 "$ADMIN_HEALTH_URL" >/dev/null
+            else
+                # The server resolver is not guaranteed to resolve the public
+                # admin hostname. Keep the Host/SNI while probing local Nginx.
+                curl -fsS --resolve admin.lcxqy.cn:443:127.0.0.1 --max-time 20 https://admin.lcxqy.cn/ >/dev/null
+            fi
+            ;;
         *) echo "Unknown component: $1" >&2; return 2 ;;
     esac
 }
@@ -489,14 +497,41 @@ rollback_component() {
             ;;
         admin)
             if [[ -f "$backup_dir/admin.tar.gz" ]]; then
-                rm -rf /www/wwwroot/admin.lcxqy.cn
+                remove_admin_target || return 20
                 mkdir -p /www/wwwroot
-                tar -xzf "$backup_dir/admin.tar.gz" -C /www/wwwroot
+                tar --no-same-owner --no-same-permissions -xzf "$backup_dir/admin.tar.gz" -C /www/wwwroot || return 20
+                restore_admin_user_ini_attribute || return 20
             elif [[ -f "$backup_dir/admin.no-previous" ]]; then
-                rm -rf /www/wwwroot/admin.lcxqy.cn
+                remove_admin_target || return 20
             fi
             ;;
     esac
+}
+
+remove_admin_target() {
+    local target=/www/wwwroot/admin.lcxqy.cn
+    local user_ini="$target/.user.ini"
+    local attrs
+    if [[ -e "$user_ini" ]]; then
+        command -v lsattr >/dev/null 2>&1 || { echo 'lsattr is required to handle admin .user.ini safely.' >&2; return 20; }
+        attrs=$(lsattr -d -- "$user_ini" 2>/dev/null) || { echo 'Unable to inspect admin .user.ini attributes.' >&2; return 20; }
+        if [[ "${attrs%% *}" == *i* ]]; then
+            command -v chattr >/dev/null 2>&1 || { echo 'chattr is required to handle immutable admin .user.ini.' >&2; return 20; }
+            chattr -i -- "$user_ini" || return 20
+            ADMIN_USER_INI_IMMUTABLE=1
+        else
+            ADMIN_USER_INI_IMMUTABLE=0
+        fi
+    else
+        ADMIN_USER_INI_IMMUTABLE=0
+    fi
+    rm -rf -- "$target" || return 20
+}
+
+restore_admin_user_ini_attribute() {
+    if [[ "${ADMIN_USER_INI_IMMUTABLE:-0}" -eq 1 && -e /www/wwwroot/admin.lcxqy.cn/.user.ini ]]; then
+        chattr +i -- /www/wwwroot/admin.lcxqy.cn/.user.ini || return 20
+    fi
 }
 
 backup_current_link() {
