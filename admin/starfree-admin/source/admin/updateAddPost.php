@@ -20,10 +20,11 @@ $version = trim((string)($_POST['version'] ?? ''));
 $versionCode = filter_input(INPUT_POST, 'versionCode', FILTER_VALIDATE_INT);
 $versionIntro = trim((string)($_POST['versionIntro'] ?? ''));
 $versionUrl = trim((string)($_POST['versionUrl'] ?? ''));
+$wgtUrl = trim((string)($_POST['wgtUrl'] ?? ''));
 $force = isset($_POST['force']) && (string)$_POST['force'] === '1' ? 1 : 0;
 
 if ($version === '' || strlen($version) > 120 || $versionCode === false || $versionCode === null || $versionCode < 1 ||
-    $versionIntro === '' || strlen($versionIntro) > 10000 || strlen($versionUrl) > 1000) {
+    $versionIntro === '' || strlen($versionIntro) > 10000 || strlen($versionUrl) > 1000 || strlen($wgtUrl) > 2000) {
     update_add_fail('版本信息不能为空或格式不正确');
 }
 $urlParts = parse_url($versionUrl);
@@ -33,7 +34,9 @@ if (!filter_var($versionUrl, FILTER_VALIDATE_URL) || !is_array($urlParts) ||
     update_add_fail('下载链接必须是有效的 http/https 地址');
 }
 
+$maxWgtBytes = 200 * 1024 * 1024;
 $upload = isset($_FILES['wgtFile']) ? $_FILES['wgtFile'] : null;
+$hasUpload = $upload && (int)$upload['error'] !== UPLOAD_ERR_NO_FILE;
 $uploadTemp = null;
 $storedWgtTemp = null;
 $storedWgt = null;
@@ -49,9 +52,23 @@ $fail = function ($message) use (&$cleanup) {
 };
 
 $wgtPayload = null;
-if ($upload && (int)$upload['error'] !== UPLOAD_ERR_NO_FILE) {
+$directWgtUrl = null;
+if ($hasUpload && $wgtUrl !== '') $fail('WGT 文件和直链只能填写一个');
+if ($wgtUrl !== '') {
+    $wgtUrlParts = parse_url($wgtUrl);
+    $wgtUrlPath = is_array($wgtUrlParts) ? (string)($wgtUrlParts['path'] ?? '') : '';
+    if (!filter_var($wgtUrl, FILTER_VALIDATE_URL) || !is_array($wgtUrlParts) ||
+        strtolower((string)($wgtUrlParts['scheme'] ?? '')) !== 'https' || empty($wgtUrlParts['host']) ||
+        !empty($wgtUrlParts['user']) || !empty($wgtUrlParts['pass']) ||
+        !preg_match('/\.wgt$/i', $wgtUrlPath)) {
+        $fail('WGT 直链必须是公开的 HTTPS .wgt 地址');
+    }
+    $directWgtUrl = $wgtUrl;
+}
+
+if ($hasUpload) {
     if ((int)$upload['error'] !== UPLOAD_ERR_OK) $fail('WGT 上传失败，请重新选择文件');
-    if ((int)$upload['size'] < 1 || (int)$upload['size'] > 100 * 1024 * 1024) $fail('WGT 文件不能为空且不能超过 100 MB');
+    if ((int)$upload['size'] < 1 || (int)$upload['size'] > $maxWgtBytes) $fail('WGT 文件不能为空且不能超过 200 MB');
     if (strtolower(pathinfo((string)$upload['name'], PATHINFO_EXTENSION)) !== 'wgt') $fail('只能上传 .wgt 文件');
     if (!class_exists('ZipArchive')) $fail('服务器未启用 ZipArchive，暂时无法校验 WGT');
 
@@ -109,6 +126,26 @@ if ($upload && (int)$upload['error'] !== UPLOAD_ERR_NO_FILE) {
         'description' => $versionIntro,
         'force' => $force === 1,
         'sha256' => $sha256
+    );
+} elseif ($directWgtUrl !== null) {
+    $wgtDir = getenv('LCXQY_WGT_DIR');
+    if (!$wgtDir) $wgtDir = '/opt/starfree/files/static/app-updates';
+    if (!is_dir($wgtDir) && !mkdir($wgtDir, 0750, true)) $fail('无法创建 WGT 发布目录');
+    if (!is_writable($wgtDir)) $fail('WGT 发布目录不可写');
+    $manifestPath = rtrim($wgtDir, '/\\') . DIRECTORY_SEPARATOR . 'update.json';
+    if (is_file($manifestPath)) {
+        $currentManifest = json_decode((string)file_get_contents($manifestPath), true);
+        $currentVersion = is_array($currentManifest) ? (int)($currentManifest['versionCode'] ?? 0) : 0;
+        if ($currentVersion >= (int)$versionCode) $fail('WGT 版本号必须高于当前已发布版本');
+    }
+    $wgtPayload = array(
+        'appid' => '__UNI__850911F',
+        'platform' => 'android',
+        'version' => $version,
+        'versionCode' => (int)$versionCode,
+        'wgtUrl' => $directWgtUrl,
+        'description' => $versionIntro,
+        'force' => $force === 1
     );
 }
 

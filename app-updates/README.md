@@ -8,7 +8,7 @@
 
 `https://frp.lcxqy.cn/app-updates/update.json`
 
-后台“功能设置 → 版本管理”的新增版本页面可以直接上传 `.wgt`，服务器会自动校验包内 AppID/版本号、计算 SHA-256，并原子更新 `update.json`。手工发布时，也可以把生成的 `.wgt` 文件和更新清单放到服务器这个目录。清单使用 `update.json.example` 的字段，`versionCode` 必须大于 App 当前版本号，`wgtUrl` 必须是 HTTPS 直链。
+后台“功能设置 → 版本管理”的新增版本页面可以直接上传 `.wgt`，服务器会自动校验包内 AppID/版本号、计算 SHA-256，并原子更新 `update.json`；单个上传文件最大 200 MB。也可以不上传文件，直接填写公开的 HTTPS `.wgt` 直链，但直链包不会经过服务器压缩包校验。手工发布时，也可以把生成的 `.wgt` 文件和更新清单放到服务器这个目录。清单使用 `update.json.example` 的字段，`versionCode` 必须大于 App 当前版本号，`wgtUrl` 必须是 HTTPS 直链。
 
 WGT 只用于页面、脚本、样式和静态资源更新。修改原生模块、权限、推送配置、App 图标或 Manifest 时，仍需重新云打包 APK。
 

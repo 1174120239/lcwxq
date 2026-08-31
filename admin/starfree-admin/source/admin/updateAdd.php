@@ -44,7 +44,12 @@ if (empty($_SESSION['update_csrf'])) {
                     <div class="form-group ">
                         <label for="wgtFile">Android WGT 热更新包（可选）</label>
                         <input type="file" class="form-control-file" id="wgtFile" name="wgtFile" accept=".wgt,application/octet-stream">
-                        <small class="form-text text-muted">上传后会自动发布到 /opt/starfree/files/static/app-updates/，并更新安卓 App 热更新清单。WGT 必须使用同一 AppID，且包内版本号必须与上方版本号一致，单个文件最大 100 MB。</small>
+                        <small class="form-text text-muted">可上传到专用目录并自动更新安卓 App 热更新清单。WGT 必须使用同一 AppID，且包内版本号必须与上方版本号一致，单个文件最大 200 MB。</small>
+                    </div>
+                    <div class="form-group ">
+                        <label for="wgtUrl">Android WGT 直链（可选）</label>
+                        <input type="url" class="form-control" id="wgtUrl" name="wgtUrl" placeholder="https://example.com/app-update.wgt">
+                        <small class="form-text text-muted">上传文件和直链二选一。直链必须是公开 HTTPS 地址，并以 .wgt 结尾；直链包不会经过服务器压缩包校验。</small>
                     </div>
                   
                     <div class="form-group mb-3 text_right">
@@ -64,6 +69,7 @@ if (empty($_SESSION['update_csrf'])) {
         let versionIntro = document.getElementsByName('versionIntro')[0].value.trim();
         let versionUrl = document.getElementsByName('versionUrl')[0].value.trim();
         let wgtFile = document.getElementsByName('wgtFile')[0].files[0];
+        let wgtUrl = document.getElementsByName('wgtUrl')[0].value.trim();
         
         if (version.length == 0) {
             alert("版本名不能为空");
@@ -77,8 +83,14 @@ if (empty($_SESSION['update_csrf'])) {
         } else if (versionUrl.length == 0) {
             alert("下载链接不能为空");
             return false;
-        } else if (wgtFile && (!/\.wgt$/i.test(wgtFile.name) || wgtFile.size > 100 * 1024 * 1024)) {
-            alert("WGT 文件必须为 .wgt 且不超过 100 MB");
+        } else if (wgtFile && wgtUrl) {
+            alert("WGT 文件和 WGT 直链只能填写一个");
+            return false;
+        } else if (wgtFile && (!/\.wgt$/i.test(wgtFile.name) || wgtFile.size > 200 * 1024 * 1024)) {
+            alert("WGT 文件必须为 .wgt 且不超过 200 MB");
+            return false;
+        } else if (wgtUrl && (!/^https:\/\//i.test(wgtUrl) || !/\.wgt(?:[?#].*)?$/i.test(wgtUrl))) {
+            alert("WGT 直链必须是 HTTPS 地址并以 .wgt 结尾");
             return false;
         }
     }
