@@ -72,12 +72,28 @@ export function checkAndroidWgtUpdate() {
 	})
 }
 
-export function installAndroidWgt(update, onProgress) {
+export function installAndroidWgt(update, onProgress, onStage) {
 	return new Promise((resolve, reject) => {
 		if (!isAndroidApp() || !update || !/^https:\/\//i.test(update.wgtUrl || '')) {
 			reject(new Error('没有可安装的安卓 WGT 更新包'))
 			return
 		}
+		let lastProgress = -1
+		let lastProgressAt = 0
+		const reportProgress = (value, force) => {
+			if (typeof onProgress !== 'function') return
+			const progress = Math.max(0, Math.min(100, Number(value) || 0))
+			const now = Date.now()
+			if (!force && progress < 100 && now - lastProgressAt < 120) return
+			if (!force && progress === lastProgress) return
+			lastProgress = progress
+			lastProgressAt = now
+			onProgress(progress)
+		}
+		const reportStage = (stage) => {
+			if (typeof onStage === 'function') onStage(stage)
+		}
+		reportStage('downloading')
 		const task = uni.downloadFile({
 			url: update.wgtUrl,
 			timeout: 120000,
@@ -86,10 +102,11 @@ export function installAndroidWgt(update, onProgress) {
 					reject(new Error('WGT 下载失败'))
 					return
 				}
+				reportProgress(100, true)
+				reportStage('installing')
 				plus.runtime.install(res.tempFilePath, { force: false }, () => {
-					uni.hideLoading()
 					resolve()
-					setTimeout(() => plus.runtime.restart(), 150)
+					setTimeout(() => plus.runtime.restart(), 420)
 				}, (error) => {
 					reject(new Error('WGT 安装失败：' + (error && error.message ? error.message : '文件可能损坏')))
 				})
@@ -97,7 +114,7 @@ export function installAndroidWgt(update, onProgress) {
 			fail: () => reject(new Error('WGT 下载失败，请检查网络'))
 		})
 		if (task && typeof task.onProgressUpdate === 'function' && typeof onProgress === 'function') {
-			task.onProgressUpdate((event) => onProgress(Number(event.progress) || 0))
+			task.onProgressUpdate((event) => reportProgress(event.progress, false))
 		}
 	})
 }

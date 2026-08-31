@@ -104,6 +104,14 @@
 				</view>
 			</view>
 		</view>
+		<!-- #ifdef APP-PLUS -->
+		<WgtDownloadOverlay
+			:visible="updateInstalling"
+			:progress="wgtProgress"
+			:stage="wgtStage"
+			:version="wgtTargetVersion || '新版本'"
+		/>
+		<!-- #endif -->
 		
 	</view>
 </template>
@@ -111,6 +119,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { checkAndroidWgtUpdate, installAndroidWgt } from '../../utils/appUpdate.js'
+	import WgtDownloadOverlay from '../../components/wgt-download-overlay/wgt-download-overlay.vue'
 	var API = require('../../utils/api')
 	var Net = require('../../utils/net')
 	export default {
@@ -135,6 +144,9 @@
 				updateSource: "",
 				updatePackage: null,
 				updateInstalling: false,
+				wgtProgress: 0,
+				wgtStage: 'downloading',
+				wgtTargetVersion: '',
 				qqlogin: 0,
 				wxlogin: 0,
 				wblogin: 0,
@@ -297,8 +309,9 @@
 								that.wgtVer = result.runtime.version;
 								that.versionCode = result.runtime.versionCode;
 								if (result.available) {
-									that.updateSource = 'wgt';
-									that.updatePackage = result.update;
+					that.updateSource = 'wgt';
+					that.updatePackage = result.update;
+					that.wgtTargetVersion = result.update.version || '';
 									that.qzgx = result.update.force ? 1 : 0;
 									that.Update = 1;
 									if (Status) that.installUpdate();
@@ -321,18 +334,21 @@
 								});
 							});
 						},
-						installUpdate() {
-							if (this.updateSource !== 'wgt' || !this.updatePackage || this.updateInstalling) return;
-							this.updateInstalling = true;
-							uni.showLoading({ title: '正在下载更新', mask: true });
-							installAndroidWgt(this.updatePackage, function(progress) {
-								uni.showLoading({ title: '正在下载 ' + progress + '%', mask: true });
-							}).catch((error) => {
-								this.updateInstalling = false;
-								uni.hideLoading();
-								uni.showModal({ title: '更新失败', content: error.message || 'WGT 安装失败，请稍后重试', showCancel: false });
-							});
-						},
+			installUpdate() {
+				if (this.updateSource !== 'wgt' || !this.updatePackage || this.updateInstalling) return;
+				this.updateInstalling = true;
+				this.wgtProgress = 0;
+				this.wgtStage = 'downloading';
+				this.wgtTargetVersion = this.updatePackage.version || this.wgtTargetVersion || '';
+				installAndroidWgt(this.updatePackage, (progress) => {
+					this.wgtProgress = progress;
+				}, (stage) => {
+					this.wgtStage = stage;
+				}).catch((error) => {
+					this.updateInstalling = false;
+					uni.showModal({ title: '更新失败', content: error.message || 'WGT 安装失败，请稍后重试', showCancel: false });
+				});
+			},
 			download(url){
 				var that=this;
 				const downloadTask = uni.downloadFile({
@@ -505,6 +521,9 @@
 				    }
 				});
 			}
+		},
+		components: {
+			WgtDownloadOverlay
 		}
 	}
 </script>

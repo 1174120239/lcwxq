@@ -488,6 +488,16 @@
 			</view>
 		</view>
 
+		<!-- WGT 下载和安装使用固定页面层，避免系统 loading 文案频繁重绘。 -->
+		<!-- #ifdef APP-PLUS -->
+		<WgtDownloadOverlay
+			:visible="updateInstalling"
+			:progress="wgtProgress"
+			:stage="wgtStage"
+			:version="versionTitle || '新版本'"
+		/>
+		<!-- #endif -->
+
 		<!--  #ifdef APP-PLUS -->
 		<view class="Startupmap" v-if="!isStart">
 			<view class="Startupmap-close" @tap="toStart">
@@ -519,6 +529,7 @@
 	import { isQixiEasterEggDate } from '@/utils/qixiEasterEgg.js'
 	import { checkAndroidWgtUpdate, installAndroidWgt } from '@/utils/appUpdate.js'
 	import QixiEasterEgg from '@/components/qixi-easter-egg/qixi-easter-egg.vue'
+	import WgtDownloadOverlay from '@/components/wgt-download-overlay/wgt-download-overlay.vue'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
 	// #endif
@@ -637,6 +648,8 @@
 				updateSource: "",
 				updatePackage: null,
 				updateInstalling: false,
+				wgtProgress: 0,
+				wgtStage: 'downloading',
 				startImg: {
 					localUrl: ""
 				},
@@ -2359,12 +2372,14 @@
 				if (this.updateSource === 'wgt' && this.updatePackage) {
 					if (this.updateInstalling) return;
 					this.updateInstalling = true;
-					uni.showLoading({ title: '正在下载更新', mask: true });
-					installAndroidWgt(this.updatePackage, function(progress) {
-						uni.showLoading({ title: '正在下载 ' + progress + '%', mask: true });
+					this.wgtProgress = 0;
+					this.wgtStage = 'downloading';
+					installAndroidWgt(this.updatePackage, (progress) => {
+						this.wgtProgress = progress;
+					}, (stage) => {
+						this.wgtStage = stage;
 					}).catch((error) => {
 						this.updateInstalling = false;
-						uni.hideLoading();
 						uni.showModal({ title: '更新失败', content: error.message || 'WGT 安装失败，请稍后重试', showCancel: false });
 					});
 					return;
@@ -2612,7 +2627,8 @@
 			waves,
 			Tabbar,
 			metas,
-			QixiEasterEgg
+			QixiEasterEgg,
+			WgtDownloadOverlay
 		},
 		// #endif
 
