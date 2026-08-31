@@ -55,7 +55,10 @@ $cacheKey = $cacheKeyPrefix . $act;
 $cacheTTL = 86400; 
 
 $cachedData = $redis->get($cacheKey);
-if ($cachedData !== false && $act !== 'downloadSiteConfig') {
+// Version history is the public projection of the admin version table. It
+// must reflect a newly published version immediately instead of waiting for
+// the general one-day API cache to expire.
+if ($cachedData !== false && $act !== 'downloadSiteConfig' && $act !== 'versionList') {
     header('Content-Type: application/json');
     echo base64_decode($cachedData);
     exit;

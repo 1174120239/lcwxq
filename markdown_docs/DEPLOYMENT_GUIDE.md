@@ -404,6 +404,8 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 ### 9.2 安全版本切流
 
+安卓 WGT 热更新包不随后端 JAR 发布。使用 HBuilderX 5.24 生成 WGT 后，可在后台“功能设置 → 版本管理”的新增版本页面直接上传；admin 安装流程会创建 `/opt/starfree/files/static/app-updates/` 并授予 PHP-FPM `www` 用户写权限。发布后确认可通过 `https://frp.lcxqy.cn/app-updates/update.json` 和清单中的 WGT HTTPS 直链读取。也可以按 `app-updates/README.md` 手工上传。WGT 的 `appid` 必须为 `__UNI__850911F`，`versionCode` 必须递增；涉及原生模块、权限或 Manifest 的变更仍需重新云打包 APK。
+
 渗透测试修复不能只更新 JAR。必须在独立发布会话按以下顺序执行：
 
 1. 构建、发布并验证 replacement JAR，确认 Redis 登录态已启用且 `/health` 正常。

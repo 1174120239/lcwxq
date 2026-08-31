@@ -32,12 +32,17 @@ uni-app 前端
   ├─ https://admin.lcxqy.cn/    PHP admin 与配置接口
   └─ https://prev.lcxqy.cn/     H5/分享页面
 
+安卓 App 热更新清单：
+  └─ https://frp.lcxqy.cn/app-updates/update.json
+
 新旧后端共享：
   ├─ MySQL lcxqy
   └─ Redis 登录态、限额与缓存
 ~~~
 
 Nginx 只对已验证路径建立精确 location。未匹配路径继续进入旧端兜底。
+
+安卓 App 的前端资源热更新使用独立的 WGT 清单和文件目录，不经过 API 或 PHP 版本表。
 
 ## 3. 项目目录
 

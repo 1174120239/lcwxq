@@ -4,6 +4,14 @@ session_start();
 include_once 'Menu.php';
 $sql = "select * from ".$db_prefix."_admin_update order by id desc";
 $contents = mysqli_query($connect, $sql);
+$wgtDir = getenv('LCXQY_WGT_DIR');
+if (!$wgtDir) $wgtDir = '/opt/starfree/files/static/app-updates';
+$wgtManifest = null;
+$wgtManifestPath = rtrim($wgtDir, '/\\') . DIRECTORY_SEPARATOR . 'update.json';
+if (is_file($wgtManifestPath)) {
+    $wgtManifestData = json_decode((string)file_get_contents($wgtManifestPath), true);
+    if (is_array($wgtManifestData)) $wgtManifest = $wgtManifestData;
+}
 
 
 ?>
@@ -22,6 +30,16 @@ $contents = mysqli_query($connect, $sql);
                             <i class="dripicons-plus"></i> 添加新版本
                         </button>
                     </a></h4>
+                <?php if ($wgtManifest && !empty($wgtManifest['wgtUrl'])): ?>
+                    <div class="alert alert-info py-2">
+                        当前安卓 WGT：版本 <?php echo htmlspecialchars((string)($wgtManifest['version'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                        （<?php echo (int)($wgtManifest['versionCode'] ?? 0); ?>）
+                        <a href="<?php echo htmlspecialchars((string)$wgtManifest['wgtUrl'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">查看文件</a>
+                        <span class="ml-2">清单地址：/app-updates/update.json</span>
+                    </div>
+                <?php else: ?>
+                    <div class="alert alert-secondary py-2">尚未发布安卓 WGT。新增版本时可在表单中直接上传，下载页的 APK 地址仍按原有配置同步。</div>
+                <?php endif; ?>
                 
                 <table id="basic-update" class="table dt-responsive nowrap" width="100%">
                     <thead>
@@ -31,6 +49,7 @@ $contents = mysqli_query($connect, $sql);
                         <th>版本号</th>
                         <th>描述</th>
                         <th>下载链接</th>
+                        <th>WGT</th>
                         <th>类型</th>
                         <th style="width: 125px;">操作</th>
                     </tr>
@@ -47,6 +66,13 @@ $contents = mysqli_query($connect, $sql);
                             <td><?php echo $articledata['versionIntro'] ?></td>
                              <td>
                                 <?php echo $articledata['versionUrl'] ?>
+                            </td>
+                            <td>
+                                <?php if ($wgtManifest && (int)($wgtManifest['versionCode'] ?? 0) === (int)$articledata['versionCode'] && !empty($wgtManifest['wgtUrl'])): ?>
+                                    <a href="<?php echo htmlspecialchars((string)$wgtManifest['wgtUrl'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">已发布</a>
+                                <?php else: ?>
+                                    <span class="text-muted">-</span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                  <h5>
