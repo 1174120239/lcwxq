@@ -571,6 +571,10 @@ QQBot 不使用 `webinfo.key` 冒充上传 token。replacement 会为已绑定�
 
 ## 8. PHP admin 专用接口和插件边界
 
+### 8.1 安卓 WGT 热更新清单
+
+App-Plus 安卓客户端会读取 `GET https://frp.lcxqy.cn/app-updates/update.json`。该地址是静态 JSON，不需要登录，字段为 `appid`、`platform`、`version`、`versionCode`、`wgtUrl`、`description` 和 `force`。客户端只接受同一 AppID、`platform=android/all`、HTTPS 且 `versionCode` 大于本地版本的 WGT；下载后由 App-Plus 安装并重启。原有 `admin.lcxqy.cn/Api/api.php?update=1` 仍保留，用于没有 WGT 时的 APK 更新兜底。
+
 前端还会直接访问 `https://admin.lcxqy.cn/Api/api.php?act=...` 的 PHP 配置接口，例如 `getPlugins`、`usercount`、`appdata`、`opset`、`fenlei`、`vip`、`adimg2`、`logininfo`、`chongzhiset`、`viphide`、`qzxz`、`musicpic`、`likeall`，以及更新、广告、客服/群链接和 mp3 页面。独立下载/介绍站使用 `act=versionList` 读取 `*_admin_update` 的公开版本投影；该接口只返回版本名称、版本号、更新描述、下载链接和更新类型，不读取后台账号信息。
 
 这些不是 `api.lcxqy.cn` 的 Spring API，也不在后端重建范围。项目明确不做插件功能：Space `type=6` 不支持；未知插件形态内容由旧端处理，不应猜测表结构或写入格式。

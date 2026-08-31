@@ -6,6 +6,7 @@ SOURCE_DIR="$(cd "${SCRIPT_DIR}/../source" && pwd)"
 TARGET_DIR="${TARGET_DIR:-/www/wwwroot/admin.lcxqy.cn}"
 WEB_USER="${WEB_USER:-www}"
 WEB_GROUP="${WEB_GROUP:-www}"
+WGT_DIR="${LCXQY_WGT_DIR:-/opt/starfree/files/static/app-updates}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 USER_INI="$TARGET_DIR/.user.ini"
 USER_INI_WAS_IMMUTABLE=0
@@ -115,6 +116,10 @@ if grep -q 'CHANGE_ME' "$TARGET_DIR/Config_DB.php"; then
     echo "$TARGET_DIR/Config_DB.php still contains CHANGE_ME placeholders." >&2
     exit 2
 fi
+
+# Keep Android WGT assets outside the PHP document tree, but writable by the
+# same PHP-FPM account that handles the version manager upload.
+install -d -o "$WEB_USER" -g "$WEB_GROUP" -m 0750 "$WGT_DIR"
 
 find "$TARGET_DIR" -mindepth 1 ! -path "$USER_INI" \
     -exec chown "$WEB_USER:$WEB_GROUP" {} +

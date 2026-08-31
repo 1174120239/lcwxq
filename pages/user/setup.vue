@@ -110,6 +110,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { checkAndroidWgtUpdate, installAndroidWgt } from '../../utils/appUpdate.js'
 	var API = require('../../utils/api')
 	var Net = require('../../utils/net')
 	export default {
@@ -131,6 +132,9 @@
 				Update: 0,
 				qzgx: 0,
 				versionUrl: "",
+				updateSource: "",
+				updatePackage: null,
+				updateInstalling: false,
 				qqlogin: 0,
 				wxlogin: 0,
 				wblogin: 0,
@@ -289,46 +293,45 @@
 			},
 			isUpdate(Status) {
 							var that = this;
-							plus.runtime.getProperty(plus.runtime.appid, function(inf) {
-								
-								that.wgtVer = inf.version //获取当前版本号
-								that.versionCode = inf.versionCode;
-								var version = inf.versionCode;
+							checkAndroidWgtUpdate().then(function(result) {
+								that.wgtVer = result.runtime.version;
+								that.versionCode = result.runtime.versionCode;
+								if (result.available) {
+									that.updateSource = 'wgt';
+									that.updatePackage = result.update;
+									that.qzgx = result.update.force ? 1 : 0;
+									that.Update = 1;
+									if (Status) that.installUpdate();
+									return;
+								}
+								that.updateSource = '';
+								that.updatePackage = null;
 								that.$Net.request({
-									url: that.$API.GetUpdateUrl(),
-									method: 'get',
+									url: that.$API.GetUpdateUrl(), method: 'get',
 									success: function(res) {
 										var update = res.data || {};
 										var versionCode = Number(update.versionCode);
-										var currentVersionCode = Number(version);
 										that.versionUrl = update.versionUrl || '';
 										that.qzgx = update.qzgx === true || update.qzgx === 'true' || Number(update.qzgx) === 1 ? 1 : 0;
-										if(Status){
-											uni.showToast({
-												title:"检测完成",
-												icon:'none',
-												duration: 1000,
-												position:'bottom',
-											});
-											
+										if (Number.isFinite(versionCode) && versionCode > that.versionCode) {
+											that.Update = 1;
+											if (Status && that.versionUrl) plus.runtime.openURL(that.versionUrl);
 										}
-										if(Number.isFinite(versionCode) && Number.isFinite(currentVersionCode) && versionCode > currentVersionCode){
-											console.log("有更新");
-											that.Update=1;
-											if(Status){
-												if(that.versionUrl!=""){
-													plus.runtime.openURL(that.versionUrl);
-												}
-											}
-										}
-										
-									},
-									fail:function(res){
-										
 									}
-								})
-								
-							})
+								});
+							});
+						},
+						installUpdate() {
+							if (this.updateSource !== 'wgt' || !this.updatePackage || this.updateInstalling) return;
+							this.updateInstalling = true;
+							uni.showLoading({ title: '正在下载更新', mask: true });
+							installAndroidWgt(this.updatePackage, function(progress) {
+								uni.showLoading({ title: '正在下载 ' + progress + '%', mask: true });
+							}).catch((error) => {
+								this.updateInstalling = false;
+								uni.hideLoading();
+								uni.showModal({ title: '更新失败', content: error.message || 'WGT 安装失败，请稍后重试', showCancel: false });
+							});
 						},
 			download(url){
 				var that=this;

@@ -1,7 +1,9 @@
 <?php
-session_start();
-
+require_once __DIR__ . '/session.php';
 include_once 'Menu.php';
+if (empty($_SESSION['update_csrf'])) {
+    $_SESSION['update_csrf'] = bin2hex(random_bytes(24));
+}
 ?>
 <div class="row">
 
@@ -10,8 +12,9 @@ include_once 'Menu.php';
             <div class="card-body">
                 <h4 class="header-title mb-3 size_18">新增版本</h4>
 
-                <form class="needs-validation" m action="updateAddPost.php" method="post" onsubmit="return check()"
+                <form class="needs-validation" action="updateAddPost.php" method="post" enctype="multipart/form-data" onsubmit="return check()"
                       novalidate>
+                    <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($_SESSION['update_csrf'], ENT_QUOTES, 'UTF-8'); ?>">
                     <div class="form-group ">
                         <label for="validationCustom01">版本名称</label><span class="badge badge-success-lighten"style="font-size: 0.8rem;">比如：1.0.1</span>
                         <input type="text" class="form-control" id="validationCustom01" placeholder="请输入版本名称"
@@ -38,6 +41,11 @@ include_once 'Menu.php';
                                     <option value="0">普通更新</option>
                             </select>
                     </div>
+                    <div class="form-group ">
+                        <label for="wgtFile">Android WGT 热更新包（可选）</label>
+                        <input type="file" class="form-control-file" id="wgtFile" name="wgtFile" accept=".wgt,application/octet-stream">
+                        <small class="form-text text-muted">上传后会自动发布到 /opt/starfree/files/static/app-updates/，并更新安卓 App 热更新清单。WGT 必须使用同一 AppID，且包内版本号必须与上方版本号一致，单个文件最大 100 MB。</small>
+                    </div>
                   
                     <div class="form-group mb-3 text_right">
                         <button class="btn btn-primary" type="submit" id="updateAddPost">发布新版本</button>
@@ -55,6 +63,7 @@ include_once 'Menu.php';
         let versionCode = document.getElementsByName('versionCode')[0].value.trim();
         let versionIntro = document.getElementsByName('versionIntro')[0].value.trim();
         let versionUrl = document.getElementsByName('versionUrl')[0].value.trim();
+        let wgtFile = document.getElementsByName('wgtFile')[0].files[0];
         
         if (version.length == 0) {
             alert("版本名不能为空");
@@ -67,6 +76,9 @@ include_once 'Menu.php';
             return false;
         } else if (versionUrl.length == 0) {
             alert("下载链接不能为空");
+            return false;
+        } else if (wgtFile && (!/\.wgt$/i.test(wgtFile.name) || wgtFile.size > 100 * 1024 * 1024)) {
+            alert("WGT 文件必须为 .wgt 且不超过 100 MB");
             return false;
         }
     }

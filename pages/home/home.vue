@@ -517,6 +517,7 @@
 	import { shuffleQuestions } from '@/utils/questions.js'
 	import { refreshUnreadBadge } from '@/utils/unreadBadge.js'
 	import { isQixiEasterEggDate } from '@/utils/qixiEasterEgg.js'
+	import { checkAndroidWgtUpdate, installAndroidWgt } from '@/utils/appUpdate.js'
 	import QixiEasterEgg from '@/components/qixi-easter-egg/qixi-easter-egg.vue'
 	// #ifdef APP-PLUS
 	import owo from '@/static/app-plus/owo/OwO.js'
@@ -633,6 +634,9 @@
 				versionUrl: "",
 				versionTitle: "",
 				versionIntro: "",
+				updateSource: "",
+				updatePackage: null,
+				updateInstalling: false,
 				startImg: {
 					localUrl: ""
 				},
@@ -891,7 +895,7 @@
 		},
 		onLoad() {
 			var that = this;
-			// #ifdef APP-PLUS || MP
+			// #ifdef APP-PLUS
 			that.NavBar = this.CustomBar;
 
 			that.isUpdate(false);
@@ -2311,61 +2315,60 @@
 			},
 			isUpdate(Status) {
 				var that = this;
-			
-				plus.runtime.getProperty(plus.runtime.appid, function(inf) {
-			
-					that.wgtVer = inf.version;
-					that.versionCode = inf.versionCode;
-					var version = inf.versionCode;
+				checkAndroidWgtUpdate().then(function(result) {
+					that.wgtVer = result.runtime.version;
+					that.versionCode = result.runtime.versionCode;
+					if (result.available) {
+						that.updateSource = 'wgt';
+						that.updatePackage = result.update;
+						that.versionTitle = result.update.version || '新版本';
+						that.versionIntro = result.update.description || '';
+						that.qzgx = result.update.force ? 1 : 0;
+						that.Update = 1;
+						uni.hideTabBar({ animation: true });
+						if (Status) that.openUpdate();
+						return;
+					}
+					that.updateSource = '';
+					that.updatePackage = null;
 					that.$Net.request({
 						url: that.$API.GetUpdateUrl(),
-						header: {
-							'content-type': 'application/json'
-						},
+						header: { 'content-type': 'application/json' },
 						method: 'get',
 						success: function(res) {
 							var update = res.data || {};
 							var versionCode = Number(update.versionCode);
-							var currentVersionCode = Number(version);
 							that.versionUrl = update.versionUrl || '';
 							that.versionTitle = update.version || '';
 							that.versionIntro = update.versionIntro || '';
 							that.qzgx = update.qzgx === true || update.qzgx === 'true' || Number(update.qzgx) === 1 ? 1 : 0;
-							if (Status) {
-								// uni.showToast({
-								// 	title:"检测完成",
-								// 	icon:'none',
-								// 	duration: 1000,
-								// 	position:'bottom',
-								// });
-			
-							}
-							if (Number.isFinite(versionCode) && Number.isFinite(currentVersionCode) && versionCode > currentVersionCode) {
-								console.log("有更新");
-								uni.hideTabBar({
-									animation: true
-								})
+							if (Number.isFinite(versionCode) && versionCode > that.versionCode) {
 								that.Update = 1;
-								if (Status) {
-									if (that.versionUrl != "") {
-										plus.runtime.openURL(that.versionUrl);
-									}
-								}
+								uni.hideTabBar({ animation: true });
+								if (Status && that.versionUrl) plus.runtime.openURL(that.versionUrl);
 							}
-			
-						},
-						fail: function(res) {
-			
 						}
-					})
-			
-				})
+					});
+				});
 			},
 			dismissUpdate() {
 				if (this.qzgx === 1) return;
 				this.Update = 0;
 			},
 			openUpdate() {
+				if (this.updateSource === 'wgt' && this.updatePackage) {
+					if (this.updateInstalling) return;
+					this.updateInstalling = true;
+					uni.showLoading({ title: '正在下载更新', mask: true });
+					installAndroidWgt(this.updatePackage, function(progress) {
+						uni.showLoading({ title: '正在下载 ' + progress + '%', mask: true });
+					}).catch((error) => {
+						this.updateInstalling = false;
+						uni.hideLoading();
+						uni.showModal({ title: '更新失败', content: error.message || 'WGT 安装失败，请稍后重试', showCancel: false });
+					});
+					return;
+				}
 				if (!this.versionUrl) {
 					uni.showToast({ title: '暂无下载地址', icon: 'none' });
 					return;
