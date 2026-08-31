@@ -112,6 +112,26 @@ while IFS= read -r setting; do
         printf '%s\n' "$setting" >>"$USER_INI"
     fi
 done <"$SCRIPT_DIR/php-security.ini"
+
+# PHP-FPM keeps open_basedir enabled on the admin site. Add only the WGT
+# publish directory so uploads can leave the PHP tree without broadening the
+# existing allowlist to the whole static volume.
+wgt_open_basedir="${WGT_DIR%/}/"
+current_open_basedir="$(sed -n 's/^[[:space:]]*open_basedir[[:space:]]*=[[:space:]]*//p' "$USER_INI" | tail -n 1)"
+if [[ -z "$current_open_basedir" ]]; then
+    current_open_basedir="${TARGET_DIR%/}/:/tmp/"
+fi
+case ":$current_open_basedir:" in
+    *":$wgt_open_basedir:"*) ;;
+    *)
+        current_open_basedir="${current_open_basedir%:}:$wgt_open_basedir"
+        if grep -Eq "^[[:space:]]*open_basedir[[:space:]]*=" "$USER_INI"; then
+            sed -i -E "s|^[[:space:]]*open_basedir[[:space:]]*=.*$|open_basedir=$current_open_basedir|" "$USER_INI"
+        else
+            printf 'open_basedir=%s\n' "$current_open_basedir" >>"$USER_INI"
+        fi
+        ;;
+esac
 if grep -q 'CHANGE_ME' "$TARGET_DIR/Config_DB.php"; then
     echo "$TARGET_DIR/Config_DB.php still contains CHANGE_ME placeholders." >&2
     exit 2
