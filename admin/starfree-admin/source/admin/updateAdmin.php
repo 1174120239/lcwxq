@@ -35,10 +35,10 @@ if (is_file($wgtManifestPath)) {
                         当前安卓 WGT：版本 <?php echo htmlspecialchars((string)($wgtManifest['version'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
                         （<?php echo (int)($wgtManifest['versionCode'] ?? 0); ?>）
                         <a href="<?php echo htmlspecialchars((string)$wgtManifest['wgtUrl'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">查看文件</a>
-                        <span class="ml-2">清单地址：/app-updates/update.json</span>
+                        <span class="ml-2">来源：<?php echo empty($wgtManifest['sha256']) ? '直链' : '后台上传'; ?>；清单地址：/app-updates/update.json</span>
                     </div>
                 <?php else: ?>
-                    <div class="alert alert-secondary py-2">尚未发布安卓 WGT。新增版本时可在表单中直接上传，下载页的 APK 地址仍按原有配置同步。</div>
+                    <div class="alert alert-secondary py-2">尚未发布安卓 WGT。新增版本时可上传文件或填写 HTTPS 直链，下载页的 APK 地址仍按原有配置同步。</div>
                 <?php endif; ?>
                 
                 <table id="basic-update" class="table dt-responsive nowrap" width="100%">
