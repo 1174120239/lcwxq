@@ -7,18 +7,25 @@
 				<text class="square-page-title">{{squarePageTitle}}</text>
 				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toSearch"><text class="cuIcon-search"></text></view>
 			</view>
-			<view class="square-section-tabs" v-if="squareid==0">
-				<view class="square-section-track">
-					<view class="square-section-item" :class="{'is-active':contentMode==='space'}" @tap="switchContentMode('space')">普通动态</view>
-					<view class="square-section-item" :class="{'is-active':contentMode==='qa'}" @tap="switchContentMode('qa')">提问区</view>
+			<!--
+				动态类型切换暂时隐藏。保留原有 DOM 与 switchContentMode 方法，
+				方便后续重新开放“普通动态 / 提问区”时恢复交互，不影响已有路由状态。
+			-->
+			<!-- 独立的“全部”筛选行隐藏，避免与标签栏重复；左上角工具按钮仍保留高级筛选入口。 -->
+			<!-- 只保留参考图中的纯标签胶囊栏；筛选请求仍由标签点击触发。 -->
+			<view class="square-topic-filter" v-if="contentMode==='space'" @tap.stop>
+				<view class="square-topic-filter-inner">
+					<scroll-view scroll-x class="square-topic-filter-scroll" :show-scrollbar="false">
+						<view class="square-topic-filter-track">
+							<view class="square-topic-filter-chip square-topic-filter-chip-all" :class="{'is-active': follow==1 && selectedTopics.length===0}" @tap="clearTopicFilter">
+								<text class="cuIcon-list"></text><text>全部</text>
+							</view>
+							<view class="square-topic-filter-chip" :class="{'is-active': isTopicSelected(topic.mid)}" v-for="topic in topicFilterTopics" :key="'direct-topic-'+topic.mid" @tap="selectTopic(topic)">
+								<text :class="isTopicSelected(topic.mid) ? 'cuIcon-check' : 'cuIcon-tag'"></text><text>#{{topic.name}}</text>
+							</view>
+						</view>
+					</scroll-view>
 				</view>
-			</view>
-			<view class="square-filter-row" v-if="contentMode==='space'" @tap="toggleSquareMenu">
-				<view class="square-filter-label">
-					<text class="cuIcon-filter"></text>
-					<text>{{squareFilterLabel}}</text>
-				</view>
-				<text class="cuIcon-unfold square-filter-arrow" :class="{'is-open':showSquareMenu}"></text>
 			</view>
 			<view class="square-filter-menu" v-if="contentMode==='space'" :class="{'is-open':showSquareMenu}" @tap.stop>
 				<view class="filter-menu-title">动态筛选</view>
@@ -29,27 +36,8 @@
 					<view :class="{'is-active':follow==2&&squareid==0}" @tap="setFollow(2);showSquareMenu=false">视频</view>
 					<view :class="{'is-active':follow==3&&squareid==0}" @tap="setFollow(3);showSquareMenu=false">图集</view>
 				</view>
-				<view class="filter-menu-title service-title">
-					<text>话题筛选</text>
-					<text class="filter-topic-count" v-if="selectedTopics.length">已选 {{selectedTopics.length}}/3</text>
-				</view>
-				<view class="filter-menu-topics" v-if="officialTopicPreview.length>0">
-					<scroll-view scroll-x class="filter-topic-scroll" :show-scrollbar="false">
-						<view class="filter-topic-track">
-							<view class="filter-topic-chip" :class="{'is-active': isTopicSelected(topic.mid)}" v-for="topic in officialTopicPreview" :key="'menu-topic-'+topic.mid"
-								@tap="selectTopic(topic)">
-								<text :class="isTopicSelected(topic.mid) ? 'cuIcon-check' : 'cuIcon-tag'"></text><text>#{{topic.name}}</text>
-							</view>
-							<view class="filter-topic-more" @tap="showAllTopics">
-								<text>显示更多</text><text class="cuIcon-right"></text>
-							</view>
-						</view>
-					</scroll-view>
-				</view>
-				<view class="filter-topic-empty" v-else @tap="showAllTopics">
-					<text class="cuIcon-tag"></text>
-					<text>{{topicCenterLoading ? '话题加载中' : '话题'}}</text>
-					<text class="filter-topic-empty-more">显示更多</text>
+				<view class="filter-menu-topic-entry" @tap="showAllTopics">
+					<text class="cuIcon-tag"></text><text>管理全部话题</text><text class="cuIcon-right"></text>
 				</view>
 				<view class="filter-menu-services filter-menu-extra-services" v-if="groupChatEnabled || sy_appbox">
 					<view v-if="groupChatEnabled" @tap="handleClick1();showSquareMenu=false"><text class="cuIcon-message"></text><text>群聊</text></view>
@@ -488,6 +476,9 @@
 				questionLoading: false,
 				questionLoadingMore: false,
 				questionMoreText: '',
+				spaceLoading: false,
+				spaceHasMore: true,
+				spaceRequestId: 0,
 				latestUserAvatar: [],
 				curIMG:"",
 				isGetChat: null,
@@ -503,6 +494,7 @@
 				officialTopics: [],
 				followedTopics: [],
 				topicCenterLoaded: false,
+				topicCenterToken: '',
 				topicCenterLoading: false,
 				selectedTopics: [],
 				appList: [], 
@@ -616,10 +608,17 @@
 			},
 			squareHeaderSpacer() {
 				const systemInfo = uni.getSystemInfoSync()
-				const viewportWidth = systemInfo.windowWidth || 375
 				let toolbarRpx = 184
-				if (this.squareid == 0) toolbarRpx = this.contentMode === 'qa' ? 166 : 254
-				const toolbarHeight = Math.round(toolbarRpx * viewportWidth / 750)
+				// 类型切换和独立筛选行隐藏后，动态页固定头部只由主导航与直接展示的
+				// 话题条组成；占位高度必须与这两段保持一致，避免首条动态被遮挡。
+				if (this.squareid == 0) toolbarRpx = this.contentMode === 'qa' ? 96 : 188
+				// H5 的编译样式按 750 设计宽度折算为 0.5px/rpx，桌面端也会
+				// 封顶；App/小程序继续使用设备宽度比例，避免超宽 H5 留白。
+				let toolbarHeight = toolbarRpx * 0.5
+				// #ifndef H5
+				toolbarHeight = toolbarRpx * (systemInfo.windowWidth || 375) / 750
+				// #endif
+				toolbarHeight = Math.round(toolbarHeight)
 				return { height: (this.StatusBar + toolbarHeight) + 'px' }
 			},
 			squareHeaderStyle() {
@@ -635,6 +634,18 @@
 				const recommended = topics.filter(topic => Number(topic.isrecommend) === 1)
 				return (recommended.length > 0 ? recommended : topics).slice(0, 12)
 			},
+			topicFilterTopics() {
+				// 推荐话题优先，已关注话题补充到横向条中，并按 mid 去重。
+				// 这样未登录用户可直接筛选推荐话题，登录用户也能快速回到关注话题。
+				const result = []
+				const seen = {}
+				;(this.officialTopicPreview || []).concat(this.followedTopics || []).forEach(topic => {
+					if (!topic || !topic.mid || seen[String(topic.mid)]) return
+					seen[String(topic.mid)] = true
+					result.push(topic)
+				})
+				return result.slice(0, 18)
+			},
 			showSpacePresentation() {
 				return this.squareid == 0 && this.contentMode === 'space'
 					&& this.follow == 1 && this.selectedTopics.length === 0
@@ -645,10 +656,17 @@
 			var stopRefresh = function() {
 				uni.stopPullDownRefresh();
 			};
-				if (that.squareid == 0 && that.contentMode === 'qa') {
-					that.loadQuestionList(false, stopRefresh);
-					return;
-				}
+			if (that.squareid == 0 && that.contentMode === 'qa') {
+				that.loadQuestionList(false, stopRefresh);
+				return;
+			}
+			if (that.squareid === 0) {
+				// A pull-to-refresh supersedes the current page request. The old
+				// response is ignored by spaceRequestId when it eventually returns.
+				that.spaceRequestId++;
+				that.spaceLoading = false;
+				that.spaceHasMore = true;
+			}
 				if (that.follow == 2 && that.squareid == 0) {
 					that.changeLoading = 0;
 					that.getSpaceList2();
@@ -700,12 +718,27 @@
 			
 		},
 		onPageScroll(event) {
-			this.pageScrollTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
+			const nextTop = event && Number(event.scrollTop) >= 0 ? Number(event.scrollTop) : this.pageScrollTop
+			this.pageScrollTop = nextTop
 			this.showBackToTop = this.pageScrollTop > 520
-			handleCampusChromeScroll(this, event && event.scrollTop)
-			this.collapseSquareMenu()
+			this._pendingScrollTop = nextTop
+			if (this._scrollFrame) return
+			this._scrollFrame = setTimeout(() => {
+				this._scrollFrame = null
+				// H5 already feeds the shared chrome handler from its passive window
+				// listener. Keep the page callback for App/MP runtimes only so one
+				// scroll gesture does not publish two state updates.
+				// #ifndef H5
+				handleCampusChromeScroll(this, this._pendingScrollTop)
+				// #endif
+				this.collapseSquareMenu()
+			}, 16)
 		},
 		onHide() {
+			this.spaceRequestId++;
+			this.spaceLoading = false;
+			clearTimeout(this._scrollFrame)
+			this._scrollFrame = null
 			resetCampusChromeScroll(this)
 			unbindCampusChromeScroll(this)
 			if (this.$refs.tabbar && this.$refs.tabbar.deactivate) this.$refs.tabbar.deactivate();
@@ -714,6 +747,8 @@
 			this.stopCampusThemeClock();
 		},
 		onUnload() {
+			clearTimeout(this._scrollFrame)
+			this._scrollFrame = null
 			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility)
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
@@ -764,7 +799,7 @@
 			} else {
 				that.token = "";
 			}
-			if (!restoreSpacePosition) that.getTopicCenter();
+			if (!restoreSpacePosition && (!that.topicCenterLoaded || that.topicCenterToken !== that.token)) that.getTopicCenter();
 			if (localStorage.getItem('chatList')) {
 				try {
 					var cachedChatList = JSON.parse(localStorage.getItem('chatList'));
@@ -901,6 +936,9 @@
 				if (this.contentMode === mode) return;
 				this.contentMode = mode;
 				this.stopChatPolling();
+				this.spaceRequestId++;
+				this.spaceLoading = false;
+				this.spaceHasMore = true;
 				uni.pageScrollTo({ scrollTop: 0, duration: 0 });
 				if (mode === 'qa') {
 					this.loadQuestionList(false);
@@ -1236,6 +1274,7 @@
 			},
 			loadMore() {
 				var that = this;
+				if (that.spaceLoading || !that.dataLoad || !that.spaceHasMore) return;
 				that.moreText = "加载中...";
 				that.isLoad = 1;
 				
@@ -1510,6 +1549,10 @@
 					return false;
 				}
 				that.page = 1;
+				that.spaceRequestId++;
+				that.spaceLoading = false;
+				that.spaceHasMore = true;
+				that.spaceList = [];
 				that.contentMode = 'space';
 				that.squareid = type;
 				that.stopChatPolling();
@@ -1571,6 +1614,10 @@
 			setFollow(type) {
 				var that = this;
 				that.page = 1;
+				that.spaceRequestId++;
+				that.spaceLoading = false;
+				that.spaceHasMore = true;
+				that.spaceList = [];
 				that.squareid = 0;
 				that.contentMode = 'space';
 				that.selectedTopics = [];
@@ -1588,6 +1635,11 @@
 				if (type == 1||type == 0||type == 4) {
 					that.getSpaceList(false);
 				}
+			},
+			clearTopicFilter() {
+				// “全部”标签只清除话题条件，已经处于全部视图时不重复请求。
+				if (this.follow === 1 && this.selectedTopics.length === 0) return
+				this.setFollow(1)
 			},
 			searchClose() {
 				var that = this;
@@ -1693,8 +1745,8 @@
 					url: '/pages/contents/search'
 				});
 			},
-			getTopicCenter() {
-				if (this.topicCenterLoading) return;
+			getTopicCenter(force) {
+				if (this.topicCenterLoading || (this.topicCenterLoaded && this.topicCenterToken === this.token && !force)) return;
 				this.topicCenterLoading = true;
 				this.$Net.request({
 					url: this.$API.topicList(),
@@ -1702,11 +1754,13 @@
 					method: "get",
 					dataType: "json",
 					success: (res) => {
-						if (res.data.code == 1 && res.data.data) {
-							this.officialTopics = res.data.data.official || [];
-							this.followedTopics = res.data.data.followed || [];
+						if (res.data.code == 1) {
+							const data = res.data.data || {};
+							this.officialTopics = data.official || [];
+							this.followedTopics = data.followed || [];
+							this.topicCenterToken = this.token;
+							this.topicCenterLoaded = true;
 						}
-						this.topicCenterLoaded = true;
 						this.topicCenterLoading = false;
 						this.isLoading = 1;
 					},
@@ -1731,6 +1785,7 @@
 					: this.selectedTopics.concat([{ mid: Number(topic.mid), name: topic.name || '' }]);
 				this.page = 1;
 				this.spaceList = [];
+				this.spaceHasMore = true;
 				this.getSpaceList(false);
 			},
 			isTopicSelected(mid) {
@@ -2108,6 +2163,10 @@
 			},
 			getSpaceList2(isPage){
 				var that = this;
+				if (that.spaceLoading || (isPage && !that.spaceHasMore)) return;
+				var requestId = ++that.spaceRequestId;
+				that.spaceLoading = true;
+				if (!isPage) that.spaceHasMore = true;
 				var page = that.page;
 				var token = "";
 				if(localStorage.getItem('userinfo')){
@@ -2134,6 +2193,8 @@
 						method: "get",
 						dataType: 'json',
 						success: function(res) {
+							if (requestId !== that.spaceRequestId) return;
+							that.spaceLoading = false;
 							that.changeLoading = 1;
 							that.isLoad=0;
 							that.moreText="加载更多";
@@ -2172,12 +2233,15 @@
 										that.spaceList = spaceList;
 									}
 									
-								}else{
-									that.moreText="没有更多动态了";
+						}else{
+							that.moreText="没有更多动态了";
+							that.spaceHasMore = false;
 								}
 							}
 						},
 						fail: function(res) {
+							if (requestId !== that.spaceRequestId) return;
+						that.spaceLoading = false;
 							
 							that.changeLoading = 1;
 							that.isLoad=0;
@@ -2192,6 +2256,10 @@
 			},
 			getSpaceList3(isPage){
 				var that = this;
+				if (that.spaceLoading || (isPage && !that.spaceHasMore)) return;
+				var requestId = ++that.spaceRequestId;
+				that.spaceLoading = true;
+				if (!isPage) that.spaceHasMore = true;
 				var page = that.page;
 				var token = "";
 				
@@ -2214,6 +2282,8 @@
 						method: "get",
 						dataType: 'json',
 						success: function(res) {
+							if (requestId !== that.spaceRequestId) return;
+							that.spaceLoading = false;
 							that.changeLoading = 1;
 							that.isLoad=0;
 							that.moreText="加载更多";
@@ -2252,12 +2322,15 @@
 										that.spaceList = spaceList;
 									}
 									
-								}else{
-									that.moreText="没有更多动态了";
+						}else{
+							that.moreText="没有更多动态了";
+							that.spaceHasMore = false;
 								}
 							}
 						},
 						fail: function(res) {
+							if (requestId !== that.spaceRequestId) return;
+						that.spaceLoading = false;
 							
 							that.changeLoading = 1;
 							that.isLoad=0;
@@ -2333,6 +2406,10 @@
 			},
 			getSpaceList(isPage) {
 				var that = this;
+				if (that.spaceLoading || (isPage && !that.spaceHasMore)) return;
+				var requestId = ++that.spaceRequestId;
+				that.spaceLoading = true;
+				if (!isPage) that.spaceHasMore = true;
 				var page = that.page;
 				var topicIds = that.selectedTopics.map(item => Number(item.mid));
 				var topicFilterKey = topicIds.join(',');
@@ -2357,7 +2434,9 @@
 					},
 					method: "get",
 					dataType: 'json',
-					success: function(res) {
+						success: function(res) {
+						if (requestId !== that.spaceRequestId) return;
+						that.spaceLoading = false;
 						if (String(that.follow) + ':' + that.selectedTopics.map(item => Number(item.mid)).join(',') !== feedModeKey) return;
 						that.isLoading = 1;
 						that.isLoad = 0;
@@ -2399,10 +2478,13 @@
 
 							} else {
 								that.moreText = "没有更多动态了";
+								that.spaceHasMore = false;
 							}
 						}
 					},
 					fail: function(res) {
+						if (requestId !== that.spaceRequestId) return;
+						that.spaceLoading = false;
 						if (String(that.follow) + ':' + that.selectedTopics.map(item => Number(item.mid)).join(',') !== feedModeKey) return;
 						that.isLoading = 1;
 						that.moreText = "加载更多";
@@ -2613,9 +2695,9 @@
 		z-index: 995;
 		background: rgba(249, 250, 251, 0.98) !important;
 		border-bottom: 1rpx solid rgba(219, 226, 230, 0.9) !important;
-		box-shadow: 0 8rpx 28rpx rgba(42, 57, 68, 0.05) !important;
+		box-shadow: 0 4rpx 14rpx rgba(42, 57, 68, 0.045) !important;
 		overflow: visible !important;
-		transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+		transition: transform 220ms ease, opacity 180ms ease;
 		will-change: transform, opacity;
 	}
 
@@ -2741,6 +2823,97 @@
 
 	.square-filter-row:active { background: rgba(230, 243, 241, 0.86); }
 
+	/* 纯话题胶囊栏：参考 StarPro 的横向标签条，避免额外说明文字占位。 */
+	.square-topic-filter {
+		padding: 10rpx 24rpx;
+		background: rgba(255, 255, 255, 0.72);
+		box-sizing: border-box;
+	}
+
+	.square-topic-filter-inner {
+		width: 100%;
+		max-width: 1080px;
+		margin: 0 auto;
+	}
+
+	.square-topic-filter-scroll {
+		width: 100%;
+		border: 1rpx solid #e3ece9;
+		border-radius: 26rpx;
+		background: #f8fbfa;
+		box-sizing: border-box;
+		overflow: hidden;
+	}
+
+	.square-topic-filter-track {
+		display: inline-flex;
+		align-items: center;
+		gap: 12rpx;
+		min-width: max-content;
+		padding: 8rpx 14rpx;
+		box-sizing: border-box;
+	}
+
+	.square-topic-filter-chip {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		gap: 9rpx;
+		height: 58rpx;
+		max-width: 250rpx;
+		padding: 0 20rpx;
+		border: 1rpx solid transparent;
+		border-radius: 999rpx;
+		background: #e5f4ef;
+		box-sizing: border-box;
+		font-size: 25rpx;
+		white-space: nowrap;
+		color: #177c6d;
+		transition: transform 160ms ease, color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+	}
+
+	.square-topic-filter-chip text:last-child {
+		max-width: 180rpx;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.square-topic-filter-chip-all {
+		background: #eef3f2;
+		color: #667a78;
+	}
+
+	.square-topic-filter-chip.is-active {
+		border-color: #188b7d;
+		background: #188b7d;
+		font-weight: 700;
+		color: #fff;
+	}
+
+	.square-topic-filter-chip:active {
+		transform: scale(0.95);
+	}
+
+	.filter-menu-topic-entry {
+		display: flex;
+		align-items: center;
+		gap: 10rpx;
+		min-height: 66rpx;
+		margin-top: 16rpx;
+		padding: 0 16rpx;
+		border: 1rpx solid #e7ecee;
+		border-radius: 10rpx;
+		font-size: 23rpx;
+		color: #4f6069;
+	}
+
+	.filter-menu-topic-entry .cuIcon-right {
+		margin-left: auto;
+		color: #98a4a9;
+	}
+
 	.square-qa-list {
 		width: calc(100% - 28rpx);
 		max-width: 760px;
@@ -2800,12 +2973,12 @@
 		border: 1rpx solid #e5eaed;
 		border-radius: 24rpx;
 		background: rgba(255, 255, 255, 0.97);
-		box-shadow: 0 22rpx 58rpx rgba(35, 51, 61, 0.16);
+		box-shadow: 0 12rpx 30rpx rgba(35, 51, 61, 0.12);
 		opacity: 0;
 		visibility: hidden;
 		transform: translateY(-12rpx) scale(0.98);
 		transform-origin: top center;
-		transition: opacity 180ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 280ms;
+		transition: opacity 140ms ease, transform 160ms ease, visibility 0s linear 160ms;
 	}
 
 	.square-filter-menu.is-open {
@@ -3135,6 +3308,13 @@
 			margin-left: auto;
 		}
 
+		.square-topic-filter {
+			width: calc(100vw - 48px);
+			max-width: 840px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
 		.square-filter-menu {
 			right: 0;
 			left: 0;
@@ -3170,6 +3350,13 @@
 
 	@media (min-width: 1200px) {
 		.square-section-tabs {
+			width: calc(100vw - 80px);
+			max-width: 1080px;
+			margin-right: auto;
+			margin-left: auto;
+		}
+
+		.square-topic-filter {
 			width: calc(100vw - 80px);
 			max-width: 1080px;
 			margin-right: auto;
@@ -3271,6 +3458,9 @@
 	@media (max-width: 360px) {
 		.square-mainbar { grid-template-columns: 72rpx 1fr 72rpx; padding: 0 18rpx; }
 		.square-filter-menu { right: 18rpx; left: 18rpx; padding: 22rpx; }
+		.square-topic-filter { padding-right: 18rpx; padding-left: 18rpx; }
+		.square-topic-filter-track { gap: 10rpx; padding-right: 10rpx; padding-left: 10rpx; }
+		.square-topic-filter-chip { padding-right: 16rpx; padding-left: 16rpx; font-size: 23rpx; }
 		.campus-square .appcontent { margin-right: 10rpx !important; margin-left: 10rpx !important; }
 	}
 
@@ -4217,6 +4407,7 @@
 
 	.campus-square.campus-night .square-tool-button,
 	.campus-square.campus-night .square-filter-row,
+	.campus-square.campus-night .square-topic-filter,
 	.campus-square.campus-night .square-filter-menu,
 	.campus-square.campus-night .space-pin-list,
 	.campus-square.campus-night .cu-list.menu-avatar > .cu-item,
@@ -4315,9 +4506,40 @@
 		box-shadow: none !important;
 	}
 
+	.campus-square.campus-night .square-topic-filter {
+		border-top-color: rgba(226, 232, 230, 0.09);
+		background: #1f2728 !important;
+	}
+
+	.campus-square.campus-night .square-topic-filter-scroll {
+		border-color: rgba(226, 232, 230, 0.16);
+		background: #1b2324;
+	}
+
+	.campus-square.campus-night .square-topic-filter-chip {
+		background: rgba(62, 146, 112, 0.18);
+		color: #79d0ae;
+	}
+
+	.campus-square.campus-night .square-topic-filter-chip-all {
+		background: #273132;
+		color: #a3b1ad;
+	}
+
+	.campus-square.campus-night .square-topic-filter-chip.is-active {
+		border-color: #79d0ae;
+		background: #328661;
+		color: #fff;
+	}
+
 	.campus-square.campus-night .square-filter-menu {
 		background: #242d2e !important;
 		box-shadow: 0 12rpx 28rpx rgba(0, 0, 0, 0.22) !important;
+	}
+
+	.campus-square.campus-night .filter-menu-topic-entry {
+		border-color: rgba(226, 232, 230, 0.14);
+		color: #b9c3c0;
 	}
 
 	.campus-square.campus-night {

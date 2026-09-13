@@ -30,7 +30,7 @@
 
 		<view class="home-stage">
 			<view class="home-mode-switch">
-				<view class="home-mode-item" :class="{'is-active': flag==0}" @tap="flag=0"><text class="cuIcon-hot"></text><text>此刻</text></view>
+				<view class="home-mode-item" :class="{'is-active': flag==0}" @tap="flag=0"><text class="cuIcon-hot"></text><text>最新</text></view>
 				<view class="home-mode-item" :class="{'is-active': flag==1}" @tap="flag=1"><text class="cuIcon-discover"></text><text>发现</text></view>
 			</view>
 
@@ -47,8 +47,9 @@
 					</swiper-item>
 				</swiper>
 
+				<view v-if="top_of==1" class="home-section-label"><text>快捷入口</text><text>常用功能</text></view>
 				<view v-if="top_of==1" class="index-sort home-shortcuts grid col-4">
-					<view class="index-sort-box" v-if="!sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/contents/blackhouse')"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">小黑屋</view></view></waves></view>
+					<view class="index-sort-box" v-if="!sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/contents/blackhouse')"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">封禁记录</view></view></waves></view>
 					<view class="index-sort-box" v-if="sy_appbox"><waves itemClass="butclass"><view class="index-sort-main" @tap="goPage('/pages/plugins/sy_appbox/home',true)"><view class="index-sort-i shortcut-green"><text class="cuIcon-apps"></text></view><view class="index-sort-text">应用</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toShop"><view class="index-sort-i shortcut-blue"><text class="cuIcon-friend"></text></view><view class="index-sort-text">校园互助</view></view></waves></view>
 					<view class="index-sort-box"><waves itemClass="butclass"><view class="index-sort-main" @tap="toLink('/pages/user/invitation')"><view class="index-sort-i shortcut-violet"><text class="cuIcon-share"></text></view><view class="index-sort-text">分享</view></view></waves></view>
@@ -61,6 +62,7 @@
 				</view>
 				<view class="ads-banner" v-if="bannerAdsInfo!=null"><image :src="bannerAdsInfo.img" mode="widthFix" @tap="goAds(bannerAdsInfo)"></image></view>
 
+				<view class="home-feed-heading"><text>社区动态</text><text>最新分享</text></view>
 				<view class="all-box home-feed" :style="TabCur!=0?'margin-top:0;':''">
 					<view v-if="hometop==1"><block v-for="(item,index) in topContents" :key="'top-new'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view>
 					<view v-if="act_of==1">
@@ -803,7 +805,10 @@
 
 
 		onPageScroll(event) {
+			// H5 使用共享监听，避免与页面回调重复更新底栏状态。
+			// #ifndef H5
 			handleCampusChromeScroll(this, event && event.scrollTop)
+			// #endif
 		},
 		onShow() {
 			var that = this;
@@ -3257,6 +3262,14 @@
 		overflow: hidden;
 	}
 
+	/* Keep wide H5 screens from letting a banner take over the whole first fold. */
+	@media (min-width: 760px) {
+		.campus-home .swiper-container {
+			height: clamp(280px, 38vw, 420px) !important;
+			aspect-ratio: auto;
+		}
+	}
+
 	.campus-home .swiper-box,
 	.campus-home .swiper-box image,
 	.campus-home .swiper-box video {
@@ -3264,6 +3277,22 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 28rpx !important;
+	}
+
+	/* Promotional artwork puts its title at the top; keep that context visible
+	   when the compact desktop banner crops the artwork. */
+	@media (min-width: 760px) {
+		.campus-home .swiper-box image,
+		.campus-home .swiper-box video {
+			object-fit: contain;
+			object-position: center center;
+		}
+		.campus-home ::v-deep .swiper-box uni-image > div {
+			background-size: contain !important;
+			background-position: center center !important;
+			background-repeat: no-repeat !important;
+			background-color: rgba(255, 255, 255, 0.24);
+		}
 	}
 
 	/* Mobile polish: keep the first screen calm and leave room for the dock. */
@@ -3346,8 +3375,33 @@
 		box-shadow: 0 12rpx 30rpx rgba(44, 74, 78, 0.07) !important;
 	}
 
+	.home-section-label,
+	.home-feed-heading {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 16rpx;
+		margin: 2rpx 26rpx 12rpx;
+	}
+
+	.home-section-label > text:first-child,
+	.home-feed-heading > text:first-child {
+		font-size: 29rpx;
+		font-weight: 700;
+		letter-spacing: 1rpx;
+		color: #213437;
+	}
+
+	.home-section-label > text:last-child,
+	.home-feed-heading > text:last-child {
+		font-size: 21rpx;
+		color: #78908a;
+		white-space: nowrap;
+	}
+
 	.home-shortcuts {
-		padding: 18rpx 10rpx 16rpx;
+		margin-top: 0;
+		padding: 14rpx 10rpx 12rpx;
 		overflow: visible !important;
 	}
 
@@ -3448,9 +3502,8 @@
 	::v-deep .home-feed .cu-card.article.no-card > .cu-item {
 		border: 2rpx solid rgba(255, 255, 255, 0.86);
 		border-radius: 30rpx !important;
-		background:
-			linear-gradient(135deg, rgba(255, 236, 246, 0.72) 0%, rgba(213, 246, 250, 0.88) 46%, rgba(197, 232, 218, 0.78) 100%);
-		box-shadow: 0 18rpx 42rpx rgba(37, 87, 91, 0.12);
+		background: rgba(255, 255, 255, 0.78);
+		box-shadow: 0 10rpx 28rpx rgba(37, 87, 91, 0.08);
 	}
 
 	.discovery-card {
@@ -3712,6 +3765,16 @@
 		color: #dce8e3 !important;
 	}
 
+	.campus-home.campus-night .home-section-label > text:first-child,
+	.campus-home.campus-night .home-feed-heading > text:first-child {
+		color: #edf3f0 !important;
+	}
+
+	.campus-home.campus-night .home-section-label > text:last-child,
+	.campus-home.campus-night .home-feed-heading > text:last-child {
+		color: #aebdb7 !important;
+	}
+
 	.campus-home.campus-night .home-notice {
 		border-color: rgba(222, 232, 228, 0.14) !important;
 		background: #202729 !important;
@@ -3782,9 +3845,8 @@
 	::v-deep .home-feed .article-item-shell.is-home-feed .cu-card.article.no-card > .cu-item {
 		border: 2rpx solid rgba(255, 255, 255, 0.88);
 		border-radius: 30rpx !important;
-		background:
-			linear-gradient(135deg, rgba(255, 236, 246, 0.72) 0%, rgba(213, 246, 250, 0.88) 46%, rgba(197, 232, 218, 0.78) 100%);
-		box-shadow: 0 18rpx 42rpx rgba(37, 87, 91, 0.12);
+		background: rgba(255, 255, 255, 0.78);
+		box-shadow: 0 10rpx 28rpx rgba(37, 87, 91, 0.08);
 	}
 
 	::v-deep .home-feed .article-item-shell.is-home-feed .home-article-card {

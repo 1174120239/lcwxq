@@ -342,7 +342,11 @@ import { data } from '../../static/app-plus/owo/OwO.js';
 			this.refreshProfile(true)
 		},
 		onPageScroll(event) {
+			// H5 已由共享的 passive window/document 监听统一处理。
+			// 页面回调只保留给 App/小程序，避免同一手势发布两次状态。
+			// #ifndef H5
 			handleCampusChromeScroll(this, event && event.scrollTop)
+			// #endif
 		},
 		onShow(){
 			var that = this;

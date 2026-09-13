@@ -340,7 +340,10 @@
 			that.loadMore();
 		},
 		onPageScroll(event) {
+			// H5 使用共享监听，避免与页面回调重复更新底栏状态。
+			// #ifndef H5
 			handleCampusChromeScroll(this, event && event.scrollTop)
+			// #endif
 		},
 		onShow(){
 			var that = this;
