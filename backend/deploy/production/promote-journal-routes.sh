@@ -27,7 +27,12 @@ NGINX
 done
 nginx -t || { rollback; exit 20; }
 nginx -s reload
-observed=$(curl -sk --max-time 20 -D - -o /tmp/journal-route-body "$PUBLIC_URL/SFreeJournal/journalList?page=1&limit=1" | awk 'BEGIN{IGNORECASE=1} /^x-starfree-backend:/ {sub(/\r$/, ""); print $2}')
+observed=''
+for _ in $(seq 1 10); do
+    observed=$(curl -sk --max-time 20 -D - -o /tmp/journal-route-body "$PUBLIC_URL/SFreeJournal/journalList?page=1&limit=1" | awk 'BEGIN{IGNORECASE=1} /^x-starfree-backend:/ {sub(/\r$/, ""); print $2}')
+    [[ "$observed" == replacement-journal ]] && break
+    sleep 1
+done
 if [[ "$observed" != replacement-journal ]]; then echo "Backend header mismatch: ${observed:-<missing>}" >&2; rollback; exit 21; fi
 grep -Eq '"code"[[:space:]]*:[[:space:]]*1' /tmp/journal-route-body || { echo 'Journal API envelope failed.' >&2; rollback; exit 22; }
 echo "rollback=$BACKUP"
