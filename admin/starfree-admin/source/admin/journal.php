@@ -26,15 +26,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hot = (int)($_POST['hot_weight'] ?? 0);
             if ($name === '' || mb_strlen($name) > 80) $message = '刊物名称不能为空且不能超过 80 字';
             else {
+                $stmt = null;
                 if ($slug === '') $slug = 'journal-' . time();
                 if ($id > 0) {
                     $stmt = $connect->prepare('UPDATE starfree_journals SET name=?,slug=?,description=?,tags=?,cover_url=?,banner_url=?,theme=?,sort_order=?,featured=?,hot_weight=?,modified=? WHERE id=?');
-                    $now = time(); $stmt->bind_param('sssssssiiiii', $name,$slug,$description,$tags,$cover,$banner,$theme,$sort,$featured,$hot,$now,$id);
+                    $now = time();
+                    if (!$stmt) {
+                        $message = '保存失败：数据库结构不可用，请确认 017 迁移已执行';
+                    } else {
+                        $stmt->bind_param('sssssssiiiii', $name,$slug,$description,$tags,$cover,$banner,$theme,$sort,$featured,$hot,$now,$id);
+                    }
                 } else {
-                    $stmt = $connect->prepare('INSERT INTO starfree_journals (name,slug,description,tags,cover_url,banner_url,theme,status,sort_order,featured,hot_weight,created_by,created,modified) VALUES (?,?,?,?,?,?,?,1,?,?,?,?,?,?,?)');
-                    $now = time(); $adminUid = 0; $stmt->bind_param('sssssssiiiiii', $name,$slug,$description,$tags,$cover,$banner,$theme,$sort,$featured,$hot,$adminUid,$now,$now);
+                    $stmt = $connect->prepare('INSERT INTO starfree_journals (name,slug,description,tags,cover_url,banner_url,theme,status,sort_order,featured,hot_weight,created_by,created,modified) VALUES (?,?,?,?,?,?,?,1,?,?,?,?,?,?)');
+                    $now = time(); $adminUid = 0;
+                    if (!$stmt) {
+                        $message = '保存失败：数据库结构不可用，请确认 017 迁移已执行';
+                    } else {
+                        $stmt->bind_param('sssssssiiiiii', $name,$slug,$description,$tags,$cover,$banner,$theme,$sort,$featured,$hot,$adminUid,$now,$now);
+                    }
                 }
-                if ($stmt && $stmt->execute()) $message = '刊物已保存'; else $message = '保存失败，请确认 017 迁移已执行';
+                if ($stmt && $stmt->execute()) {
+                    $message = '刊物已保存';
+                } elseif ($stmt) {
+                    $message = '保存失败，请确认 017 迁移已执行或检查 slug 是否重复';
+                }
                 if ($stmt) $stmt->close();
             }
         } elseif ($action === 'article_status') {
