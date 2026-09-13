@@ -245,6 +245,7 @@ sudo install -m 0755 /tmp/lcxqy-deploy.sh /usr/local/sbin/lcxqy-deploy
 sudo install -m 0755 /tmp/lcxqy-rollback.sh /usr/local/sbin/lcxqy-rollback
 echo "control_entry_backup=$backup"
 '@
+        $bootstrapCommand = $bootstrapCommand -replace "`r`n", "`n"
         & ssh @sshOptions $remote $bootstrapCommand
         if ($LASTEXITCODE -ne 0) { throw 'Bootstrap installation failed.' }
     }
