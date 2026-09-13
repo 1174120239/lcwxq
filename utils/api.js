@@ -358,6 +358,17 @@ module.exports = {
 	getContentsInfo:function(){
 		return API_URL + 'SFreeContents/contentsInfo';
 	},
+	journalList:function(){ return API_URL + 'SFreeJournal/journalList'; },
+	journalInfo:function(){ return API_URL + 'SFreeJournal/journalInfo'; },
+	journalArticleList:function(){ return API_URL + 'SFreeJournal/articleList'; },
+	journalArticleInfo:function(){ return API_URL + 'SFreeJournal/articleInfo'; },
+	journalArticleSubmit:function(){ return API_URL + 'SFreeJournal/articleSubmit'; },
+	journalArticleVote:function(){ return API_URL + 'SFreeJournal/articleVote'; },
+	journalSave:function(){ return API_URL + 'SFreeJournal/journalSave'; },
+	journalStatus:function(){ return API_URL + 'SFreeJournal/journalStatus'; },
+	journalArticleManage:function(){ return API_URL + 'SFreeJournal/articleManage'; },
+	journalMyArticles:function(){ return API_URL + 'SFreeJournal/myArticles'; },
+	journalArticleReview:function(){ return API_URL + 'SFreeJournal/articleReview'; },
 	// 校园问答
 	qaQuestionList:function(){
 		return API_URL + 'SFreeQa/questionList';

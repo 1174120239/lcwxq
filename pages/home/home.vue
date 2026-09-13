@@ -62,6 +62,13 @@
 				</view>
 				<view class="ads-banner" v-if="bannerAdsInfo!=null"><image :src="bannerAdsInfo.img" mode="widthFix" @tap="goAds(bannerAdsInfo)"></image></view>
 
+				<view class="journal-shelf-entry" @tap="openJournalHome">
+					<view class="journal-shelf-heading"><view><text class="journal-shelf-kicker">CAMPUS EDITIONS</text><text class="journal-shelf-title">校园刊物</text><text class="journal-shelf-desc">阅读让校园生活更有温度</text></view><text class="journal-shelf-more">查看更多 <text class="cuIcon-right"></text></text></view>
+					<scroll-view scroll-x class="journal-shelf-scroll" :show-scrollbar="false">
+						<view class="journal-shelf-card" v-for="(item,index) in journalShelfList" :key="item.id" @tap.stop="openJournalColumn(item)"><view class="journal-shelf-cover" :class="'journal-palette-' + (index % 5)"><image v-if="item.coverUrl" :src="item.coverUrl" mode="aspectFill"></image><view class="journal-shelf-cover-shade"></view><text class="journal-shelf-cover-name">{{item.name}}</text><text class="journal-shelf-cover-meta">{{journalBadge(index)}}</text></view><text class="journal-shelf-card-title">《{{item.name}}》</text><text class="journal-shelf-card-desc">{{item.description || journalTagline(index)}}</text></view>
+					</scroll-view>
+				</view>
+
 				<view class="home-feed-heading"><text>社区动态</text><text>最新分享</text></view>
 				<view class="all-box home-feed" :style="TabCur!=0?'margin-top:0;':''">
 					<view v-if="hometop==1"><block v-for="(item,index) in topContents" :key="'top-new'+index"><articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem></block></view>
@@ -626,6 +633,7 @@
 				contentsList: [],
 				topContents: [],
 				metaList: [],
+				journals: [],
 				Topic: [],
 				dotStyle: false,
 				towerStart: 0,
@@ -694,6 +702,9 @@
 			}
 		},
 		computed: {
+			journalShelfList() {
+				return (this.journals || []).slice(0, 5)
+			},
 			qixiAvailable() {
 				return isQixiEasterEggDate(new Date(this.themeClock))
 			},
@@ -911,8 +922,9 @@
 
 
 		},
-		onLoad() {
+			onLoad() {
 			var that = this;
+			this.loadIndependentJournals();
 			// #ifdef APP-PLUS
 			that.NavBar = this.CustomBar;
 
@@ -1757,6 +1769,24 @@
 						}, 300)
 					}
 				})
+			},
+			loadIndependentJournals() {
+				this.$Net.request({ url: this.$API.journalList(), data: { page: 1, limit: 20 }, method: 'get', dataType: 'json', success: (res) => {
+					this.journals = res.data && res.data.code === 1 && Array.isArray(res.data.data) ? res.data.data : [];
+				} });
+			},
+			openJournalHome() {
+				uni.navigateTo({ url: '/pages/journal/index' })
+			},
+			openJournalColumn(item) {
+				if (!item || !item.id) return
+				uni.navigateTo({ url: '/pages/journal/info?id=' + item.id + '&name=' + encodeURIComponent(item.name || '') })
+			},
+			journalBadge(index) {
+				return index === 0 ? '最新' : (index === 1 ? '热门' : (index === 2 ? '推荐' : '精选'))
+			},
+			journalTagline(index) {
+				return ['校园生活 · 思想碰撞', '文学 · 写作 · 成长', '探索 · 创新 · 未来', '运动 · 心理 · 生活', '人文 · 科普 · 探索'][index % 5]
 			},
 			formatDate(datetime) {
 				var now = new Date();
@@ -3404,6 +3434,28 @@
 		padding: 14rpx 10rpx 12rpx;
 		overflow: visible !important;
 	}
+
+	.journal-home-entry {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin: 0 8rpx 26rpx;
+		padding: 28rpx 30rpx;
+		border: 2rpx solid rgba(255,255,255,.86);
+		border-radius: 28rpx;
+		background: linear-gradient(120deg, #e8f1e8, #f7f1e6 70%, #f5e5d9);
+		box-shadow: 0 14rpx 30rpx rgba(44,74,78,.08);
+	}
+	.journal-home-copy { display:flex; flex-direction:column; gap:7rpx; }
+	.journal-home-kicker { font-size:18rpx; letter-spacing:3rpx; color:#9b7048; }
+	.journal-home-title { font-family: Georgia, serif; font-size:48rpx; line-height:1; color:#285448; }
+	.journal-home-desc { font-size:22rpx; color:#71877d; }
+	.journal-home-mark { display:flex; align-items:center; gap:18rpx; color:#3d715f; }
+	.journal-home-mark > text:first-child { font-family: Georgia, serif; font-size:72rpx; color:#9b7048; }
+	.journal-home-mark > text:last-child { font-size:28rpx; }
+	.campus-home.campus-night .journal-home-entry { border-color:rgba(226,232,230,.14); background:linear-gradient(120deg,#2a3b36,#323a35); box-shadow:0 10rpx 28rpx rgba(0,0,0,.18); }
+	.campus-home.campus-night .journal-home-title { color:#e7f0eb; }
+	.campus-home.campus-night .journal-home-desc { color:#a9b8b0; }
 
 	.home-shortcuts .index-sort-main {
 		padding: 10rpx 0;
