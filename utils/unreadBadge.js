@@ -3,6 +3,9 @@ export const CAMPUS_UNREAD_EVENT = 'campus:unread-change'
 const MESSAGE_TAB_INDEX = 2
 let latestUnreadCount = 0
 let requestVersion = 0
+let lastRefreshAt = 0
+let refreshInFlight = false
+let refreshCallbacks = []
 
 export function normalizeUnreadCount(value) {
 	const source = value && typeof value === 'object'
@@ -32,6 +35,8 @@ function renderUnreadBadge(count) {
 
 export function syncUnreadBadge(value) {
 	requestVersion += 1
+	refreshInFlight = false
+	refreshCallbacks = []
 	return renderUnreadBadge(normalizeUnreadCount(value))
 }
 
@@ -45,9 +50,28 @@ export function getUnreadBadgeCount() {
 
 export function refreshUnreadBadge(context, token, onSuccess) {
 	if (!token || !context || !context.$Net || !context.$API) {
+		refreshInFlight = false
+		refreshCallbacks = []
+		lastRefreshAt = 0
 		const count = clearUnreadBadge()
 		if (typeof onSuccess === 'function') onSuccess(count)
 		return
+	}
+	const now = Date.now()
+	if (refreshInFlight) {
+		if (typeof onSuccess === 'function') refreshCallbacks.push(onSuccess)
+		return
+	}
+	if (now - lastRefreshAt < 1200) {
+		if (typeof onSuccess === 'function') onSuccess(latestUnreadCount)
+		return
+	}
+	lastRefreshAt = now
+	refreshInFlight = true
+	const callbacks = () => {
+		const pending = refreshCallbacks.splice(0)
+		pending.forEach((callback) => callback(latestUnreadCount))
+		if (typeof onSuccess === 'function') onSuccess(latestUnreadCount)
 	}
 
 	const version = ++requestVersion
@@ -61,18 +85,35 @@ export function refreshUnreadBadge(context, token, onSuccess) {
 		dataType: 'json',
 		timeout: 15000,
 		success(res) {
-			if (version !== requestVersion) return
+			if (version !== requestVersion) {
+				refreshInFlight = false
+				refreshCallbacks = []
+				return
+			}
 			if (res && res.data && res.data.code == 1) {
 				const count = renderUnreadBadge(normalizeUnreadCount(res.data.data))
-				if (typeof onSuccess === 'function') onSuccess(count)
+				refreshInFlight = false
+				callbacks()
 				return
 			}
 			if (res && res.data && res.data.code == 0) {
 				const count = renderUnreadBadge(0)
-				if (typeof onSuccess === 'function') onSuccess(count)
+				refreshInFlight = false
+				callbacks()
 			}
 		},
 		// A temporary network failure must not erase a known unread state.
-		fail() {}
+		fail() {
+			refreshInFlight = false
+			refreshCallbacks = []
+		},
+		complete() {
+			// Release the shared lock for malformed responses as well as network
+			// failures; a later page activation must still be able to refresh.
+			if (refreshInFlight) {
+				refreshInFlight = false
+				refreshCallbacks = []
+			}
+		}
 	})
 }

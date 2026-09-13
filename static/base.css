@@ -4526,7 +4526,7 @@ body.campus-editor-open uni-tabbar {
 .campus-square .square-header,
 .campus-messages .header,
 .campus-profile .profile-top-tools {
-	transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease;
+	transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
 	will-change: transform, opacity;
 }
 
@@ -4553,7 +4553,394 @@ body.campus-scroll-chrome-hidden .campus-profile .profile-top-tools {
 }
 
 uni-tabbar .uni-tabbar {
-	transition: width 520ms cubic-bezier(0.22, 1, 0.36, 1), transform 560ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease !important;
+	transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease, height 220ms ease, border-radius 220ms ease !important;
+}
+
+/* Shared profile interaction motion. Keep the two profile surfaces visually and
+ * behaviorally aligned without applying a transform to the page root. */
+.campus-profile,
+.campus-profile-page {
+	--campus-profile-accent: #169c92;
+	--campus-profile-accent-strong: #167f77;
+	--campus-profile-motion-fast: 160ms;
+	--campus-profile-motion: 220ms;
+	--campus-profile-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.campus-profile .profile-top-tools,
+.campus-profile-page .header {
+	transition-property: transform, opacity, background-color, border-color, box-shadow;
+	transition-duration: var(--campus-profile-motion);
+	transition-timing-function: var(--campus-profile-motion-ease);
+}
+
+.campus-profile .profile-tool,
+.campus-profile-page .header .action,
+.campus-profile .profile-quick-actions > view,
+.campus-profile .profile-quick-actions > uni-view,
+.campus-profile-page .userInfo-bottom-box .cu-btn {
+	transition: transform var(--campus-profile-motion-fast) var(--campus-profile-motion-ease),
+		opacity var(--campus-profile-motion-fast) ease,
+		background-color var(--campus-profile-motion) ease,
+		border-color var(--campus-profile-motion) ease,
+		box-shadow var(--campus-profile-motion) ease,
+		color var(--campus-profile-motion) ease;
+	will-change: transform;
+}
+
+.campus-profile .profile-quick-actions > uni-view {
+	transition: transform var(--campus-profile-motion-fast) var(--campus-profile-motion-ease),
+		opacity var(--campus-profile-motion-fast) ease,
+		background-color var(--campus-profile-motion) ease,
+		border-color var(--campus-profile-motion) ease,
+		box-shadow var(--campus-profile-motion) ease,
+		color var(--campus-profile-motion) ease !important;
+}
+
+.campus-profile .profile-tool:active,
+.campus-profile .profile-quick-actions > view:active,
+.campus-profile .profile-quick-actions > uni-view:active,
+.campus-profile-page .header .action:active,
+.campus-profile-page .userInfo-bottom-box .cu-btn:active {
+	transform: scale(0.96);
+	opacity: 0.9;
+}
+
+.campus-profile .profile-menu > view {
+	transition: transform var(--campus-profile-motion-fast) var(--campus-profile-motion-ease),
+		background-color var(--campus-profile-motion-fast) ease,
+		opacity var(--campus-profile-motion-fast) ease;
+}
+
+.campus-profile .profile-menu > uni-view {
+	transition: transform var(--campus-profile-motion-fast) var(--campus-profile-motion-ease),
+		background-color var(--campus-profile-motion-fast) ease,
+		opacity var(--campus-profile-motion-fast) ease;
+}
+
+.campus-profile .profile-menu > view:active {
+	transform: scale(0.98);
+	opacity: 0.9;
+}
+
+.campus-profile .profile-menu > uni-view:active {
+	transform: scale(0.98);
+	opacity: 0.9;
+}
+
+/* Public profile navigation sits over the hero, then becomes a readable glass
+ * bar once the user has scrolled into the content. */
+.campus-profile-page .header {
+	background: transparent !important;
+	border-bottom-color: transparent !important;
+	box-shadow: none !important;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
+.campus-profile-page .header.goScroll {
+	background: rgba(247, 250, 249, 0.9) !important;
+	border-bottom-color: rgba(219, 232, 229, 0.92) !important;
+	box-shadow: 0 8rpx 24rpx rgba(32, 59, 56, 0.08) !important;
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+}
+
+.campus-profile-page .header:not(.goScroll) .content,
+.campus-profile-page .header:not(.goScroll) .action {
+	color: #ffffff !important;
+}
+
+.campus-profile-page .header .action {
+	display: flex !important;
+	align-items: center;
+	justify-content: center;
+	width: 72rpx !important;
+	min-width: 72rpx;
+	height: 72rpx !important;
+	margin-right: 16rpx !important;
+	margin-left: 16rpx !important;
+	padding: 0 !important;
+	border-radius: 50% !important;
+	box-sizing: border-box;
+}
+
+.campus-profile-page .header:not(.goScroll) .action {
+	border-color: rgba(255, 255, 255, 0.24) !important;
+	background: rgba(22, 31, 31, 0.28) !important;
+	box-shadow: 0 4rpx 14rpx rgba(7, 18, 17, 0.12) !important;
+}
+
+.campus-profile-page .header.goScroll .content,
+.campus-profile-page .header.goScroll .action {
+	color: #20312f !important;
+}
+
+.campus-profile-page .header.goScroll .action {
+	border-color: #dce9e6 !important;
+	background: rgba(255, 255, 255, 0.78) !important;
+	box-shadow: 0 4rpx 14rpx rgba(31, 64, 61, 0.08) !important;
+}
+
+/* Public profile hero and content sheet. The existing data bindings remain
+ * unchanged; only the visual layers are brought in line with the personal page. */
+.campus-profile-page .all-box {
+	margin-top: 0 !important;
+	background: transparent !important;
+}
+
+.campus-profile-page .user-info {
+	position: relative !important;
+	height: 480upx !important;
+	min-height: 480upx;
+	background: #263331;
+	border-radius: 0 0 32rpx 32rpx;
+}
+
+.campus-profile-page .user-info-bg {
+	height: 100% !important;
+	filter: blur(18rpx) saturate(0.78) brightness(0.68);
+	transform: scale(1.08);
+	transition: transform 480ms var(--campus-profile-motion-ease);
+}
+
+.campus-profile-page .user-info-bg image {
+	width: 100% !important;
+	height: 100% !important;
+	object-fit: cover;
+}
+
+.campus-profile-page .user-info-main {
+	height: 100% !important;
+	background: linear-gradient(180deg, rgba(18, 27, 26, 0.32) 0%, rgba(20, 30, 29, 0.58) 54%, rgba(20, 29, 28, 0.92) 100%) !important;
+}
+
+.campus-profile-page .user-info-main > .bg-white {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), #ffffff 64%) !important;
+	box-shadow: 0 -10rpx 26rpx rgba(23, 38, 37, 0.08);
+}
+
+.campus-profile-page .user-name {
+	position: relative;
+	z-index: 2;
+	margin: -28rpx 0 0 !important;
+	padding: 28rpx 34rpx 18rpx !important;
+	border-radius: 32rpx 32rpx 0 0;
+	background: #ffffff;
+	box-shadow: 0 -8rpx 24rpx rgba(27, 52, 49, 0.06);
+	transition: background-color var(--campus-profile-motion) ease, color var(--campus-profile-motion) ease;
+}
+
+.campus-profile-page .user-name .user-info-name {
+	font-size: 34rpx !important;
+	font-weight: 700 !important;
+	line-height: 48rpx;
+	color: #20312f !important;
+}
+
+.campus-profile-page .user-name .user-data-label,
+.campus-profile-page .user-name .profile-introduce {
+	color: #71817f !important;
+}
+
+.campus-profile-page .user-name .profile-introduce {
+	max-width: 100%;
+	font-size: 25rpx;
+	line-height: 1.55;
+}
+
+.campus-profile-page .user-name .userlv {
+	display: inline-flex;
+	align-items: center;
+	min-height: 42rpx;
+	margin-right: 8rpx;
+	padding: 4rpx 13rpx !important;
+	border-radius: 14rpx !important;
+	font-size: 21rpx;
+	line-height: 30rpx;
+}
+
+/* The public and personal tab strips share the same height, indicator and
+ * touch feedback. */
+.campus-profile .profile-content-tabs,
+.campus-profile-page .search-type {
+	height: 88rpx;
+	border-bottom: 1rpx solid #e3ecea;
+	background: transparent;
+}
+
+.campus-profile .profile-content-tabs > view,
+.campus-profile .profile-content-tabs > uni-view,
+.campus-profile-page .search-type-box {
+	transition: color var(--campus-profile-motion-fast) ease,
+		background-color var(--campus-profile-motion-fast) ease,
+		border-color var(--campus-profile-motion-fast) ease,
+		transform var(--campus-profile-motion-fast) var(--campus-profile-motion-ease);
+}
+
+.campus-profile .profile-content-tabs > view.is-active {
+	color: var(--campus-profile-accent-strong);
+}
+
+.campus-profile .profile-content-tabs > uni-view.is-active {
+	color: var(--campus-profile-accent-strong) !important;
+}
+
+.campus-profile .profile-content-tabs > view.is-active::after {
+	width: 42rpx;
+	height: 6rpx;
+	border-radius: 6rpx;
+	background: var(--campus-profile-accent);
+}
+
+.campus-profile .profile-content-tabs > uni-view.is-active::after {
+	width: 42rpx !important;
+	height: 6rpx !important;
+	border-radius: 6rpx !important;
+	background: var(--campus-profile-accent) !important;
+}
+
+.campus-profile-page .search-type {
+	display: flex !important;
+	align-items: stretch;
+	width: calc(100% - 68rpx) !important;
+	margin: 0 34rpx !important;
+	padding: 0 !important;
+	border-bottom: 1rpx solid #e3ecea !important;
+}
+
+.campus-profile-page .search-type-box {
+	display: flex !important;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 0;
+	width: auto !important;
+	height: 88rpx !important;
+	border-bottom: 4rpx solid transparent;
+	color: #71817f !important;
+	font-size: 26rpx;
+	font-weight: 500;
+}
+
+.campus-profile-page .search-type-box.active {
+	border-bottom-color: var(--campus-profile-accent) !important;
+	color: var(--campus-profile-accent-strong) !important;
+	font-weight: 700;
+}
+
+.campus-profile-page .search-type-box:active {
+	transform: scale(0.96);
+}
+
+/* Equal-width profile actions keep the primary and secondary actions aligned
+ * on both phone and desktop layouts. */
+.campus-profile-page .userInfo-bottom-main {
+	display: flex;
+	align-items: stretch;
+	gap: 12rpx;
+}
+
+.campus-profile-page .userInfo-bottom-box {
+	width: auto !important;
+	flex: 1 1 0;
+	padding: 0 !important;
+}
+
+.campus-profile-page .userInfo-bottom-box .cu-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 72rpx;
+	min-height: 72rpx !important;
+	border: 1rpx solid #dce9e6 !important;
+	border-radius: 16rpx !important;
+	background: #eff7f5 !important;
+	color: #28655e !important;
+}
+
+.campus-profile-page .userInfo-bottom-box .cu-btn.bg-shojo {
+	border-color: var(--campus-profile-accent) !important;
+	background: var(--campus-profile-accent) !important;
+	color: #ffffff !important;
+}
+
+@keyframes campusProfileReveal {
+	from { opacity: 0; transform: translate3d(0, 14rpx, 0); }
+	to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.campus-profile .profile-identity,
+.campus-profile .profile-stats,
+.campus-profile .profile-signature,
+.campus-profile .profile-quick-actions,
+.campus-profile-page .user-info-content,
+.campus-profile-page .user-name,
+.campus-profile-page .search-type {
+	animation: campusProfileReveal 420ms var(--campus-profile-motion-ease) both;
+}
+
+.campus-profile .profile-stats { animation-delay: 40ms; }
+.campus-profile .profile-signature { animation-delay: 80ms; }
+.campus-profile .profile-quick-actions { animation-delay: 120ms; }
+.campus-profile-page .user-name { animation-delay: 60ms; }
+.campus-profile-page .search-type { animation-delay: 100ms; }
+
+.campus-profile-page.campus-night .header.goScroll {
+	background: rgba(25, 30, 32, 0.92) !important;
+	border-bottom-color: rgba(226, 232, 230, 0.1) !important;
+	box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.18) !important;
+}
+
+.campus-profile-page.campus-night .user-name {
+	background: #202527 !important;
+	box-shadow: 0 -8rpx 24rpx rgba(0, 0, 0, 0.16);
+}
+
+.campus-profile-page.campus-night .user-name .user-info-name {
+	color: #edf2f0 !important;
+}
+
+.campus-profile-page.campus-night .user-name .user-data-label,
+.campus-profile-page.campus-night .user-name .profile-introduce {
+	color: #aeb9b5 !important;
+}
+
+.campus-profile-page.campus-night .search-type {
+	border-bottom-color: rgba(226, 232, 230, 0.1) !important;
+}
+
+.campus-profile-page.campus-night .search-type-box {
+	color: #9ba8a4 !important;
+}
+
+.campus-profile-page.campus-night .search-type-box.active {
+	border-bottom-color: #5bc49e !important;
+	color: #70c99a !important;
+}
+
+.campus-profile-page.campus-night .userInfo-bottom-box .cu-btn {
+	border-color: rgba(226, 232, 230, 0.1) !important;
+	background: #293132 !important;
+	color: #edf2f0 !important;
+}
+
+/* Keep the native H5 dock responsive during tab switches and use the same
+ * restrained press scale as the App dock. */
+uni-tabbar .uni-tabbar__item:active {
+	transform: scale(0.96) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.campus-profile .profile-identity,
+	.campus-profile .profile-stats,
+	.campus-profile .profile-signature,
+	.campus-profile .profile-quick-actions,
+	.campus-profile-page .user-info-content,
+	.campus-profile-page .user-name,
+	.campus-profile-page .search-type {
+		animation: none !important;
+	}
 }
 
 html.campus-scroll-chrome-hidden uni-tabbar .uni-tabbar,

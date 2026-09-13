@@ -48,7 +48,7 @@
 				scrollHidden: false,
 				chromeProgress: 0,
 				list: [{
-					text: '此刻',
+					text: '首页',
 					icon: '/static/tabbar/home_line.png',
 					icon_a: '/static/tabbar/home_line_cur.png',
 					path: "/pages/home/home",
@@ -260,12 +260,13 @@
 		border: 1rpx solid rgba(255, 255, 255, 0.82);
 		border-radius: 58rpx;
 		background: rgba(247, 250, 250, 0.96);
-		box-shadow: 0 16rpx 46rpx rgba(39, 59, 66, 0.15), inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
+		box-shadow: 0 8rpx 24rpx rgba(39, 59, 66, 0.12), inset 0 1rpx 0 rgba(255, 255, 255, 0.7);
 		box-sizing: border-box;
 		opacity: 0;
 		transform: translate3d(0, 14rpx, 0);
-		transition: left 420ms cubic-bezier(0.22, 1, 0.36, 1), right 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1), height 320ms ease, border-radius 320ms ease;
+		transition: left 180ms ease, right 180ms ease, opacity 160ms ease, transform 180ms ease, height 180ms ease, border-radius 180ms ease;
 		will-change: left, right, opacity, transform;
+		contain: layout paint;
 	}
 
 	/* Fill the available row after the publish trigger instead of shrinking by viewport width. */
@@ -312,7 +313,8 @@
 		min-width: 0;
 		height: 98rpx;
 		border-radius: 28rpx;
-		transition: transform 180ms ease, background-color 220ms ease;
+		transition: transform 120ms ease, background-color 140ms ease;
+		contain: layout;
 	}
 
 	.tabbar-dock .tabbar-item.is-active {
@@ -329,7 +331,7 @@
 	.tabbar-current-3 .tabbarActive { color: #237c74 !important; }
 
 	.tabbar-dock .tabbar-item:active {
-		transform: scale(0.91);
+		transform: scale(0.96);
 	}
 
 

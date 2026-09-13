@@ -53,8 +53,9 @@
 							<text>查看全文</text><text class="cuIcon-right margin-left-xs"></text>
 						</view>
 						<view class="space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
-							<view class="bg-img" :style="'background-image:url('+data+');'"
+							<view class="bg-img"
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
+								<image class="space-feed-image" :src="data" mode="aspectFit" lazy-load></image>
 							</view>
 						</view>
 						<space-poll v-if="item.poll" :poll="item.poll" :night="resolvedNight" :compact="compact" @change="updatePoll(item,$event)"></space-poll>
@@ -199,6 +200,8 @@
 				uid:0,
 				isPlay:false,
 				curVideo:"",
+				richCache: Object.create(null),
+				longTextCache: Object.create(null),
 				reportVisible:false,
 				reportSubmitting:false,
 				reportTargetId:0,
@@ -272,6 +275,8 @@
 				
 			},
 			isLongText(text){
+				var cacheKey = this.compact + ':' + String(text || '');
+				if (Object.prototype.hasOwnProperty.call(this.longTextCache, cacheKey)) return this.longTextCache[cacheKey];
 				var content = String(text || '')
 					.replace(/<br\s*\/?\s*>/gi, '\n')
 					.replace(/<\/(p|div|li)>/gi, '\n')
@@ -284,7 +289,9 @@
 				var lineBreaks = (content.match(/\r\n|\r|\n/g) || []).length;
 				var textLimit = this.compact ? 44 : 90;
 				var lineLimit = this.compact ? 2 : 4;
-				return content.length > textLimit || lineBreaks >= lineLimit;
+				var result = content.length > textLimit || lineBreaks >= lineLimit;
+				this.longTextCache[cacheKey] = result;
+				return result;
 			},
 			replaceSpecialChar(text) {
 			  text = text.replace(/&quot;/g, '"');
@@ -388,7 +395,11 @@
 				return userlvStyle;
 			},
 			markHtml(text){
-				return renderRichContent(this.replaceSpecialChar(String(text || '')), { emojiList: this.owoList })
+				var source = this.replaceSpecialChar(String(text || ''));
+				if (Object.prototype.hasOwnProperty.call(this.richCache, source)) return this.richCache[source];
+				var rendered = renderRichContent(source, { emojiList: this.owoList });
+				this.richCache[source] = rendered;
+				return rendered;
 			},
 			TransferString(content)
 			{  
@@ -896,6 +907,19 @@
 	height: 80rpx;
 	border: 1rpx solid #e2e9e7;
 	box-shadow: none;
+}
+
+.space-feed .space-image-grid > .bg-img {
+	position: relative;
+}
+
+.space-feed .space-image-grid > .bg-img > .space-feed-image {
+	position: absolute;
+	inset: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+	background: transparent;
 }
 
 .space-feed .square-list .content.flex-sub > view:first-child {

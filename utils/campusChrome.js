@@ -4,9 +4,28 @@ const TOP_EDGE = 18
 // Require a deliberate downward travel, but let an upward gesture recover sooner.
 const HIDE_THRESHOLD = 64
 const SHOW_THRESHOLD = 30
+// 页面只有一小段可滚动空间时，底部导航不应被推到屏幕外；否则用户
+// 只滚动一次就无法继续操作导航。真正有内容滚动空间的页面仍保持原逻辑。
+const SHORT_SCROLL_LIMIT = 96
 
 function clampProgress(value) {
 	return Math.max(0, Math.min(1, Number(value) || 0))
+}
+
+function getDocumentMaxScrollTop() {
+	if (typeof document === 'undefined') return Infinity
+	const root = document.documentElement
+	const body = document.body
+	const viewportHeight = Math.max(
+		Number((root && root.clientHeight) || 0),
+		Number((typeof window !== 'undefined' && window.innerHeight) || 0)
+	)
+	const contentHeight = Math.max(
+		Number((root && root.scrollHeight) || 0),
+		Number((body && body.scrollHeight) || 0)
+	)
+	if (!viewportHeight || contentHeight <= viewportHeight) return Infinity
+	return Math.max(0, contentHeight - viewportHeight)
 }
 
 function setRootChromeClass(hidden) {
@@ -100,7 +119,9 @@ export function bindCampusChromeScroll(vm) {
 		const base = Number.isFinite(Number(vm._campusChromeGestureTop))
 			? Number(vm._campusChromeGestureTop)
 			: readTop()
-		const next = Math.max(0, base + delta)
+		const maxScrollTop = getDocumentMaxScrollTop()
+		const requested = Math.max(0, base + delta)
+		const next = Number.isFinite(maxScrollTop) ? Math.min(maxScrollTop, requested) : requested
 		vm._campusChromeGestureTop = next
 		handleCampusChromeScroll(vm, next)
 	}
@@ -172,6 +193,18 @@ export function unbindCampusChromeScroll(vm) {
 export function handleCampusChromeScroll(vm, rawTop) {
 	if (!vm) return
 	const top = Math.max(0, Number(rawTop) || 0)
+	const maxDocumentScrollTop = getDocumentMaxScrollTop()
+	if (Number.isFinite(maxDocumentScrollTop) && maxDocumentScrollTop <= SHORT_SCROLL_LIMIT) {
+		// 短页面保留底栏，避免滚动距离不足以恢复导航时出现“消失”的假象。
+		vm._campusChromeInitialized = true
+		vm._campusChromeLastTop = top
+		vm._campusChromeDirection = ''
+		vm._campusChromeDistance = 0
+		vm._campusChromeProgress = 0
+		vm._campusChromeHidden = false
+		publishChromeState(0)
+		return
+	}
 	if (!vm._campusChromeInitialized) {
 		vm._campusChromeInitialized = true
 		vm._campusChromeLastTop = top

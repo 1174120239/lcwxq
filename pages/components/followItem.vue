@@ -1,7 +1,7 @@
 <template>
 	<view>
 		<view class="cu-card dynamic no-card square-list">
-			<block  v-for="(item,index) in spaceList" :key="index" v-if="spaceList.length>0">
+			<block  v-for="(item,index) in spaceList" :key="item.id || index" v-if="spaceList.length>0">
 			<block v-if="item.isFollow>0">
 			
 				<view class="cu-item cu-item2">
@@ -41,8 +41,9 @@
 							<rich-text :nodes="markHtml(item.text)"></rich-text>
 						</view>
 						<view class="space-image-grid" :class="imageGridClass(item.picList.length)" v-if="item.picList.length>0">
-							<view class="bg-img" :style="'background-image:url('+data+');'"
+							<view class="bg-img"
 							 v-for="(data,i) in item.picList" :key="i" @tap.stop="previewImage(item.picList,data)">
+								<image class="space-feed-image" :src="data" mode="aspectFit" lazy-load></image>
 							</view>
 						</view>
 					</block>
@@ -145,6 +146,7 @@
 						uid:0,
 						isPlay:false,
 						curVideo:"",
+						richCache: Object.create(null),
 					};
 				},
 				created(){
@@ -310,18 +312,21 @@
 					},
 					markHtml(text){
 						var that = this;
-						text = that.replaceAll(text,"<","&lt;");
+						var source = that.replaceSpecialChar(String(text || ''));
+						if (Object.prototype.hasOwnProperty.call(that.richCache, source)) return that.richCache[source];
+						text = that.replaceAll(source,"<","&lt;");
 						text = that.replaceAll(text,">","&gt;");
 						var owoList=that.owoList;
 						for(var i in owoList){
 						
-							if(that.replaceSpecialChar(text).indexOf(owoList[i].data) != -1){
-								text = that.replaceAll(that.replaceSpecialChar(text),owoList[i].data,"<img src='/"+owoList[i].icon+"' class='tImg' />")
+							if(text.indexOf(owoList[i].data) != -1){
+								text = that.replaceAll(text,owoList[i].data,"<img src='/"+owoList[i].icon+"' class='tImg' />")
 								
 							}
 						}
 						text = that.replaceAll(text,"/r/n","<br>");
 						text = that.TransferString(text);
+						that.richCache[source] = text;
 						return text;
 					},
 					TransferString(content)
@@ -655,6 +660,17 @@
 		</script>
 		
 		<style>
+		.space-image-grid > .bg-img {
+			position: relative;
+		}
+		.space-image-grid > .bg-img > .space-feed-image {
+			position: absolute;
+			inset: 0;
+			display: block;
+			width: 100%;
+			height: 100%;
+			background: transparent;
+		}
 		
 		.paceVideo2 {
 		  width: 100%;
