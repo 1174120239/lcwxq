@@ -11,7 +11,7 @@ param(
     [switch]$DryRun,
     [switch]$ConfirmProduction,
     [switch]$RunMigrations,
-    [ValidateSet('014', '015', '016')]
+    [ValidateSet('014', '015', '016', '017')]
     [string]$Migration = '',
     [switch]$UseExistingArtifact,
     [switch]$BootstrapServer
@@ -26,6 +26,7 @@ $mutualAidJarSha256 = '56ec4591466d5ccef862c48dbf14d90f2ddc1fd6799780609f6ee28ca
 $migration014Sha256 = '6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271'
 $migration015Sha256 = '9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8'
 $migration016Sha256 = '5d346004f56351d23aa8e50cb23182f25d81d32252954544d5be3b926a8161e8'
+$migration017Sha256 = '06f485e973a7f2c8840507cdfb3804a2576dce667b287ef2d76528fdff3a9f1d'
 
 function Invoke-Git([string[]]$Arguments) {
     $result = & git -C $repoRoot @Arguments 2>&1
@@ -85,7 +86,7 @@ if ($RunMigrations -and $Component -ne 'replacement-backend') {
     throw 'Database migrations are only allowed with Component=replacement-backend.'
 }
 if ($RunMigrations -and -not $Migration) {
-    throw 'RunMigrations requires an explicit -Migration value (014, 015 or 016).'
+    throw 'RunMigrations requires an explicit -Migration value (014, 015, 016 or 017).'
 }
 if ($Migration -and -not $RunMigrations) {
     throw '-Migration requires -RunMigrations.'
@@ -120,8 +121,8 @@ try {
     )
 
     if ($RunMigrations) {
-        $migrationName = switch ($Migration) { '014' { '014_lost_and_found.sql' } '015' { '015_publish_rich_media.sql' } default { '016_download_site_config.sql' } }
-        $expectedMigrationHash = switch ($Migration) { '014' { $migration014Sha256 } '015' { $migration015Sha256 } default { $migration016Sha256 } }
+        $migrationName = switch ($Migration) { '014' { '014_lost_and_found.sql' } '015' { '015_publish_rich_media.sql' } '016' { '016_download_site_config.sql' } default { '017_journal.sql' } }
+        $expectedMigrationHash = switch ($Migration) { '014' { $migration014Sha256 } '015' { $migration015Sha256 } '016' { $migration016Sha256 } default { $migration017Sha256 } }
         $migrationPath = Join-Path $repoRoot (Join-Path 'backend/database/migrations' $migrationName)
         if (-not (Test-Path -LiteralPath $migrationPath -PathType Leaf)) {
             throw "Migration $Migration is missing: $migrationPath"

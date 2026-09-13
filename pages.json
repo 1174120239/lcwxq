@@ -65,6 +65,26 @@
 			"style": {}
 		},
 		{
+			"path": "pages/journal/index",
+			"style": {}
+		},
+		{
+			"path": "pages/journal/info",
+			"style": {}
+		},
+		{
+			"path": "pages/journal/article",
+			"style": {}
+		},
+		{
+			"path": "pages/journal/post",
+			"style": { "softinputMode": "adjustResize" }
+		},
+		{
+			"path": "pages/journal/submissions",
+			"style": {}
+		},
+		{
 			"path": "pages/user/userlist",
 			"style": {
 				"enablePullDownRefresh": true

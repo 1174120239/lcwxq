@@ -15,9 +15,10 @@ MIGRATION=
 MIGRATION_014_SHA256=6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d36271
 MIGRATION_015_SHA256=9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8
 MIGRATION_016_SHA256=5d346004f56351d23aa8e50cb23182f25d81d32252954544d5be3b926a8161e8
+MIGRATION_017_SHA256=06f485e973a7f2c8840507cdfb3804a2576dce667b287ef2d76528fdff3a9f1d
 
 usage() {
-    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015|016]"
+    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015|016|017]"
     echo "       $0 --verify --component COMPONENT"
 }
 
@@ -350,6 +351,62 @@ apply_migration_016() {
     echo 'migration_016=applied'; echo "migration_016_backup=$backup_dir"
 }
 
+configure_mysql_017() {
+    local db_url db_target db_hostport db_user db_password escaped_user escaped_password
+    [[ -r /opt/application.properties ]] || { echo 'Production database configuration is not readable.' >&2; return 2; }
+    db_url=$(read_property 'spring\.datasource\.url'); db_user=$(read_property 'spring\.datasource\.username'); db_password=$(read_property 'spring\.datasource\.password')
+    [[ "$db_url" == jdbc:mysql://* ]] || { echo 'Unsupported production JDBC URL.' >&2; return 2; }
+    [[ -n "$db_user" ]] || { echo 'Production database username is empty.' >&2; return 2; }
+    db_target=${db_url#jdbc:mysql://}; db_target=${db_target%%\?*}; db_hostport=${db_target%%/*}; DB_NAME_017=${db_target#*/}
+    [[ "$DB_NAME_017" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'Unsafe production database name.' >&2; return 2; }
+    if [[ "$db_hostport" == *:* ]]; then DB_HOST_017=${db_hostport%%:*}; DB_PORT_017=${db_hostport##*:}; else DB_HOST_017=$db_hostport; DB_PORT_017=3306; fi
+    [[ -n "$DB_HOST_017" && "$DB_PORT_017" =~ ^[0-9]+$ ]] || { echo 'Invalid production database address.' >&2; return 2; }
+    MYSQL_CNF_017="$incoming/mysql-017.cnf"; escaped_user=${db_user//\\/\\\\}; escaped_user=${escaped_user//\"/\\\"}; escaped_password=${db_password//\\/\\\\}; escaped_password=${escaped_password//\"/\\\"}; umask 077; printf '[client]\nuser="%s"\npassword="%s"\n' "$escaped_user" "$escaped_password" > "$MYSQL_CNF_017"
+    MYSQL_BASE_ARGS_017=("--defaults-extra-file=$MYSQL_CNF_017" --protocol=tcp --host="$DB_HOST_017" --port="$DB_PORT_017")
+    mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" --batch --skip-column-names -e 'SELECT 1' >/dev/null
+}
+
+migration_017_valid() {
+    local count
+    count=$(mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_journals','starfree_journal_articles','starfree_journal_votes','starfree_journal_actions')")
+    [[ "$count" == 4 ]]
+}
+
+backup_migration_017() {
+    local count
+    count=$(mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_journals','starfree_journal_articles','starfree_journal_votes','starfree_journal_actions')")
+    if [[ "$count" == 4 ]]; then
+        mysqldump "${MYSQL_BASE_ARGS_017[@]}" --single-transaction --skip-lock-tables "$DB_NAME_017" starfree_journals starfree_journal_articles starfree_journal_votes starfree_journal_actions > "$backup_dir/migration-017-existing-tables.sql"
+        [[ -s "$backup_dir/migration-017-existing-tables.sql" ]] || { echo 'Migration 017 database backup is empty.' >&2; return 2; }
+        sha256sum "$backup_dir/migration-017-existing-tables.sql" > "$backup_dir/migration-017-existing-tables.sql.sha256"
+    else
+        touch "$backup_dir/migration-017.no-existing-tables"
+    fi
+}
+
+rollback_migration_017() {
+    if [[ -f "$backup_dir/migration-017.no-existing-tables" ]]; then
+        mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -e 'DROP TABLE IF EXISTS starfree_journal_actions,starfree_journal_votes,starfree_journal_articles,starfree_journals'
+    elif [[ -s "$backup_dir/migration-017-existing-tables.sql" ]]; then
+        mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -e 'DROP TABLE IF EXISTS starfree_journal_actions,starfree_journal_votes,starfree_journal_articles,starfree_journals'
+        mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" < "$backup_dir/migration-017-existing-tables.sql"
+    fi
+    echo 'migration_017_rollback=success' >&2
+}
+
+apply_migration_017() {
+    local migration_file="$incoming/017_journal.sql" migration_hash
+    for required in mysql mysqldump sha256sum; do command -v "$required" >/dev/null 2>&1 || { echo "Required migration command not found: $required" >&2; return 2; }; done
+    [[ -r "$migration_file" ]] || { echo 'Migration 017 is missing from the release.' >&2; return 2; }
+    migration_hash=$(sha256sum "$migration_file" | awk '{print $1}')
+    [[ "$migration_hash" == "$MIGRATION_017_SHA256" ]] || { echo 'Migration 017 SHA-256 mismatch.' >&2; return 2; }
+    configure_mysql_017 || return; backup_migration_017 || return
+    if migration_017_valid; then echo 'migration_017=already_present'; echo "migration_017_backup=$backup_dir"; return 0; fi
+    if ! mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" < "$migration_file"; then rollback_migration_017; return 20; fi
+    if ! migration_017_valid; then rollback_migration_017; return 21; fi
+    echo 'migration_017=applied'; echo "migration_017_backup=$backup_dir"
+}
+
 wait_for_component() {
     local component="$1"
     local timeout_seconds="${2:-180}"
@@ -422,8 +479,8 @@ if [[ "$RUN_MIGRATIONS" == true && "$COMPONENT" != replacement-backend ]]; then
     echo 'Database migrations are only allowed for replacement-backend.' >&2
     exit 30
 fi
-if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 && "$MIGRATION" != 016 ]]; then
-    echo 'Run migrations requires --migration 014, 015 or 016.' >&2
+if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 && "$MIGRATION" != 016 && "$MIGRATION" != 017 ]]; then
+    echo 'Run migrations requires --migration 014, 015, 016 or 017.' >&2
     exit 30
 fi
 if [[ "$RUN_MIGRATIONS" == false && -n "$MIGRATION" ]]; then
@@ -441,8 +498,10 @@ if [[ "$RUN_MIGRATIONS" == true ]]; then
         migration_status=apply_migration_014
     elif [[ "$MIGRATION" == 015 ]]; then
         migration_status=apply_migration_015
-    else
+    elif [[ "$MIGRATION" == 016 ]]; then
         migration_status=apply_migration_016
+    else
+        migration_status=apply_migration_017
     fi
     if ! $migration_status; then
         echo "backup=$backup_dir" >&2

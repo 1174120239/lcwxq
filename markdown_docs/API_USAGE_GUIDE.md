@@ -8,6 +8,10 @@
 
 ## 1. 地址、路由和术语
 
+### 1.1 见字独立刊物接口
+
+`SFreeJournal/*` 是独立的校园刊物体系，不复用普通帖子、分类或评论接口。公开读取包括 `journalList`、`journalInfo`、`articleList(journalId=0 可取全局文章)` 和 `articleInfo`；登录用户可用 `articleSubmit`、`articleVote`、`myArticles`。编辑部使用 `journalSave`、`journalStatus`、`articleManage` 和 `articleReview` 管理刊物、排序、推荐和审核。正文保存为 `bodyMarkdown`，展示时由文章版式和主题预设渲染。
+
 | 名称 | 地址/含义 | 使用规则 |
 |---|---|---|
 | 生产 API | `https://api.lcxqy.cn/` | App、H5 和外部程序默认使用此地址。 |
@@ -221,9 +225,9 @@ form_post("SFreeUsers/userRegister", {
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
 |---|---|---|---|---|
-| `SFreeContents/contentsList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,random,token` | 条件新 | 匿名新、带 token 旧；普通用户仅 publish；`random=1` 查询成本高。 |
+| `SFreeContents/contentsList` | GET/POST / 可选 token | `searchParams,searchKey,order,page,limit,random,token` | 条件新 | `searchParams.journal=1` 读取已审核的“见字”投稿，可再用 `mid` 按专栏筛选；普通用户仅 publish；`random=1` 查询成本高。 |
 | `SFreeContents/contentsInfo` | GET/POST / 可选 token | `key` 或 `cid`，可选 `isMd` | 公网新 | 成功是裸文章对象。IP+UA 900 秒只增加一次浏览量；本次计数成功时返回自增后的 views。 |
-| `SFreeContents/contentsAdd` | POST / token | `params,text,isMd`，前端还传 `isSpace` | 公网新+内部委托 | 仅普通 `post/video` 由新端写；付费、草稿、动态、商品、未知类型原样委托旧端。 |
+| `SFreeContents/contentsAdd` | POST / token | `params,text,isMd,journal`，前端还传 `isSpace` | 公网新+内部委托 | `journal=1` 会标记为“见字”投稿并让非 staff 进入待审核；其他普通 `post/video` 由新端写；付费、草稿、动态、商品、未知类型原样委托旧端。 |
 | `SFreeContents/contentsUpdate` | POST / token | `params.cid/title,text,isMd` | 公网新+内部委托 | 普通 post/video 新写；保留原 type 和 Markdown；其他形态委托旧端。 |
 | `SFreeContents/contentsDelete` | GET/POST / 作者或 staff | `key` 或 `cid` | 代码新/公网旧 | 删除内容和关系，可能按配置扣经验；多表 MyISAM 写入需要对账。 |
 | `SFreeContents/contentsAudit` | GET/POST / staff | `key/id` 与审核动作 | 代码新/公网旧 | 审核、经验、通知；非法或重复状态为 `code=0`。 |
