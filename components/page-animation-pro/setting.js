@@ -52,6 +52,7 @@ export const pageIndexSetting = [
 	{path:'pages/contents/recommend',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
 	{path:'pages/manage/comments',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
 	{path:'pages/manage/contents',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
+	{path:'pages/manage/journal',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
 	{path:'pages/manage/recharge',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
 	{path:'pages/manage/shop',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},
 	{path:'pages/manage/users',animaName:'slide-in-right',pageIn:"slide-in-right",pageOut:"slide-in-left"},

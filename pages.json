@@ -450,6 +450,10 @@
 			"style": { "navigationStyle": "custom" }
 		},
 		{
+			"path": "pages/manage/journal",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
 			"path": "pages/manage/withdraw",
 			"style": {
 				"enablePullDownRefresh": true

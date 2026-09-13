@@ -43,6 +43,17 @@
 			<text class="cuIcon-warn margin-right-xs"></text>
 			<text>请注意！请遵守社区规定进行审核管理，违规操作将取消职位！</text>
 		</view>
+		<!-- 见字编辑部：独立于帖子、分类和普通内容管理 -->
+		<view class="data-box journal-console" v-if="group=='administrator'||group=='editor'">
+			<view class="journal-console-head">
+				<view><text class="journal-console-kicker">CAMPUS EDITIONS</text><text class="journal-console-title">见字编辑部</text><text class="journal-console-desc">刊物运营与投稿审核</text></view>
+				<view class="journal-console-mark">见<br/>字</view>
+			</view>
+			<view class="journal-console-actions">
+				<view v-if="group=='administrator'" @tap="toLink('/pages/manage/journal?tab=journals')"><text class="cuIcon-add"></text><view><text>刊物管理</text><small>新增、编辑、排序与推荐</small></view><text class="cuIcon-right"></text></view>
+				<view @tap="toLink('/pages/manage/journal?tab=articles')"><text class="cuIcon-form"></text><view><text>投稿审核</text><small>发布、退回与隐藏文章</small></view><text class="cuIcon-right"></text></view>
+			</view>
+		</view>
 		<!-- 内容发布 -->
 		<view class="data-box" v-if="group=='administrator'||group=='editor'">
 			<view class="module-title">内容发布</view>
@@ -720,6 +731,97 @@
     padding: 20rpx;
     margin: 20rpx;
     border-radius: 8rpx;
+}
+
+.journal-console {
+	background: #23483e;
+	color: #fff;
+}
+
+.journal-console-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	padding-bottom: 24rpx;
+}
+
+.journal-console-kicker,
+.journal-console-title,
+.journal-console-desc {
+	display: block;
+}
+
+.journal-console-kicker {
+	font-size: 18rpx;
+	letter-spacing: 3rpx;
+	color: #d5ad8d;
+}
+
+.journal-console-title {
+	margin-top: 12rpx;
+	font-family: Georgia, serif;
+	font-size: 42rpx;
+}
+
+.journal-console-desc {
+	margin-top: 7rpx;
+	font-size: 22rpx;
+	color: #b9cbc4;
+}
+
+.journal-console-mark {
+	width: 78rpx;
+	height: 78rpx;
+	padding-top: 10rpx;
+	box-sizing: border-box;
+	border: 1rpx solid rgba(255,255,255,.35);
+	border-radius: 50%;
+	text-align: center;
+	font-family: Georgia, serif;
+	font-size: 25rpx;
+	line-height: 27rpx;
+}
+
+.journal-console-actions {
+	border-top: 1rpx solid rgba(255,255,255,.16);
+}
+
+.journal-console-actions>view {
+	display: flex;
+	align-items: center;
+	gap: 20rpx;
+	padding: 24rpx 2rpx;
+	border-bottom: 1rpx solid rgba(255,255,255,.12);
+}
+
+.journal-console-actions>view>.cuIcon-add,
+.journal-console-actions>view>.cuIcon-form {
+	width: 64rpx;
+	height: 64rpx;
+	border-radius: 50%;
+	background: rgba(255,255,255,.1);
+	text-align: center;
+	line-height: 64rpx;
+	font-size: 30rpx;
+}
+
+.journal-console-actions view view {
+	flex: 1;
+}
+
+.journal-console-actions view view text,
+.journal-console-actions view view small {
+	display: block;
+}
+
+.journal-console-actions view view text {
+	font-size: 27rpx;
+}
+
+.journal-console-actions view view small {
+	margin-top: 5rpx;
+	font-size: 20rpx;
+	color: #a9beb6;
 }
 
 .warning-box text {
