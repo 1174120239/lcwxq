@@ -3457,6 +3457,42 @@
 	.campus-home.campus-night .journal-home-title { color:#e7f0eb; }
 	.campus-home.campus-night .journal-home-desc { color:#a9b8b0; }
 
+	/* Independent journal shelf: keep the home entry readable even when the API returns covers. */
+	.journal-shelf-entry {
+		margin: 0 8rpx 26rpx;
+		padding: 28rpx 24rpx 24rpx;
+		border: 2rpx solid rgba(255, 255, 255, .86);
+		border-radius: 28rpx;
+		background: linear-gradient(120deg, rgba(232, 241, 232, .96), rgba(247, 241, 230, .96) 70%, rgba(245, 229, 217, .94));
+		box-shadow: 0 14rpx 30rpx rgba(44, 74, 78, .08);
+		overflow: hidden;
+	}
+	.journal-shelf-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20rpx; }
+	.journal-shelf-heading > view { min-width:0; }
+	.journal-shelf-kicker { display:block; color:#9b7048; font-size:17rpx; letter-spacing:3rpx; }
+	.journal-shelf-title { display:block; margin-top:8rpx; color:#285448; font: 42rpx/1.08 Georgia, serif; }
+	.journal-shelf-desc { display:block; margin-top:8rpx; color:#71877d; font-size:21rpx; }
+	.journal-shelf-more { flex:none; padding-bottom:4rpx; color:#3d715f; font-size:21rpx; white-space:nowrap; }
+	.journal-shelf-scroll { width:calc(100% + 24rpx); height:330rpx; margin:26rpx -12rpx 0; white-space:nowrap; }
+	.journal-shelf-card { display:inline-block; vertical-align:top; width:218rpx; margin:0 10rpx; white-space:normal; }
+	.journal-shelf-cover { position:relative; width:218rpx; height:238rpx; overflow:hidden; border-radius:10rpx; background:#315e50; box-shadow:0 12rpx 24rpx rgba(35, 71, 61, .16); }
+	.journal-shelf-cover image { position:absolute; inset:0; width:100%; height:100%; opacity:.86; }
+	.journal-shelf-cover-shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(20, 44, 36, .04) 25%, rgba(20, 44, 36, .82) 100%); }
+	.journal-shelf-cover-name { position:absolute; left:18rpx; right:16rpx; bottom:36rpx; overflow:hidden; color:#fff; font:25rpx/1.2 Georgia, serif; white-space:nowrap; text-overflow:ellipsis; }
+	.journal-shelf-cover-meta { position:absolute; left:18rpx; bottom:15rpx; color:rgba(255,255,255,.78); font-size:17rpx; }
+	.journal-shelf-card-title { display:block; margin:13rpx 3rpx 0; overflow:hidden; color:#2c4c42; font:22rpx/1.2 Georgia, serif; white-space:nowrap; text-overflow:ellipsis; }
+	.journal-shelf-card-desc { display:block; margin:7rpx 3rpx 0; overflow:hidden; color:#75887f; font-size:18rpx; line-height:1.25; white-space:nowrap; text-overflow:ellipsis; }
+	.journal-palette-0 { background:#315e50; }
+	.journal-palette-1 { background:#9d684e; }
+	.journal-palette-2 { background:#3e6371; }
+	.journal-palette-3 { background:#70836b; }
+	.journal-palette-4 { background:#67576d; }
+	.journal-shelf-entry:active { transform:translateY(1rpx); }
+	.campus-home.campus-night .journal-shelf-entry { border-color:rgba(226,232,230,.14); background:linear-gradient(120deg,#2a3b36,#323a35); box-shadow:0 10rpx 28rpx rgba(0,0,0,.18); }
+	.campus-home.campus-night .journal-shelf-title,.campus-home.campus-night .journal-shelf-card-title { color:#e7f0eb; }
+	.campus-home.campus-night .journal-shelf-desc,.campus-home.campus-night .journal-shelf-card-desc { color:#a9b8b0; }
+	.campus-home.campus-night .journal-shelf-more { color:#a7d0bc; }
+
 	.home-shortcuts .index-sort-main {
 		padding: 10rpx 0;
 	}
@@ -3961,6 +3997,11 @@
 	}
 
 	@media (max-width: 370px) {
+		.journal-shelf-entry { padding-left:20rpx; padding-right:20rpx; }
+		.journal-shelf-scroll { height:300rpx; }
+		.journal-shelf-card,.journal-shelf-cover { width:190rpx; }
+		.journal-shelf-cover { height:210rpx; }
+		.journal-shelf-card-title { font-size:20rpx; }
 		.hero-main { align-items: flex-start; flex-direction: column; gap: 22rpx; }
 		.hero-actions { width: 100%; max-width: none; }
 		.home-hero { min-height: 348rpx; }
