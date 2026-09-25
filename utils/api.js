@@ -413,6 +413,10 @@ module.exports = {
 	qaQuestionStatus:function(){
 		return API_URL + 'SFreeQa/questionStatus';
 	},
+	// 统一社区动态流：普通帖子、问题及校园互助
+	feedList:function(){
+		return API_URL + 'SFreeFeed/feedList';
+	},
 	contentsAdd:function(){
 		return API_URL + 'SFreeContents/contentsAdd';
 	},

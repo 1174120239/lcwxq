@@ -282,6 +282,12 @@ article = form_post("SFreeContents/contentsAdd", {
 
 ## 5. 收藏、打赏、动态和广告
 
+### 5.0 统一社区动态流
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeFeed/feedList` | GET/POST / 无 | `page,limit,type` | 代码新/公网切流后 | 聚合公开动态、普通帖子、校园问答和校园互助任务，按最后活动时间倒序；`type` 可选 `space/post/question/task`。普通帖子排除“见字”刊物文章；问题含最新回答摘要；互助仅含进行中且未过期的信息。点击后分别进入 `SFreeSpace/spaceInfo`、`SFreeContents/contentsInfo`、`SFreeQa/questionInfo` 或 `SFreeLostFound/itemInfo` 对应详情页。 |
+
 ### 5.1 互动日志与奖励
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
