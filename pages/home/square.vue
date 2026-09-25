@@ -46,86 +46,27 @@
 			</view>
 		</view>
 			
-		<block v-if="squareid==0&&contentMode==='space'">
+		<block v-if="squareid==0&&contentMode==='space'&&follow==1&&selectedTopics.length===0">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
-			<view class="space-presentation" v-if="showSpacePresentation && (presentationBanners.length>0 || presentationPins.length>0)">
-				<swiper class="space-banner" v-if="presentationBanners.length>0" :indicator-dots="presentationBanners.length>1" :autoplay="presentationBanners.length>1" :interval="5000" :duration="420" circular>
-					<swiper-item v-for="item in presentationBanners" :key="'space-banner-'+item.id">
-						<view class="space-banner-item" :class="{'is-text-only':!presentationImage(item)}" @tap="openPresentationSpace(item.id)">
-							<image class="space-banner-image" v-if="presentationImage(item)" :src="presentationImage(item)" mode="aspectFill"></image>
-							<view class="space-banner-copy">
-								<view class="space-banner-label"><text class="cuIcon-picfill"></text><text>精选置顶</text></view>
-								<text class="space-banner-title">{{presentationTitle(item)}}</text>
-								<text class="space-banner-author" v-if="item.userJson">{{item.userJson.name}}</text>
-							</view>
-						</view>
-					</swiper-item>
-				</swiper>
-				<view class="space-pin-list" v-if="presentationPins.length>0">
-					<view class="space-pin-row" v-for="item in presentationPins" :key="'space-pin-'+item.id" @tap="openPresentationSpace(item.id)">
-						<text class="space-pin-badge">置顶</text>
-						<text class="space-pin-title">{{presentationTitle(item)}}</text>
-						<text class="cuIcon-right space-pin-arrow"></text>
-					</view>
-				</view>
+			<view class="community-feed-list" @touchmove="collapseSquareMenu">
+				<view class="community-feed-overview"><text class="community-feed-title">社区动态</text><text class="community-feed-count">{{feedTotal}} 条</text></view>
+				<scroll-view class="community-feed-filters" scroll-x :show-scrollbar="false" @tap.stop>
+					<view class="community-feed-filter-track"><view v-for="filter in feedFilters" :key="filter.value || 'all'" class="community-feed-filter" :class="{'is-active':feedTypeFilter===filter.value}" @tap="setFeedType(filter.value)">{{filter.label}}</view></view>
+				</scroll-view>
+				<view class="square-qa-loading" v-if="feedLoading && feedList.length===0"><view class="campus-loader"></view></view>
+				<view class="community-feed-error" v-else-if="feedError" @tap="loadFeed(false)"><text>{{feedError}}</text><text>点击重试</text></view>
+				<view class="no-data square-empty" v-else-if="!feedLoading&&feedList.length===0"><text class="cuIcon-text"></text>暂时还没有社区动态</view>
+				<community-feed-item v-for="item in feedList" :key="item.feedType + '-' + item.id" :item="item" :night="campusNight" @open="openFeedItem"></community-feed-item>
+				<view class="load-more" v-if="feedList.length>0" @tap="loadFeed(true)"><text>{{feedMoreText}}</text></view>
 			</view>
+		</block>
+		<block v-else-if="squareid==0&&contentMode==='space'">
+			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
 			<view class="appcontent margin-top-xl" @tap="collapseSquareMenu" @touchmove="collapseSquareMenu">
-			
-			<block v-if="follow==0">
-				<view class="no-data" v-if="token==''">
-					<text class="cuIcon-text"></text>
-					请先登录哦！
-					<view class="text-center margin-top-sm">
-						<text class="cu-btn bg-shojo radius" @tap="goLogin()">登录</text>
-						<text class="cu-btn line-blue margin-left-sm radius" @tap="goRegister()">注册</text>
-					</view>
-				
-				</view>
-				<view v-else>
-				<view class="no-data square-empty" v-if="spaceList.length==0">
-				<text class="cuIcon-text"></text>
-				暂时还没有关注的人哦~
+				<view class="no-data square-empty" v-if="spaceList.length==0"><text class="cuIcon-text"></text>{{follow==4 ? '暂时还没有精华动态' : selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}</view>
+				<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
+				<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0"><text>{{moreText}}</text></view>
 			</view>
-			<followItem :spaceList="spaceList" :followList="spaceList.isFollow" @before-navigate="rememberSpaceReturn"></followItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
-				<text>{{moreText}}</text>
-			</view>
-			</view>
-			</block>
-			<block v-if="follow==1||follow==4">
-			<view class="no-data square-empty" v-if="spaceList.length==0">
-				<text class="cuIcon-text"></text>
-				{{follow==4 ? '暂时还没有精华动态' : selectedTopics.length > 1 ? '暂无同时包含这些话题的动态' : selectedTopics.length === 1 ? '该话题下暂无动态' : '什么都没有'}}
-			</view>
-			
-			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
-				<text>{{moreText}}</text>
-			</view>
-			</block>
-			<block v-if="follow==2">
-			<view class="no-data square-empty" v-if="spaceList.length==0">
-				<text class="cuIcon-text"></text>
-				什么都没有
-			</view>
-			
-			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
-				<text>{{moreText}}</text>
-			</view>
-			</block>
-			<block v-if="follow==3">
-			<view class="no-data square-empty" v-if="spaceList.length==0">
-				<text class="cuIcon-text"></text>
-				什么都没有
-			</view>
-			
-			<spaceItem :spaceList="spaceList" :night="campusNight" @before-navigate="rememberSpaceReturn"></spaceItem>
-			<view class="load-more" @tap="loadMore" v-if="dataLoad&&spaceList.length>0">
-				<text>{{moreText}}</text>
-			</view>
-			</block>
-		</view>
 		</block>
 		<block v-if="squareid==0&&contentMode==='qa'">
 			<view class="square-header-spacer" :style="squareHeaderSpacer"></view>
@@ -476,6 +417,19 @@
 				questionLoading: false,
 				questionLoadingMore: false,
 				questionMoreText: '',
+				feedList: [],
+				feedPage: 1,
+				feedTotal: 0,
+				feedLoading: false,
+				feedLoadingMore: false,
+				feedRequestId: 0,
+				feedError: '',
+				feedMoreText: '上拉加载更多',
+				feedTypeFilter: '',
+				feedFilters: [
+					{ label: '全部', value: '' }, { label: '动态', value: 'space' },
+					{ label: '帖子', value: 'post' }, { label: '问题', value: 'question' }, { label: '互助', value: 'task' }
+				],
 				spaceLoading: false,
 				spaceHasMore: true,
 				spaceRequestId: 0,
@@ -660,6 +614,10 @@
 				that.loadQuestionList(false, stopRefresh);
 				return;
 			}
+			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 1 && that.selectedTopics.length === 0) {
+				that.loadFeed(false, stopRefresh);
+				return;
+			}
 			if (that.squareid === 0) {
 				// A pull-to-refresh supersedes the current page request. The old
 				// response is ignored by spaceRequestId when it eventually returns.
@@ -696,6 +654,10 @@
 			var that = this;
 			if (that.squareid == 0 && that.contentMode === 'qa') {
 				that.loadQuestionList(true);
+				return;
+			}
+			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 1 && that.selectedTopics.length === 0) {
+				that.loadFeed(true);
 				return;
 			}
 			if (that.follow == 2 && that.squareid == 0) {
@@ -737,6 +699,9 @@
 		onHide() {
 			this.spaceRequestId++;
 			this.spaceLoading = false;
+			this.feedRequestId++;
+			this.feedLoading = false;
+			this.feedLoadingMore = false;
 			clearTimeout(this._scrollFrame)
 			this._scrollFrame = null
 			resetCampusChromeScroll(this)
@@ -822,7 +787,9 @@
 				if (that.token != "" && that.squareid == 1) that.startChatPolling();
 				return;
 			}
-			if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
+			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 1 && that.selectedTopics.length === 0) {
+				that.loadFeed(false);
+			} else if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
 				that.getSpaceList(false);
 			}
 			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 2) {
@@ -911,7 +878,8 @@
 						this.changeLoading = 0
 						this.getSpaceList3(false)
 					} else {
-						this.getSpaceList(false)
+						if (this.follow === 1 && this.selectedTopics.length === 0) this.loadFeed(false)
+						else this.getSpaceList(false)
 					}
 				}, 280)
 			},
@@ -939,13 +907,78 @@
 				this.spaceRequestId++;
 				this.spaceLoading = false;
 				this.spaceHasMore = true;
+				this.feedPage = 1;
+				this.feedTotal = 0;
 				uni.pageScrollTo({ scrollTop: 0, duration: 0 });
 				if (mode === 'qa') {
 					this.loadQuestionList(false);
-				} else if (mode === 'space' && this.spaceList.length === 0) {
+				} else if (mode === 'space' && this.feedList.length === 0) {
 					this.page = 1;
-					this.getSpaceList(false);
+					if (this.follow === 1 && this.selectedTopics.length === 0) this.loadFeed(false);
+					else this.getSpaceList(false);
 				}
+			},
+			loadFeed(append, complete) {
+				if ((append && this.feedLoadingMore) || (append && this.feedList.length >= this.feedTotal && this.feedTotal > 0)) {
+					if (complete) complete();
+					return;
+				}
+				const targetPage = append ? this.feedPage + 1 : 1;
+				const requestId = ++this.feedRequestId;
+				this.feedLoadingMore = true;
+				if (!append) {
+					this.feedLoading = true;
+					this.feedError = '';
+				}
+				this.feedMoreText = append ? '加载中...' : '';
+				this.$Net.request({
+					url: this.$API.feedList(),
+					data: { page: targetPage, limit: 12, type: this.feedTypeFilter },
+					method: 'get', dataType: 'json',
+					success: (res) => {
+						if (requestId !== this.feedRequestId) return;
+						if (!res.data || res.data.code !== 1) {
+							const message = res.data && res.data.msg ? res.data.msg : '动态加载失败';
+							if (append) this.feedMoreText = '加载失败，点击重试';
+							else this.feedError = message;
+							return;
+						}
+						const list = Array.isArray(res.data.data) ? res.data.data : [];
+						this.feedList = append ? this.feedList.concat(list) : list;
+						this.feedPage = targetPage;
+						this.feedTotal = Number(res.data.total || 0);
+						this.feedError = '';
+						this.feedMoreText = this.feedList.length < this.feedTotal ? '上滑或点击加载更多' : '已经到底了';
+					},
+					fail: () => {
+						if (requestId !== this.feedRequestId) return;
+						if (append) this.feedMoreText = '加载失败，点击重试';
+						else this.feedError = '动态加载失败';
+					},
+					complete: () => {
+						if (requestId === this.feedRequestId) {
+							this.feedLoading = false;
+							this.feedLoadingMore = false;
+						}
+						if (complete) complete();
+					}
+				});
+			},
+			openFeedItem(item) {
+				if (!item || !item.feedType || !item.id) return;
+				this.rememberSpaceReturn();
+				if (item.feedType === 'space') return uni.navigateTo({ url: '/pages/space/info?id=' + item.id });
+				if (item.feedType === 'question') return uni.navigateTo({ url: '/pages/qa/info?id=' + item.id });
+				if (item.feedType === 'task') return uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + item.id + '&returnTo=mutualAidList' });
+				uni.navigateTo({ url: '/pages/contents/info?cid=' + item.id + '&title=' + encodeURIComponent(item.title || '') });
+			},
+			setFeedType(type) {
+				if (this.feedTypeFilter === type) return;
+				this.feedTypeFilter = type;
+				this.feedList = [];
+				this.feedPage = 1;
+				this.feedTotal = 0;
+				this.loadFeed(false);
 			},
 			loadQuestionList(append, complete) {
 				if (this.questionLoadingMore || (append && (this.questionList.length === 0 || this.questionList.length >= this.questionTotal))) {
@@ -1564,7 +1597,8 @@
 						that.changeLoading = 0;
 						that.getSpaceList3();
 					} else {
-						that.getSpaceList(false);
+						if (that.follow === 1 && that.selectedTopics.length === 0) that.loadFeed(false);
+						else that.getSpaceList(false);
 					}
 				}
 				if (type == 1) {
@@ -1633,7 +1667,8 @@
 					
 				}
 				if (type == 1||type == 0||type == 4) {
-					that.getSpaceList(false);
+					if (type === 1 && that.selectedTopics.length === 0) that.loadFeed(false);
+					else that.getSpaceList(false);
 				}
 			},
 			clearTopicFilter() {
@@ -1786,7 +1821,8 @@
 				this.page = 1;
 				this.spaceList = [];
 				this.spaceHasMore = true;
-				this.getSpaceList(false);
+				if (this.selectedTopics.length === 0) this.loadFeed(false);
+				else this.getSpaceList(false);
 			},
 			isTopicSelected(mid) {
 				return this.selectedTopics.some(item => String(item.mid) === String(mid));
@@ -2921,6 +2957,91 @@
 		background: transparent;
 		box-sizing: border-box;
 	}
+
+	.community-feed-list {
+		width: calc(100% - 32rpx);
+		max-width: 760px;
+		margin: 12rpx auto 0;
+		box-sizing: border-box;
+	}
+
+	.community-feed-overview {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding: 8rpx 2rpx 16rpx;
+	}
+
+	.community-feed-title {
+		color: #293b48;
+		font-size: 30rpx;
+		font-weight: 700;
+	}
+
+	.community-feed-count {
+		color: #899590;
+		font-size: 22rpx;
+	}
+
+	.community-feed-filters {
+		width: 100%;
+		margin-bottom: 18rpx;
+		white-space: nowrap;
+	}
+
+	.community-feed-filter-track {
+		display: inline-flex;
+		align-items: center;
+		gap: 10rpx;
+		min-width: 100%;
+		padding: 2rpx 0 4rpx;
+		box-sizing: border-box;
+	}
+
+	.community-feed-filter {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		min-width: 92rpx;
+		height: 54rpx;
+		padding: 0 18rpx;
+		border: 1rpx solid #e3e9e7;
+		border-radius: 10rpx;
+		background: rgba(255, 255, 255, .72);
+		color: #687873;
+		font-size: 23rpx;
+		transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+	}
+
+	.community-feed-filter.is-active {
+		border-color: #237c74;
+		background: #237c74;
+		color: #fff;
+		font-weight: 700;
+	}
+
+	.community-feed-error {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 12rpx;
+		min-height: 180rpx;
+		color: #788780;
+		font-size: 24rpx;
+	}
+
+	.community-feed-error text:last-child {
+		color: #237c74;
+		font-weight: 600;
+	}
+
+	.campus-night .community-feed-title { color: #edf3f0; }
+	.campus-night .community-feed-count { color: #94a39e; }
+	.campus-night .community-feed-filter { border-color: #303b38; background: #1d2523; color: #a7b4af; }
+	.campus-night .community-feed-filter.is-active { border-color: #4c998c; background: #286a62; color: #fff; }
+	.campus-night .community-feed-error { color: #a7b4af; }
+	.campus-night .community-feed-error text:last-child { color: #78b8aa; }
 
 	.square-qa-overview {
 		display: flex;

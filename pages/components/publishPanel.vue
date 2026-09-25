@@ -24,7 +24,7 @@
 							<view class="publish-option-icon"><text class="cuIcon-camera"></text></view>
 							<view class="publish-option-copy">
 								<text class="publish-option-label">发布动态</text>
-								<text class="publish-option-desc">分享此刻的校园生活</text>
+								<text class="publish-option-desc">分享校园生活，可切换匿名</text>
 							</view>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
@@ -32,11 +32,6 @@
 							<view class="publish-option publish-option-secondary" @tap.stop="goPublish('/pages/qa/post')">
 								<view class="publish-option-icon question-icon"><text class="cuIcon-question"></text></view>
 								<text class="publish-option-label">提出问题</text>
-								<text class="publish-option-arrow cuIcon-right"></text>
-							</view>
-							<view class="publish-option publish-option-secondary" @tap.stop="goPublish('/pages/space/post?anonymous=1')">
-								<view class="publish-option-icon anonymous-icon"><text class="cuIcon-notice"></text></view>
-								<text class="publish-option-label">匿名动态</text>
 								<text class="publish-option-arrow cuIcon-right"></text>
 							</view>
 						</view>
@@ -48,7 +43,7 @@
 							</view>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
-						<text class="publish-option-hint">匿名动态不展示真实身份，请遵守社区规范</text>
+						<text class="publish-option-hint">发布身份可以在编辑页随时切换，请遵守社区规范</text>
 					</view>
 					</view>
 				</scroll-view>
@@ -356,7 +351,7 @@
 		color: var(--publish-primary, #237c74);
 		opacity: 0;
 		transform: translateY(10rpx) scale(0.58) translateZ(0);
-		transition: opacity 360ms ease, transform 560ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 280ms ease;
+		transition: opacity 160ms ease, transform 180ms ease, box-shadow 160ms ease;
 		will-change: transform, opacity;
 	}
 
@@ -441,7 +436,7 @@
 		box-shadow: 0 -18rpx 60rpx rgba(39, 59, 66, 0.18);
 		overflow: hidden;
 		transform: translate3d(-50%, 100%, 0);
-		transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition: transform 180ms ease;
 		will-change: transform;
 	}
 
@@ -635,6 +630,12 @@
 		border-color: rgba(116, 194, 164, 0.72);
 		background: rgba(221, 244, 235, 0.92);
 		color: #2f9188;
+	}
+
+	.publish-option-icon.journal-icon {
+		border-color: rgba(214, 186, 118, 0.72);
+		background: rgba(250, 241, 216, 0.9);
+		color: #ae7b2c;
 	}
 
 	.publish-option-icon.anonymous-icon {

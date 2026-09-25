@@ -9,6 +9,9 @@
 					<block v-if="type=='edit'">
 						修改帖子
 					</block>
+					<block v-else-if="journalMode">
+						投稿见字
+					</block>
 					<block v-else>
 						发布帖子
 					</block>
@@ -16,7 +19,7 @@
 				<!--  #ifdef H5 || APP-PLUS -->
 				<view class="action" @tap="submit">
 					<!-- <text class="cuIcon-upload"></text> -->
-					<button class="cu-btn round bg-blue">发布</button>
+					<button class="cu-btn round bg-blue">{{journalMode ? '投稿' : '发布'}}</button>
 				</view>
 				<!--  #endif -->
 				
@@ -26,10 +29,10 @@
 		<form>
 			<view class="cu-form-group margin-top">
 				<view class="title">标题</view>
-				<input placeholder="输入帖子标题" name="input" v-model="title"   @focus="ToisText(0)" @blur="ToisText(0)" :adjust-position="false" :focus="false"></input>
+				<input :placeholder="journalMode ? '输入文章标题' : '输入帖子标题'" name="input" v-model="title"   @focus="ToisText(0)" @blur="ToisText(0)" :adjust-position="false" :focus="false"></input>
 			<view class="picker" @tap="toCategory">
 				<block v-if="categoryText==''">
-					选择分类
+					{{journalMode ? '选择见字专栏' : '选择分类'}}
 				</block>
 				<block v-else>
 					<text class="text-green">已选择</text>
@@ -86,7 +89,7 @@
 				
 			</view>
 			<view class="cu-form-group">
-				<textarea maxlength="-1" v-if="z_kg==0" class="text" :adjust-position="false" :auto-blur="true" :focus="false" @input="textareaAInput" v-model="text" placeholder="输入帖子内容" :style="poststyle" @focus="ToisText(1)" @blur="ToisText(0)">
+				<textarea maxlength="-1" v-if="z_kg==0" class="text" :adjust-position="false" :auto-blur="true" :focus="false" @input="textareaAInput" v-model="text" :placeholder="journalMode ? '写下想与校园分享的文章…' : '输入帖子内容'" :style="poststyle" @focus="ToisText(1)" @blur="ToisText(0)">
 				</textarea>
 				<scroll-view scroll-y class="text" v-if="z_kg==1"  :style="readstyle" @tap="toIsShow2(0,true)">
 					<mp-html :content="textRead" :scroll-table="true" :selectable="true" :show-img-menu="true" :lazy-load="true" :markdown="true"/>
@@ -416,6 +419,7 @@
 				
 				toImg:false,
 				isSpace:false,
+				journalMode:false,
 				
 			}
 		},
@@ -478,7 +482,8 @@
 			// #ifdef APP-PLUS || MP
 			that.NavBar = this.CustomBar;
 			// #endif
-			if (res.type !== 'edit' && !that.canManagePublish()) {
+			that.journalMode = res.journal === '1';
+			if (res.type !== 'edit' && !that.canManagePublish() && !that.journalMode) {
 				that.rejectPublicPublish('帖子');
 				return;
 			}
@@ -1186,6 +1191,7 @@
 						"params":JSON.stringify(that.$API.removeObjectEmptyKey(data)),
 						"token":that.token,
 						'text':text,
+						'journal': that.journalMode ? 1 : 0,
 						"isSpace":0,
 					},
 					header:{
@@ -1198,7 +1204,7 @@
 							uni.hideLoading();
 						}, 1000);
 						uni.showToast({
-							title: res.data.msg,
+							title: that.journalMode && res.data.code == 1 ? '投稿已提交，等待编辑审核' : res.data.msg,
 							icon: 'none'
 						})
 						if(res.data.code==1){

@@ -97,7 +97,8 @@ public class ContentController {
      * POST {@code /SFreeContents/contentsAdd}：发布内容或透明转发旧写接口。
      *
      * <p>必填普通表单：{@code token}、JSON {@code params}（title/type/category/tag 等）及
-     * 顶层 {@code text}；可选 {@code isMd}。仅结构明确的普通 post/video 进入新实现；
+     * 顶层 {@code text}；可选 {@code isMd} 和 {@code journal=1}。投稿见字的文章会标记为
+     * journal 并进入待审核状态；仅结构明确的普通 post/video 进入新实现；
      * isDraft、isPaid、isSpace、商品 sid、插件/未知类型、重复或歧义表单均原样转发 8081。
      * 新实现校验 200 字标题、60000 字正文、防刷/敏感代码和分类关系；Markdown 会添加标记并
      * 把 {@code ||rn||} 转为换行。文章行写入后才做尽力而为的用户活动/经验更新，客户端超时

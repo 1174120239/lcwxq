@@ -113,6 +113,10 @@ public class ContentService {
             from.append(" AND EXISTS (SELECT 1 FROM starfree_relationships r WHERE r.cid = c.cid AND r.mid = ?)");
             args.add(RequestValues.objectInteger(filters, "mid", 0));
         }
+        if (RequestValues.objectInteger(filters, "journal", 0) == 1) {
+            from.append(" AND EXISTS (SELECT 1 FROM starfree_fields f "
+                    + "WHERE f.cid = c.cid AND f.name = 'journal' AND f.str_value = '1')");
+        }
 
         Integer totalValue = jdbc.queryForObject("SELECT COUNT(*)" + from, Integer.class, args.toArray());
         StringBuilder sql = new StringBuilder(
@@ -236,8 +240,12 @@ public class ContentService {
         if (config.isCodeDisabled() && SENSITIVE_CODE.matcher(text).find()) {
             throw new IllegalArgumentException("你的内容包含敏感代码，请修改后重试！");
         }
-        String status = economy.contentStatus(config, group, title, text);
         boolean staff = economy.isStaff(group);
+        boolean journal = RequestValues.integer(request, "journal", 0) == 1;
+        String status = economy.contentStatus(config, group, title, text);
+        if (journal && !staff) {
+            status = "waiting";
+        }
         LegacyContentAbuseGuard.Reservation reservation = abuse.reservePost(
                 uid, staff, config.getPostMax(), staff ? 0 : economy.postsInLastDay(uid));
 
@@ -286,6 +294,12 @@ public class ContentService {
             }
             insertAddRelationships(cid, RequestValues.objectText(params, "category"));
             insertAddRelationships(cid, RequestValues.objectText(params, "tag"));
+            if (journal) {
+                jdbc.update("INSERT INTO starfree_fields(cid,name,type,str_value,int_value,float_value) "
+                                + "VALUES(?, 'journal', 'str', '1', 0, 0) ON DUPLICATE KEY UPDATE "
+                                + "type='str',str_value='1',int_value=0,float_value=0",
+                        cid);
+            }
         } catch (RuntimeException failure) {
             if (cid > 0) {
                 cleanupFailedAdd(cid);
@@ -667,6 +681,11 @@ public class ContentService {
     }
 
     private void cleanupFailedAdd(long cid) {
+        try {
+            jdbc.update("DELETE FROM starfree_fields WHERE cid = ?", cid);
+        } catch (RuntimeException cleanupFailure) {
+            LOG.error("Could not remove fields for failed article {}", cid, cleanupFailure);
+        }
         try {
             jdbc.update("DELETE FROM starfree_relationships WHERE cid = ?", cid);
         } catch (RuntimeException cleanupFailure) {

@@ -402,6 +402,8 @@ journalctl -u starfree-replacement.service -n 100 --no-pager
 
 仓库中的 cutover-*.sh 和 promote-*.sh 已包含特定路由的备份、语法检查与验收逻辑。使用前必须确认脚本目标与本次范围一致。校区和入学年份的三个管理/注册接口统一使用 `promote-campus-identity-routes.sh`；用户资料读取的 `userStatus/userInfo` 使用 `promote-user-profile-routes.sh`；邮箱验证码的 `RegSendCode/SendCode` 使用 `promote-email-verification-routes.sh`；消息中心的 `inbox/unreadNum/setRead` 使用 `promote-inbox-routes.sh`（新端负责渲染动态评论 `spaceComment` 通知并携带原动态状态）；匿名动态的 `config/post/owner/admin/config` 使用 `promote-anonymous-routes.sh`；轻量邀请的 `SFreeInvitation/config` 和 `SFreeInvitation/me` 使用 `promote-invitation-routes.sh`；NapCat/AstrBot 动态助手的 14 个 `SFreeBot/*` 接口使用 `promote-qqbot-routes.sh`；校园问答的 14 个 `SFreeQa/*` 接口使用 `promote-qa-routes.sh`；校园互助的 16 个 `SFreeLostFound/*` 接口使用 `promote-mutual-aid-routes.sh`，且必须先完成迁移 014、replacement JAR 和 App 验证；动态举报的 `reportAdd/reportList/reportReview` 使用 `promote-space-report-routes.sh`；动态精华、列表置顶和横幅置顶的 `spacePresentation/spacePresentationList` 使用 `promote-space-presentation-routes.sh`，且必须先完成迁移 012 和 replacement JAR 验证。个人电脑上的 NapCat 连接服务器 AstrBot 时，使用 `promote-astrbot-onebot-route.sh` 单独开放带 Token 的 `/onebot/v11/ws` 精确 WSS 路由；6185 管理页和 6199 原始端口均不得直接暴露公网。脚本都先备份 include、执行 `nginx -t`，并在 reload 后验证对应响应。
 
+统一社区动态上线前，先在本机 `18082` 调用 `SFreeFeed/feedList?page=1&limit=12`，确认成功包络、四类筛选、刊物排除、问题最新回答摘要及互助状态/过期过滤；该接口依赖校园问答迁移 007 和校园互助迁移 014。验证完成后运行 `backend/deploy/production/promote-community-feed-route.sh`。脚本只添加 `/SFreeFeed/feedList` 精确 location，公网响应必须带 `X-Starfree-Backend: replacement-community-feed`；本项不执行数据库迁移或切换其他路由。
+
 ### 9.2 安全版本切流
 
 安卓 WGT 热更新包不随后端 JAR 发布。使用 HBuilderX 5.24 生成 WGT 后，可在后台“功能设置 → 版本管理”的新增版本页面直接上传（单个文件最大 200 MB），也可以填写公开的 HTTPS `.wgt` 直链；上传文件会校验包内 AppID/版本号并计算 SHA-256，直链不会经过服务器压缩包校验。admin 安装流程会创建 `/opt/starfree/files/static/app-updates/` 并授予 PHP-FPM `www` 用户写权限，同时配置 PHP 上传上限。发布后确认可通过 `https://frp.lcxqy.cn/app-updates/update.json` 和清单中的 WGT HTTPS 直链读取。也可以按 `app-updates/README.md` 手工上传。WGT 的 `appid` 必须为 `__UNI__850911F`，`versionCode` 必须递增；涉及原生模块、权限或 Manifest 的变更仍需重新云打包 APK。
@@ -493,6 +495,7 @@ HTTP 200 不代表业务成功，还要检查响应 JSON 的 code 和 msg。
 | 广告奖励 | verify-ads-reward.sh |
 | 注册与账号 | verify-user-registration.sh、verify-account-maintenance.sh |
 | 匿名动态 | verify-anonymous.sh |
+| 统一社区动态 | 本机读取 `SFreeFeed/feedList?page=1&limit=12`；切流后检查 `X-Starfree-Backend: replacement-community-feed` |
 
 ## 11. 回滚
 

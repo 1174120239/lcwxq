@@ -29,6 +29,12 @@ class ContentAddRoutingPolicyTest {
     }
 
     @Test
+    void journalSubmissionsRemainReplacementOwnedOrdinaryPosts() {
+        request.put("journal", "1");
+        assertThat(routing.useReplacement(request)).isTrue();
+    }
+
+    @Test
     void legacyFeaturesAreDelegated() {
         for (String flag : new String[]{"isPaid", "isDraft", "isSpace"}) {
             request.put(flag, "1");

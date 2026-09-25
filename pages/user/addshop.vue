@@ -2,7 +2,7 @@
 	<view class="editor-page" :class="AppStyle">
 		<view class="header" :style="[{height: CustomBar + 'px'}]">
 			<view class="cu-bar bg-white" :style="{'height': CustomBar + 'px', 'padding-top': StatusBar + 'px'}">
-				<view class="action" @tap="handleBack"><text class="cuIcon-back"></text></view>
+				<view class="action editor-back-action" @tap.stop="handleBack"><text class="cuIcon-back"></text></view>
 				<view class="content text-bold" :style="[{top: StatusBar + 'px'}]">{{ editing ? '修改互助' : '发布互助' }}</view>
 				<view class="action"></view>
 			</view>
@@ -73,17 +73,10 @@
 		</view>
 
 		<view class="editor-bottom-bar">
-			<button class="cu-btn bg-blue editor-submit-bottom" :disabled="submitting || !canSubmit" @tap="submit">
+			<button class="cu-btn bg-blue editor-submit-bottom" :disabled="submitting || uploadingImages" @tap="submit">
 				<view v-if="submitting" class="button-spinner"></view>
-				<text v-else class="cuIcon-upload"></text>{{ submitting ? '提交中...' : (editing ? '保存修改' : '提交审核') }}
+				<text v-else class="cuIcon-upload"></text>{{ submitting ? '提交中...' : (editing ? '保存修改' : (auditRequired ? '提交审核' : '发布信息')) }}
 			</button>
-		</view>
-
-		<view v-if="showExitModal" class="modal-mask" @touchmove.stop.prevent>
-			<view class="exit-modal">
-				<view class="exit-copy"><text class="exit-title">退出发布？</text><text class="exit-description">当前填写的内容不会被保存。</text></view>
-				<view class="exit-actions"><view @tap="showExitModal = false">继续编辑</view><view class="exit-confirm" @tap="confirmExit">退出</view></view>
-			</view>
 		</view>
 
 		<view v-if="hud.visible" class="hud-layer">
@@ -120,7 +113,7 @@
 				today: this.dateString(now),
 				categoryLabels: ['失物招领', '物品借用', '学习互助', '校园生活', '其他帮助'],
 				showCategorySheet: false,
-				showExitModal: false,
+				auditRequired: true,
 				submitSuccess: false,
 				returnToMutualAidList: false,
 				hud: { visible: false, type: 'loading', text: '' },
@@ -158,7 +151,7 @@
 			canSubmit() { return this.form.title.trim().length >= 4 && this.form.location.trim().length >= 2 && this.form.description.trim().length >= 5 }
 		},
 		onBackPress() {
-			if (this.hasUnsavedChanges()) { this.showExitModal = true; return true }
+			if (this.hasUnsavedChanges()) { this.requestExit(); return true }
 			return false
 		},
 		methods: {
@@ -168,8 +161,18 @@
 				return date.getFullYear() + '-' + month + '-' + day
 			},
 			timeString(date) { return ('0' + date.getHours()).slice(-2) + ':' + ('0' + date.getMinutes()).slice(-2) },
-			handleBack() { if (this.hasUnsavedChanges()) this.showExitModal = true; else uni.navigateBack({ delta: 1 }) },
-			confirmExit() { this.showExitModal = false; uni.navigateBack({ delta: 1 }) },
+			handleBack() { if (this.hasUnsavedChanges()) this.requestExit(); else this.leavePage() },
+			requestExit() {
+				var that = this
+				uni.showModal({
+					title: '退出发布？',
+					content: '当前填写的内容不会被保存。',
+					cancelText: '继续编辑',
+					confirmText: '退出',
+					success: function(res) { if (res.confirm) that.leavePage() }
+				})
+			},
+			leavePage() { uni.navigateBack({ delta: 1 }) },
 			hasUnsavedChanges() { return !this.submitSuccess && !!(this.form.title || this.form.location || this.form.description || this.form.imageUrl) },
 			selectCategory(value) { this.form.category = value; this.showCategorySheet = false },
 			checkEligibility() {
@@ -177,6 +180,9 @@
 				that.$Net.request({
 					url: that.$API.lostFoundConfig(), data: { token: that.token() }, method: 'get', dataType: 'json',
 					success: function(res) {
+						if (res.data.code === 1) {
+							that.auditRequired = Number(res.data.data.auditRequired) === 1
+						}
 						if (res.data.code === 1 && !res.data.data.eligible) {
 							uni.showToast({ title: res.data.data.enabled ? '达到Lv' + res.data.data.minimumLevel + '后可参与校园互助' : '校园互助暂未开放', icon: 'none' })
 							that.submitSuccess = true
@@ -289,6 +295,7 @@
 
 <style scoped>
 	.editor-page { min-height: 100vh; padding-bottom: 138rpx; background: #f2f5f6; color: #17212b; }
+	.editor-back-action { min-width: 96rpx; position: relative; z-index: 2; }
 	.editor-form { padding: 14rpx 0 0; }
 	.form-section { margin-bottom: 14rpx; padding: 28rpx; background: #fff; border-top: 1rpx solid #e5ebed; border-bottom: 1rpx solid #e5ebed; animation: sectionIn .28s ease both; }
 	.field-label { display: block; color: #26343c; font-size: 27rpx; font-weight: 600; }
@@ -341,15 +348,6 @@
 	.sheet-option { min-height: 88rpx; padding: 0 22rpx; display: flex; align-items: center; justify-content: space-between; border-top: 1rpx solid #edf1f2; color: #45545c; font-size: 28rpx; }
 	.sheet-option-active { color: #168cf0; font-weight: 600; }
 	.sheet-cancel { height: 82rpx; line-height: 82rpx; margin-top: 14rpx; text-align: center; border-radius: 12rpx; background: #f1f4f5; color: #59676e; font-size: 28rpx; }
-	.modal-mask { position: fixed; z-index: 1100; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(18, 27, 32, .42); animation: fadeIn .18s ease; }
-	.exit-modal { width: 560rpx; overflow: hidden; border-radius: 16rpx; background: rgba(255,255,255,.98); animation: modalIn .2s ease; }
-	.exit-copy { padding: 40rpx 32rpx 34rpx; text-align: center; }
-	.exit-title, .exit-description { display: block; }
-	.exit-title { font-size: 32rpx; font-weight: 600; }
-	.exit-description { margin-top: 12rpx; color: #718087; font-size: 25rpx; }
-	.exit-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1rpx solid #e2e8ea; }
-	.exit-actions view { height: 88rpx; line-height: 88rpx; text-align: center; color: #168cf0; font-size: 28rpx; }
-	.exit-confirm { border-left: 1rpx solid #e2e8ea; color: #d84b3e !important; font-weight: 600; }
 	.hud-layer { position: fixed; z-index: 1200; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 	.hud-box { min-width: 210rpx; padding: 30rpx 38rpx; display: flex; flex-direction: column; align-items: center; border-radius: 16rpx; background: rgba(21, 29, 34, .88); animation: hudIn .18s ease; }
 	.hud-spinner { width: 50rpx; height: 50rpx; border: 5rpx solid rgba(255,255,255,.25); border-top-color: #fff; }
@@ -374,15 +372,11 @@
 	.campus-night .picker-value,
 	.campus-night .date-controls { color: #c6cfcb; }
 	.campus-night .editor-bottom-bar { border-top-color: #333b3c; background: rgba(27, 33, 35, .97); }
-	.campus-night .category-sheet,
-	.campus-night .exit-modal { background: #202527; }
+	.campus-night .category-sheet { background: #202527; }
 	.campus-night .sheet-handle { background: #4a5557; }
-	.campus-night .sheet-option,
-	.campus-night .exit-actions { border-color: #333b3c; }
+	.campus-night .sheet-option { border-color: #333b3c; }
 	.campus-night .sheet-option { color: #d7dfdc; }
 	.campus-night .sheet-cancel { background: #293032; color: #bdc7c3; }
-	.campus-night .exit-description { color: #a9b5b0; }
-	.campus-night .exit-confirm { border-color: #333b3c; }
 	/* #ifdef H5 */
 	@media screen and (min-width: 820px) {
 		.editor-form { width: 760px; margin-right: auto; margin-left: auto; }
@@ -393,7 +387,6 @@
 	@keyframes sectionIn { from { opacity: 0; transform: translateY(12rpx); } to { opacity: 1; transform: translateY(0); } }
 	@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 	@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-	@keyframes modalIn { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
 	@keyframes hudIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
 	@keyframes spin { to { transform: rotate(360deg); } }
 </style>
