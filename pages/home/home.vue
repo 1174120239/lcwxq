@@ -64,9 +64,10 @@
 
 				<view class="journal-shelf-entry" @tap="openJournalHome">
 					<view class="journal-shelf-heading"><view><text class="journal-shelf-kicker">CAMPUS EDITIONS</text><text class="journal-shelf-title">校园刊物</text><text class="journal-shelf-desc">阅读让校园生活更有温度</text></view><text class="journal-shelf-more">查看更多 <text class="cuIcon-right"></text></text></view>
-					<scroll-view scroll-x class="journal-shelf-scroll" :show-scrollbar="false">
-						<view class="journal-shelf-card" v-for="(item,index) in journalShelfList" :key="item.id" @tap.stop="openJournalColumn(item)"><view class="journal-shelf-cover" :class="'journal-palette-' + (index % 5)"><image v-if="item.coverUrl" :src="item.coverUrl" mode="aspectFill"></image><view class="journal-shelf-cover-shade"></view><text class="journal-shelf-cover-name">{{item.name}}</text><text class="journal-shelf-cover-meta">{{journalBadge(index)}}</text></view><text class="journal-shelf-card-title">《{{item.name}}》</text><text class="journal-shelf-card-desc">{{item.description || journalTagline(index)}}</text></view>
+					<scroll-view v-if="journalShelfList.length" scroll-x class="journal-shelf-scroll" :show-scrollbar="false">
+						<view class="journal-shelf-card" v-for="(item,index) in journalShelfList" :key="item.id" @tap.stop="openJournalColumn(item)"><view class="journal-shelf-cover" :class="'journal-palette-' + (index % 5)"><image v-if="item.coverUrl || item.bannerUrl" :src="item.coverUrl || item.bannerUrl" mode="aspectFill"></image><view class="journal-shelf-cover-shade"></view><text class="journal-shelf-cover-name">{{item.name}}</text><text class="journal-shelf-cover-meta">{{journalBadge(index)}}</text></view><text class="journal-shelf-card-title">《{{item.name}}》</text><text class="journal-shelf-card-desc">{{item.description || journalTagline(index)}}</text></view>
 					</scroll-view>
+					<view v-else class="journal-shelf-empty" @tap.stop="openJournalHome"><text>{{ journalLoading ? '正在翻开刊物' : '编辑部正在准备推荐刊物' }}</text><text class="cuIcon-right"></text></view>
 				</view>
 
 				<view class="home-feed-heading"><text>社区动态</text><text>最新分享</text></view>
@@ -634,6 +635,7 @@
 				topContents: [],
 				metaList: [],
 				journals: [],
+				journalLoading: false,
 				Topic: [],
 				dotStyle: false,
 				towerStart: 0,
@@ -1771,9 +1773,11 @@
 				})
 			},
 			loadIndependentJournals() {
-				this.$Net.request({ url: this.$API.journalList(), data: { page: 1, limit: 20 }, method: 'get', dataType: 'json', success: (res) => {
+				this.journalLoading = true;
+				this.$Net.request({ url: this.$API.journalList(), data: { page: 1, limit: 20, featured: 1 }, method: 'get', dataType: 'json', success: (res) => {
 					this.journals = res.data && res.data.code === 1 && Array.isArray(res.data.data) ? res.data.data : [];
-				} });
+					this.journalLoading = false;
+				}, fail: () => { this.journals = []; this.journalLoading = false; } });
 			},
 			openJournalHome() {
 				uni.navigateTo({ url: '/pages/journal/index' })
@@ -3473,15 +3477,16 @@
 	.journal-shelf-title { display:block; margin-top:8rpx; color:#285448; font: 42rpx/1.08 Georgia, serif; }
 	.journal-shelf-desc { display:block; margin-top:8rpx; color:#71877d; font-size:21rpx; }
 	.journal-shelf-more { flex:none; padding-bottom:4rpx; color:#3d715f; font-size:21rpx; white-space:nowrap; }
-	.journal-shelf-scroll { width:calc(100% + 24rpx); height:330rpx; margin:26rpx -12rpx 0; white-space:nowrap; }
-	.journal-shelf-card { display:inline-block; vertical-align:top; width:218rpx; margin:0 10rpx; white-space:normal; }
-	.journal-shelf-cover { position:relative; width:218rpx; height:238rpx; overflow:hidden; border-radius:10rpx; background:#315e50; box-shadow:0 12rpx 24rpx rgba(35, 71, 61, .16); }
+	.journal-shelf-scroll { width:calc(100% + 24rpx); height:252rpx; margin:22rpx -12rpx 0; white-space:nowrap; }
+	.journal-shelf-card { display:inline-block; vertical-align:top; width:178rpx; margin:0 9rpx; white-space:normal; }
+	.journal-shelf-cover { position:relative; width:178rpx; height:178rpx; overflow:hidden; border-radius:10rpx; background:#315e50; box-shadow:0 10rpx 20rpx rgba(35, 71, 61, .16); }
 	.journal-shelf-cover image { position:absolute; inset:0; width:100%; height:100%; opacity:.86; }
 	.journal-shelf-cover-shade { position:absolute; inset:0; background:linear-gradient(180deg, rgba(20, 44, 36, .04) 25%, rgba(20, 44, 36, .82) 100%); }
 	.journal-shelf-cover-name { position:absolute; left:18rpx; right:16rpx; bottom:36rpx; overflow:hidden; color:#fff; font:25rpx/1.2 Georgia, serif; white-space:nowrap; text-overflow:ellipsis; }
 	.journal-shelf-cover-meta { position:absolute; left:18rpx; bottom:15rpx; color:rgba(255,255,255,.78); font-size:17rpx; }
 	.journal-shelf-card-title { display:block; margin:13rpx 3rpx 0; overflow:hidden; color:#2c4c42; font:22rpx/1.2 Georgia, serif; white-space:nowrap; text-overflow:ellipsis; }
 	.journal-shelf-card-desc { display:block; margin:7rpx 3rpx 0; overflow:hidden; color:#75887f; font-size:18rpx; line-height:1.25; white-space:nowrap; text-overflow:ellipsis; }
+	.journal-shelf-empty { display:flex; align-items:center; justify-content:center; gap:10rpx; height:150rpx; margin-top:18rpx; border:1px dashed rgba(61,113,95,.3); border-radius:12rpx; color:#71877d; font-size:20rpx; }
 	.journal-palette-0 { background:#315e50; }
 	.journal-palette-1 { background:#9d684e; }
 	.journal-palette-2 { background:#3e6371; }
@@ -3998,9 +4003,9 @@
 
 	@media (max-width: 370px) {
 		.journal-shelf-entry { padding-left:20rpx; padding-right:20rpx; }
-		.journal-shelf-scroll { height:300rpx; }
-		.journal-shelf-card,.journal-shelf-cover { width:190rpx; }
-		.journal-shelf-cover { height:210rpx; }
+		.journal-shelf-scroll { height:232rpx; }
+		.journal-shelf-card,.journal-shelf-cover { width:164rpx; }
+		.journal-shelf-cover { height:164rpx; }
 		.journal-shelf-card-title { font-size:20rpx; }
 		.hero-main { align-items: flex-start; flex-direction: column; gap: 22rpx; }
 		.hero-actions { width: 100%; max-width: none; }

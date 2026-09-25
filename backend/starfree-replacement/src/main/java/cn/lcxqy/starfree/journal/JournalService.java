@@ -81,7 +81,9 @@ public class JournalService {
     public Map<String, Object> articleSubmit(String token, Map<String, Object> body) {
         StaffAccess.Actor actor = access.requireUser(token); long journalId = number(body.get("journalId"));
         journalInfo(journalId, token); String title = required(body.get("title"), 5, 200, "文章标题"); String bodyText = required(body.get("bodyMarkdown"), 20, 60000, "文章正文");
-        String status = flag(body.get("draft")) == 1 ? "draft" : (actor.isStaff() ? "published" : "submitted"); long now = Instant.now().getEpochSecond();
+        // Editorial review is mandatory for every normal submission, including staff submissions.
+        // Staff can publish through the explicit review endpoint so the audit trail is preserved.
+        String status = flag(body.get("draft")) == 1 ? "draft" : "submitted"; long now = Instant.now().getEpochSecond();
         Integer duplicate = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_journal_articles WHERE author_uid=? AND title=? AND created>=?", Integer.class, actor.getUid(), title, now - 30);
         if (duplicate != null && duplicate > 0) throw new IllegalArgumentException("相同文章请勿重复提交");
         long id = insertKey("INSERT INTO starfree_journal_articles(journal_id,author_uid,title,subtitle,summary,body_markdown,cover_url,layout_preset,theme_preset,status,created,modified,published_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", journalId, actor.getUid(), title, optional(body.get("subtitle"), 500), optional(body.get("summary"), 1000), bodyText, optional(body.get("coverUrl"), 500), preset(body.get("layoutPreset"), "classic"), preset(body.get("themePreset"), "paper"), status, now, now, "published".equals(status) ? now : 0);
