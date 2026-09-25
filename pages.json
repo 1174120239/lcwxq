@@ -5,7 +5,8 @@
 		"^campus-avatar$": "@/components/campus-avatar/campus-avatar.vue",
 		"^space-reply-thread$": "@/components/space-reply-thread/space-reply-thread.vue",
 		"^qa-question-card$": "@/components/qa-question-card/qa-question-card.vue",
-		"^qa-comment-thread$": "@/components/qa-comment-thread/qa-comment-thread.vue"
+		"^qa-comment-thread$": "@/components/qa-comment-thread/qa-comment-thread.vue",
+		"^community-feed-item$": "@/components/community-feed-item/community-feed-item.vue"
 	},
 	"pages": [{
 			"path": "pages/home/home",
