@@ -86,6 +86,12 @@ public class JournalController {
                 RequestValues.text(params, "reason")));
     }
 
+    @RequestMapping("/articleDelete")
+    public ApiResponse articleDelete(@RequestParam Map<String, String> params) {
+        return ApiResponse.success("文章已删除", service.articleDelete(RequestValues.text(params, "token"),
+                RequestValues.integer(params, "id", 0), RequestValues.text(params, "reason")));
+    }
+
     private Map<String, Object> body(Map<String, String> params) {
         return RequestValues.jsonObject(mapper, params.get("params"));
     }

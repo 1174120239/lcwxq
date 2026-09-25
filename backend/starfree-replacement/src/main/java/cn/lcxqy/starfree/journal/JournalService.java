@@ -117,6 +117,20 @@ public class JournalService {
 
     @Transactional public Map<String, Object> articleReview(String token, long id, String status, String reason) { StaffAccess.Actor actor = access.requireStaff(token); if (!status.matches("published|rejected|hidden")) throw new IllegalArgumentException("审核状态不正确"); List<Map<String,Object>> rows=jdbc.queryForList("SELECT status FROM starfree_journal_articles WHERE id=?",id); if(rows.isEmpty()) throw new IllegalArgumentException("文章不存在"); String old=text(rows.get(0).get("status")); long now=Instant.now().getEpochSecond(); int changed=jdbc.update("UPDATE starfree_journal_articles SET status=?,review_reason=?,modified=?,published_at=? WHERE id=?",status,optional(reason,500),now,"published".equals(status)?now:0,id); if(changed!=1) throw new IllegalArgumentException("文章不存在"); jdbc.update("INSERT INTO starfree_journal_actions(article_id,operator_uid,from_status,to_status,action,reason,created) VALUES(?,?,?,?,?,?,?)",id,actor.getUid(),old,status,"review",optional(reason,500),now); return articleInfo(id,token); }
 
+    @Transactional
+    public Map<String, Object> articleDelete(String token, long id, String reason) {
+        StaffAccess.Actor actor = access.requireStaff(token);
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT status FROM starfree_journal_articles WHERE id=?", id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("文章不存在");
+        String old = text(rows.get(0).get("status"));
+        if ("deleted".equals(old)) return articleInfo(id, token);
+        long now = Instant.now().getEpochSecond();
+        int changed = jdbc.update("UPDATE starfree_journal_articles SET status='deleted',review_reason=?,modified=?,published_at=0 WHERE id=?", optional(reason, 500), now, id);
+        if (changed != 1) throw new IllegalArgumentException("文章不存在");
+        jdbc.update("INSERT INTO starfree_journal_actions(article_id,operator_uid,from_status,to_status,action,reason,created) VALUES(?,?,?,?,?,?,?)", id, actor.getUid(), old, "deleted", "delete", optional(reason, 500), now);
+        return articleInfo(id, token);
+    }
+
     private String journalSelect() { return "SELECT j.id,j.name,j.slug,j.description,j.tags,j.cover_url,j.banner_url,j.theme,j.status,j.sort_order,j.featured,j.hot_weight,j.created,j.modified,(SELECT COUNT(*) FROM starfree_journal_articles a WHERE a.journal_id=j.id AND a.status='published') AS article_count FROM starfree_journals j"; }
     private String articleSelect() { return "SELECT a.id,a.journal_id,a.author_uid,a.title,a.subtitle,a.summary,a.body_markdown,a.cover_url,a.layout_preset,a.theme_preset,a.status,a.review_reason,a.recommended,a.sort_order,a.views,a.likes,a.dislikes,a.comments,a.created,a.modified,a.published_at,j.name AS journal_name,u.name AS author_name,u.screenName AS author_screenName,u.avatar AS author_avatar FROM starfree_journal_articles a JOIN starfree_journals j ON j.id=a.journal_id LEFT JOIN starfree_users u ON u.uid=a.author_uid"; }
     private List<Map<String,Object>> normalizeJournals(List<Map<String,Object>> rows){List<Map<String,Object>> out=new ArrayList<>();for(Map<String,Object> r:rows)out.add(normalizeJournal(r));return out;}

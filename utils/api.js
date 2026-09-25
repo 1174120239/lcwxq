@@ -369,6 +369,7 @@ module.exports = {
 	journalArticleManage:function(){ return API_URL + 'SFreeJournal/articleManage'; },
 	journalMyArticles:function(){ return API_URL + 'SFreeJournal/myArticles'; },
 	journalArticleReview:function(){ return API_URL + 'SFreeJournal/articleReview'; },
+	journalArticleDelete:function(){ return API_URL + 'SFreeJournal/articleDelete'; },
 	// 校园问答
 	qaQuestionList:function(){
 		return API_URL + 'SFreeQa/questionList';

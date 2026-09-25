@@ -10,7 +10,7 @@
 
 ### 1.1 见字独立刊物接口
 
-`SFreeJournal/*` 是独立的校园刊物体系，不复用普通帖子、分类或评论接口。公开读取包括 `journalList`、`journalInfo`、`articleList(journalId=0 可取全局文章)` 和 `articleInfo`；登录用户可用 `articleSubmit`、`articleVote`、`myArticles`。管理员使用 `journalSave` 和 `journalStatus` 管理刊物、排序与推荐；管理员和编辑可使用 `articleManage`、`articleReview` 完成投稿审核。正文保存为 `bodyMarkdown`，展示时由文章版式和主题预设渲染。
+`SFreeJournal/*` 是独立的校园刊物体系，不复用普通帖子、分类或评论接口。公开读取包括 `journalList`、`journalInfo`、`articleList(journalId=0 可取全局文章)` 和 `articleInfo`；登录用户可用 `articleSubmit`、`articleVote`、`myArticles`。管理员使用 `journalSave` 和 `journalStatus` 管理刊物、排序与推荐；管理员和编辑可使用 `articleManage`、`articleReview`、`articleDelete` 完成投稿审核。`articleDelete` 使用可恢复的 `deleted` 状态，不物理删除正文，并写入见字操作日志。正文保存为 `bodyMarkdown`，展示时由文章版式和主题预设渲染。
 
 | 名称 | 地址/含义 | 使用规则 |
 |---|---|---|

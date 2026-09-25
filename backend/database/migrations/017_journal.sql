@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `starfree_journal_articles` (
   `cover_url` varchar(500) NOT NULL DEFAULT '',
   `layout_preset` varchar(32) NOT NULL DEFAULT 'classic',
   `theme_preset` varchar(32) NOT NULL DEFAULT 'paper',
-  `status` varchar(16) NOT NULL DEFAULT 'submitted' COMMENT 'draft,submitted,published,rejected,hidden',
+  `status` varchar(16) NOT NULL DEFAULT 'submitted' COMMENT 'draft,submitted,published,rejected,hidden,deleted',
   `review_reason` varchar(500) NOT NULL DEFAULT '',
   `recommended` tinyint unsigned NOT NULL DEFAULT 0,
   `sort_order` int NOT NULL DEFAULT 0,
