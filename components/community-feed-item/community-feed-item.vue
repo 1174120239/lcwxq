@@ -1,5 +1,7 @@
 <template>
-	<view class="community-feed-item" :class="['feed-' + item.feedType, { 'feed-night': night }]" @tap="$emit('open', item)">
+	<view class="community-feed-wrapper">
+	<space-item v-if="item.feedType === 'space' && supportsSpaceItem" :space-list="[item]" :night="night" @before-navigate="$emit('before-navigate', $event)"></space-item>
+	<view v-else class="community-feed-item" :class="['feed-' + item.feedType, { 'feed-night': night }]" @tap="$emit('open', item)">
 		<view class="feed-head">
 			<view class="feed-type"><text :class="typeIcon"></text><text>{{typeLabel}}</text></view>
 			<text class="feed-time">{{displayTime(item.lastActivity || item.modified || item.created)}}</text>
@@ -30,15 +32,25 @@
 			<view class="feed-open"><text>{{item.feedType === 'task' ? '查看任务' : item.feedType === 'question' ? '查看问题' : '查看动态'}}</text><text class="cuIcon-right"></text></view>
 		</view>
 	</view>
+	</view>
 </template>
 <script>
+import SpaceItem from '@/pages/components/spaceItem.vue'
+
 export default {
 	name: 'CommunityFeedItem',
+	components: {
+		SpaceItem
+	},
 	props: {
 		item: { type: Object, default: () => ({}) },
 		night: { type: Boolean, default: false }
 	},
 	computed: {
+		supportsSpaceItem() {
+			const type = Number(this.item.type != null ? this.item.type : this.item.spaceType)
+			return type === 0 || type === 4
+		},
 		typeLabel() {
 			return this.item.feedType === 'question' ? '问题' : this.item.feedType === 'task' ? '校园互助' : '动态'
 		},

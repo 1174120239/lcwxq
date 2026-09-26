@@ -1,6 +1,8 @@
 package cn.lcxqy.starfree.feed;
 
+import cn.lcxqy.starfree.security.LegacyTokenService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,23 +25,35 @@ public class FeedService {
     private static final int MAX_MERGE_CANDIDATES = 5000;
 
     private final JdbcTemplate jdbc;
+    private final LegacyTokenService tokens;
 
     public FeedService(JdbcTemplate jdbc) {
+		this(jdbc, null);
+	}
+
+    @Autowired
+    public FeedService(JdbcTemplate jdbc, LegacyTokenService tokens) {
         this.jdbc = jdbc;
+        this.tokens = tokens;
     }
 
     public Page feedList(int requestedPage, int requestedLimit, String requestedType) {
+		return feedList(requestedPage, requestedLimit, requestedType, null);
+	}
+
+	public Page feedList(int requestedPage, int requestedLimit, String requestedType, String token) {
         int page = Math.max(1, requestedPage);
         int limit = Math.max(1, Math.min(requestedLimit, MAX_LIMIT));
         String type = normalizeType(requestedType);
         long offset = ((long) page - 1L) * limit;
         int candidates = (int) Math.max(60L, Math.min(MAX_MERGE_CANDIDATES, offset + limit));
         long now = Instant.now().getEpochSecond();
+        Long viewerUid = tokens == null ? null : tokens.userId(token);
 
         List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
         int total = 0;
         if (type.isEmpty() || "space".equals(type)) {
-            rows.addAll(spaces(candidates));
+            rows.addAll(spaces(candidates, viewerUid));
             total += countSpaces();
         }
         if (type.isEmpty() || "question".equals(type)) {
@@ -68,11 +82,15 @@ public class FeedService {
         return new Page(new ArrayList<Map<String, Object>>(rows.subList(from, to)), total);
     }
 
-    private List<Map<String, Object>> spaces(int limit) {
+    private List<Map<String, Object>> spaces(int limit, Long viewerUid) {
         List<Map<String, Object>> source = jdbc.queryForList(
-                "SELECT s.id,s.uid,s.created,s.modified,s.text,s.pic,s.type,s.views,s.likes,"
+                "SELECT s.id,s.uid,s.created,s.modified,s.text,s.pic,s.type,s.views,s.likes,s.status,s.onlyMe,s.featured,s.pin_type,"
+                        + "u.experience AS user_experience,u.vip AS user_vip,u.mail AS user_mail,"
+                        + "u.campus_option_id AS user_campus_id,campus.name AS user_campus,"
+                        + "(SELECT COUNT(*) FROM starfree_space sr WHERE sr.toid=s.id AND sr.type=3 AND sr.status=1) AS reply_count,"
                         + "u.uid AS user_uid,u.name AS user_name,u.screenName AS user_screenName,u.avatar AS user_avatar "
                         + "FROM starfree_space s LEFT JOIN starfree_users u ON u.uid=s.uid "
+                        + "LEFT JOIN starfree_identity_options campus ON campus.id=u.campus_option_id "
                         + "WHERE s.status=1 AND s.onlyMe=0 AND s.type NOT IN (3,6) "
                         + "ORDER BY CASE WHEN s.modified > s.created THEN s.modified ELSE s.created END DESC,s.id DESC LIMIT ?", limit);
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
@@ -81,13 +99,24 @@ public class FeedService {
                     Math.max(number(row.get("created")), number(row.get("modified"))));
             item.put("id", number(row.get("id")));
             item.put("title", "");
-            item.put("text", preview(text(row.get("text")), 220));
+            item.put("text", text(row.get("text")));
             item.put("pic", text(row.get("pic")));
+			item.put("type", number(row.get("type")));
             item.put("spaceType", number(row.get("type")));
+			item.put("picList", images(text(row.get("pic"))));
             item.put("created", number(row.get("created")));
             item.put("modified", number(row.get("modified")));
             item.put("views", number(row.get("views")));
             item.put("likes", number(row.get("likes")));
+            item.put("reply", number(row.get("reply_count")));
+			item.put("status", number(row.get("status")));
+			item.put("onlyMe", number(row.get("onlyMe")));
+			item.put("featured", number(row.get("featured")));
+			item.put("pinType", number(row.get("pin_type")));
+			item.put("isLikes", viewerUid == null ? 0 : liked(number(row.get("id")), viewerUid));
+			item.put("topics", tokens == null ? new ArrayList<Map<String, Object>>() : topics(number(row.get("id")), viewerUid));
+			Map<String, Object> poll = tokens == null ? null : poll(number(row.get("id")), viewerUid);
+			if (poll != null) item.put("poll", poll);
             item.put("userJson", user(row));
             result.add(item);
         }
@@ -194,6 +223,11 @@ public class FeedService {
         String name = text(row.get("user_screenName"));
         result.put("name", name.isEmpty() ? text(row.get("user_name")) : name);
         result.put("avatar", text(row.get("user_avatar")));
+        result.put("experience", number(row.get("user_experience")));
+        result.put("vip", number(row.get("user_vip")));
+        result.put("isvip", number(row.get("user_vip")) > 0 ? 1 : 0);
+        String campus = text(row.get("user_campus"));
+        if (!campus.isEmpty()) result.put("campus", campus);
         return result;
     }
 
@@ -214,6 +248,81 @@ public class FeedService {
     }
 
     private String text(Object value) { return value == null ? "" : String.valueOf(value); }
+
+	private List<String> images(String value) {
+		List<String> result = new ArrayList<>();
+		if (value == null || value.trim().isEmpty()) return result;
+		for (String image : value.split("\\|\\|")) {
+			if (image != null && !image.trim().isEmpty()) result.add(image.trim());
+		}
+		return result;
+	}
+
+	private int liked(long spaceId, long uid) {
+		Integer count = jdbc.queryForObject(
+				"SELECT COUNT(*) FROM starfree_userlog WHERE uid=? AND cid=? AND type='spaceLike'",
+				Integer.class, uid, spaceId);
+		return count != null && count > 0 ? 1 : 0;
+	}
+
+	private List<Map<String, Object>> topics(long spaceId, Long viewerUid) {
+		List<Map<String, Object>> rows = jdbc.queryForList(
+				"SELECT m.mid,m.name FROM starfree_space_topics st JOIN starfree_metas m ON m.mid=st.mid "
+						+ "WHERE st.space_id=? AND m.type='tag' ORDER BY m.isrecommend DESC,m.`order` DESC,m.mid",
+				spaceId);
+		List<Map<String, Object>> result = new ArrayList<>();
+		for (Map<String, Object> row : rows) {
+			Map<String, Object> topic = new LinkedHashMap<>();
+			topic.put("mid", number(row.get("mid")));
+			topic.put("name", text(row.get("name")));
+			topic.put("isFollowed", viewerUid == null ? 0 : followedTopic(number(row.get("mid")), viewerUid));
+			result.add(topic);
+		}
+		return result;
+	}
+
+	private int followedTopic(long mid, long uid) {
+		Integer count = jdbc.queryForObject(
+				"SELECT COUNT(*) FROM starfree_topic_follows WHERE mid=? AND uid=?", Integer.class, mid, uid);
+		return count != null && count > 0 ? 1 : 0;
+	}
+
+	private Map<String, Object> poll(long spaceId, Long viewerUid) {
+		List<Map<String, Object>> rows = jdbc.queryForList(
+				"SELECT id,title,description,multiple,max_choices,total_votes FROM starfree_space_polls WHERE space_id=? LIMIT 1",
+				spaceId);
+		if (rows.isEmpty()) return null;
+		Map<String, Object> row = rows.get(0);
+		long pollId = number(row.get("id"));
+		List<Long> selected = new ArrayList<>();
+		if (viewerUid != null) {
+			for (Map<String, Object> vote : jdbc.queryForList(
+					"SELECT option_id FROM starfree_space_poll_votes WHERE poll_id=? AND uid=?", pollId, viewerUid)) {
+				selected.add(number(vote.get("option_id")));
+			}
+		}
+		List<Map<String, Object>> options = new ArrayList<>();
+		for (Map<String, Object> option : jdbc.queryForList(
+				"SELECT id,option_text,vote_count FROM starfree_space_poll_options WHERE poll_id=? ORDER BY sort_order,id", pollId)) {
+			Map<String, Object> item = new LinkedHashMap<>();
+			long optionId = number(option.get("id"));
+			item.put("id", optionId);
+			item.put("text", text(option.get("option_text")));
+			item.put("votes", number(option.get("vote_count")));
+			item.put("selected", selected.contains(optionId));
+			options.add(item);
+		}
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("id", pollId);
+		result.put("title", text(row.get("title")));
+		result.put("description", text(row.get("description")));
+		result.put("multiple", number(row.get("multiple")));
+		result.put("maxChoices", number(row.get("max_choices")));
+		result.put("totalVotes", number(row.get("total_votes")));
+		result.put("voted", !selected.isEmpty());
+		result.put("options", options);
+		return result;
+	}
 
     public static final class Page {
         private final List<Map<String, Object>> data;

@@ -23,7 +23,8 @@ public class FeedController {
         FeedService.Page page = service.feedList(
                 RequestValues.integer(params, "page", 1),
                 RequestValues.integer(params, "limit", 12),
-                RequestValues.text(params, "type"));
+                RequestValues.text(params, "type"),
+                RequestValues.text(params, "token"));
         return ApiResponse.paged(page.getData(), page.getData().size(), page.getTotal());
     }
 }

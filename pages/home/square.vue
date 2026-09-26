@@ -77,7 +77,7 @@
 				<view class="square-qa-loading" v-if="feedLoading && feedList.length===0"><view class="campus-loader"></view></view>
 				<view class="community-feed-error" v-else-if="feedError" @tap="loadFeed(false)"><text>{{feedError}}</text><text>点击重试</text></view>
 				<view class="no-data square-empty" v-else-if="!feedLoading&&feedList.length===0"><text class="cuIcon-text"></text>暂时还没有社区动态</view>
-				<community-feed-item v-for="item in feedList" :key="item.feedType + '-' + item.id" :item="item" :night="campusNight" @open="openFeedItem"></community-feed-item>
+				<community-feed-item v-for="item in feedList" :key="item.feedType + '-' + item.id" :item="item" :night="campusNight" @open="openFeedItem" @before-navigate="rememberSpaceReturn"></community-feed-item>
 				<view class="load-more" v-if="feedList.length>0" @tap="loadFeed(true)"><text>{{feedMoreText}}</text></view>
 			</view>
 		</block>
@@ -962,7 +962,7 @@
 				this.feedMoreText = append ? '加载中...' : '';
 				this.$Net.request({
 					url: this.$API.feedList(),
-					data: { page: targetPage, limit: 12, type: this.feedTypeFilter },
+					data: { page: targetPage, limit: 12, type: this.feedTypeFilter, token: this.token },
 					method: 'get', dataType: 'json',
 						success: (res) => {
 						if (requestId !== this.feedRequestId) return;
@@ -1065,12 +1065,29 @@
 				this.loadFallbackAnswers(pageRows, requestId);
 			},
 			normalizeFallbackSpaces(list) {
-				return (Array.isArray(list) ? list : []).map(item => ({
-					feedType: 'space', id: Number(item.id || 0), title: '', text: this.feedPreview(item.text),
-					pic: item.pic || '', likes: Number(item.likes || 0), created: Number(item.created || 0),
-					modified: Number(item.modified || 0), lastActivity: Math.max(Number(item.created || 0), Number(item.modified || 0)),
-					userJson: item.userJson || null
-				}));
+				return (Array.isArray(list) ? list : []).map(item => {
+					const pic = item && item.pic ? String(item.pic) : '';
+					const type = Number(item && (item.type != null ? item.type : item.spaceType) || 0);
+					return Object.assign({}, item, {
+						feedType: 'space',
+						id: Number(item && item.id || 0),
+						type: type,
+						spaceType: type,
+						text: item && item.text ? String(item.text) : '',
+						pic: pic,
+						picList: Array.isArray(item && item.picList) ? item.picList : pic.split('||').filter(url => !!url),
+						likes: Number(item && item.likes || 0),
+						views: Number(item && item.views || 0),
+						reply: Number(item && item.reply || 0),
+						isLikes: Number(item && item.isLikes || 0),
+						created: Number(item && item.created || 0),
+						modified: Number(item && item.modified || 0),
+						lastActivity: Math.max(Number(item && item.created || 0), Number(item && item.modified || 0)),
+						userJson: item && item.userJson ? item.userJson : null,
+						topics: Array.isArray(item && item.topics) ? item.topics : [],
+						poll: item && item.poll ? item.poll : null
+					});
+				});
 			},
 			normalizeFallbackQuestions(list) {
 				return (Array.isArray(list) ? list : []).map(item => ({
