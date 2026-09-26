@@ -4,7 +4,7 @@ CONF=${CONF:-/www/server/panel/vhost/nginx/extension/api.lcxqy.cn/starfree-repla
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP="$CONF.rollback-journal-$STAMP"
 PUBLIC_URL=${PUBLIC_URL:-https://api.lcxqy.cn}
-ROUTES=(journalList journalInfo articleList articleInfo articleSubmit articleVote journalSave journalStatus articleManage myArticles articleReview)
+ROUTES=(journalList journalInfo articleList articleInfo articleSubmit articleVote journalSave journalStatus articleManage myArticles articleReview articleDelete)
 [[ -f "$CONF" ]] || { echo "Nginx include missing: $CONF" >&2; exit 2; }
 for route in "${ROUTES[@]}"; do [[ $(grep -Fc "location = /SFreeJournal/$route {" "$CONF" || true) == 0 ]] || { echo "Route already exists: $route" >&2; exit 3; }; done
 cp -p "$CONF" "$BACKUP"
