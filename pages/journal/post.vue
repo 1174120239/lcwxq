@@ -50,4 +50,36 @@ export default {
 </style>
 <style scoped>
 .paper-line{display:block;height:4px;margin:5px 0;background:#698174}.paper-line-b{width:70%;height:9px;background:#324c41}.paper-line-c{width:85%;height:3px;background:#b8c4bc}.paper-modern .paper-line-b{width:95%;height:16px}.paper-modern .paper-line-c{width:45%;height:7px;background:#b67853}.paper-minimal .paper-line-b{margin:10px auto;width:66%;height:6px}.paper-documentary .paper-line-b{width:80%;height:12px}.swatch-line{display:block;height:3px;margin:3px 0;background:#75857c}.swatch-line-b{width:65%;background:#b67853}.theme-night .swatch-line-a{background:#dfe9e4}
+
+/* uni-app renders input text through native child nodes; keep the editing surface readable. */
+.writing-column input,
+.writing-column textarea,
+.writing-column .uni-input-input,
+.writing-column .uni-textarea-textarea {
+  color: #213d35 !important;
+  -webkit-text-fill-color: #213d35 !important;
+  opacity: 1 !important;
+}
+.writing-column input::placeholder,
+.writing-column textarea::placeholder,
+.writing-column .uni-input-placeholder,
+.writing-column .uni-textarea-placeholder {
+  color: #82928b !important;
+  -webkit-text-fill-color: #82928b !important;
+  opacity: 1 !important;
+}
+.theme-shell-night .writing-column input,
+.theme-shell-night .writing-column textarea,
+.theme-shell-night .writing-column .uni-input-input,
+.theme-shell-night .writing-column .uni-textarea-textarea {
+  color: #e2ece7 !important;
+  -webkit-text-fill-color: #e2ece7 !important;
+}
+.theme-shell-night .writing-column input::placeholder,
+.theme-shell-night .writing-column textarea::placeholder,
+.theme-shell-night .writing-column .uni-input-placeholder,
+.theme-shell-night .writing-column .uni-textarea-placeholder {
+  color: #99aaa1 !important;
+  -webkit-text-fill-color: #99aaa1 !important;
+}
 </style>
