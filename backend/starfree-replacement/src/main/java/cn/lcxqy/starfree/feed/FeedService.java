@@ -42,10 +42,6 @@ public class FeedService {
             rows.addAll(spaces(candidates));
             total += countSpaces();
         }
-        if (type.isEmpty() || "post".equals(type)) {
-            rows.addAll(posts(candidates));
-            total += countPosts();
-        }
         if (type.isEmpty() || "question".equals(type)) {
             rows.addAll(questions(candidates));
             total += countQuestions();
@@ -92,35 +88,6 @@ public class FeedService {
             item.put("modified", number(row.get("modified")));
             item.put("views", number(row.get("views")));
             item.put("likes", number(row.get("likes")));
-            item.put("userJson", user(row));
-            result.add(item);
-        }
-        return result;
-    }
-
-    private List<Map<String, Object>> posts(int limit) {
-        List<Map<String, Object>> source = jdbc.queryForList(
-                "SELECT c.cid,c.title,c.text,c.type,c.created,c.modified,c.views,c.likes,c.commentsNum,"
-                        + "c.authorId,u.uid AS user_uid,u.name AS user_name,u.screenName AS user_screenName,u.avatar AS user_avatar "
-                        + "FROM starfree_contents c LEFT JOIN starfree_users u ON u.uid=c.authorId "
-                        + "WHERE c.status='publish' AND c.type='post' "
-                        + "AND NOT EXISTS (SELECT 1 FROM starfree_fields f WHERE f.cid=c.cid AND f.name='journal' AND f.str_value='1') "
-                        + "ORDER BY CASE WHEN c.modified > c.created THEN c.modified ELSE c.created END DESC,c.cid DESC LIMIT ?", limit);
-        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (Map<String, Object> row : source) {
-            Map<String, Object> item = base("post", number(row.get("cid")),
-                    Math.max(number(row.get("created")), number(row.get("modified"))));
-            item.put("cid", number(row.get("cid")));
-            item.put("title", text(row.get("title")));
-            item.put("text", preview(text(row.get("text")), 220));
-            item.put("type", text(row.get("type")));
-            item.put("created", number(row.get("created")));
-            item.put("modified", number(row.get("modified")));
-            item.put("views", number(row.get("views")));
-            item.put("likes", number(row.get("likes")));
-            item.put("commentsNum", number(row.get("commentsNum")));
-            item.put("images", Collections.emptyList());
-            item.put("category", Collections.emptyList());
             item.put("userJson", user(row));
             result.add(item);
         }
@@ -192,11 +159,6 @@ public class FeedService {
         return result;
     }
 
-    private int countPosts() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_contents c WHERE c.status='publish' AND c.type='post' AND NOT EXISTS (SELECT 1 FROM starfree_fields f WHERE f.cid=c.cid AND f.name='journal' AND f.str_value='1')", Integer.class);
-        return count == null ? 0 : count;
-    }
-
     private int countSpaces() {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_space WHERE status=1 AND onlyMe=0 AND type NOT IN (3,6)", Integer.class);
         return count == null ? 0 : count;
@@ -237,7 +199,7 @@ public class FeedService {
 
     private String normalizeType(String value) {
         String type = value == null ? "" : value.trim().toLowerCase();
-        return "space".equals(type) || "post".equals(type) || "question".equals(type) || "task".equals(type) ? type : "";
+        return "space".equals(type) || "question".equals(type) || "task".equals(type) ? type : "";
     }
 
     private String preview(String value, int max) {

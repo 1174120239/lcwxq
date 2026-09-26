@@ -25,10 +25,9 @@
 				<view v-else class="feed-avatar-fallback"><text class="cuIcon-people"></text></view>
 				<text>{{item.userJson.name || '社区用户'}}</text>
 			</view>
-			<view class="feed-stat" v-if="item.feedType === 'post'"><text class="cuIcon-message"></text><text>{{item.commentsNum || 0}}</text></view>
-			<view class="feed-stat" v-else-if="item.feedType === 'question'"><text class="cuIcon-question"></text><text>{{item.answerCount || 0}} 个回答</text></view>
+			<view class="feed-stat" v-if="item.feedType === 'question'"><text class="cuIcon-question"></text><text>{{item.answerCount || 0}} 个回答</text></view>
 			<view class="feed-stat" v-else-if="item.feedType === 'space'"><text class="cuIcon-appreciate"></text><text>{{item.likes || 0}}</text></view>
-			<view class="feed-open"><text>{{item.feedType === 'task' ? '查看任务' : item.feedType === 'question' ? '查看问题' : item.feedType === 'space' ? '查看动态' : '查看帖子'}}</text><text class="cuIcon-right"></text></view>
+			<view class="feed-open"><text>{{item.feedType === 'task' ? '查看任务' : item.feedType === 'question' ? '查看问题' : '查看动态'}}</text><text class="cuIcon-right"></text></view>
 		</view>
 	</view>
 </template>
@@ -41,7 +40,7 @@ export default {
 	},
 	computed: {
 		typeLabel() {
-			return this.item.feedType === 'question' ? '问题' : this.item.feedType === 'task' ? '校园互助' : this.item.feedType === 'space' ? '动态' : '帖子'
+			return this.item.feedType === 'question' ? '问题' : this.item.feedType === 'task' ? '校园互助' : '动态'
 		},
 		typeIcon() {
 			return this.item.feedType === 'question' ? 'cuIcon-question' : this.item.feedType === 'task' ? 'cuIcon-friendadd' : this.item.feedType === 'space' ? 'cuIcon-community' : 'cuIcon-edit'

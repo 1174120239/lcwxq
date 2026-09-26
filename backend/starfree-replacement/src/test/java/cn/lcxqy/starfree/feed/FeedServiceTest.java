@@ -30,10 +30,6 @@ class FeedServiceTest {
                 "id", 1, "uid", 11, "created", 100, "modified", 100, "text", "动态正文",
                 "pic", "", "type", 0, "views", 4, "likes", 2,
                 "user_uid", 11, "user_name", "space-user", "user_screenName", "", "user_avatar", "")));
-        jdbc.rows.put("post", Collections.singletonList(row(
-                "cid", 2, "title", "普通帖子", "text", "帖子正文", "type", "post", "created", 90,
-                "modified", 120, "views", 10, "likes", 3, "commentsNum", 2, "authorId", 12,
-                "user_uid", 12, "user_name", "post-user", "user_screenName", "", "user_avatar", "")));
         jdbc.rows.put("question", Collections.singletonList(row(
                 "id", 3, "title", "怎么申请图书馆座位", "description", "<p>需要帮忙</p>", "topic", "校园生活",
                 "cover_url", "", "created", 70, "modified", 80, "answer_count", 1,
@@ -48,9 +44,9 @@ class FeedServiceTest {
 
         FeedService.Page page = service.feedList(1, 3, "");
 
-        assertThat(page.getTotal()).isEqualTo(10);
+        assertThat(page.getTotal()).isEqualTo(7);
         assertThat(page.getData()).extracting(item -> item.get("feedType"))
-                .containsExactly("question", "post", "task");
+                .containsExactly("question", "task", "space");
         assertThat(page.getData().get(0))
                 .containsEntry("title", "怎么申请图书馆座位")
                 .containsEntry("description", "需要帮忙")
@@ -59,10 +55,6 @@ class FeedServiceTest {
 		Map<?, ?> latestAnswer = (Map<?, ?>) page.getData().get(0).get("latestAnswer");
 		assertThat(String.valueOf(latestAnswer.get("text"))).isEqualTo("可以在服务号里预约。");
         assertThat(jdbc.listSql).anySatisfy(sql -> assertThat(sql)
-                .contains("c.status='publish'")
-                .contains("c.type='post'")
-                .contains("f.name='journal'"));
-        assertThat(jdbc.listSql).anySatisfy(sql -> assertThat(sql)
                 .contains("WHERE q.status=1")
                 .contains("a.status=1"));
         assertThat(jdbc.listSql).anySatisfy(sql -> assertThat(sql)
@@ -70,9 +62,9 @@ class FeedServiceTest {
         assertThat(jdbc.listSql).anySatisfy(sql -> assertThat(sql)
                 .contains("CASE WHEN s.modified > s.created THEN s.modified ELSE s.created END"));
         long expectedExpiryCutoff = Instant.now().getEpochSecond() - 45L * 86400L;
-        assertThat(((Number) jdbc.listArgs.get(4).get(0)).longValue())
+        assertThat(((Number) jdbc.listArgs.get(3).get(0)).longValue())
                 .isBetween(expectedExpiryCutoff - 2, expectedExpiryCutoff + 2);
-        assertThat(jdbc.listArgs.get(4).get(1)).isEqualTo(60);
+        assertThat(jdbc.listArgs.get(3).get(1)).isEqualTo(60);
     }
 
     @Test
@@ -118,7 +110,6 @@ class FeedServiceTest {
                 return Collections.singletonList(row("item_expiry_days", 45));
             }
             if (sql.contains("FROM starfree_space s ")) return rows("space");
-            if (sql.contains("FROM starfree_contents c ")) return rows("post");
             if (sql.contains("FROM starfree_qa_questions q ")) return rows("question");
             if (sql.contains("FROM starfree_lost_found_items i ")) return rows("task");
             return Collections.emptyList();
@@ -136,7 +127,6 @@ class FeedServiceTest {
 
         private <T> T scalar(String sql, Class<T> requiredType) {
             int value = sql.contains("FROM starfree_space WHERE") ? 2
-                    : sql.contains("FROM starfree_contents c ") ? 3
                     : sql.contains("FROM starfree_qa_questions WHERE") ? 4
                     : sql.contains("FROM starfree_lost_found_items WHERE") ? 1 : 0;
             return requiredType.cast(Integer.valueOf(value));

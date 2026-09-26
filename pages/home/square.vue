@@ -443,13 +443,14 @@
 				feedTotal: 0,
 				feedLoading: false,
 				feedLoadingMore: false,
+				feedFallbackRequestId: 0,
 				feedRequestId: 0,
 				feedError: '',
 				feedMoreText: '上拉加载更多',
 				feedTypeFilter: '',
 				feedFilters: [
 					{ label: '全部', value: '' }, { label: '动态', value: 'space' },
-					{ label: '帖子', value: 'post' }, { label: '问题', value: 'question' }, { label: '互助', value: 'task' }
+					{ label: '问题', value: 'question' }, { label: '互助', value: 'task' }
 				],
 				spaceLoading: false,
 				spaceHasMore: true,
@@ -963,12 +964,10 @@
 					url: this.$API.feedList(),
 					data: { page: targetPage, limit: 12, type: this.feedTypeFilter },
 					method: 'get', dataType: 'json',
-					success: (res) => {
+						success: (res) => {
 						if (requestId !== this.feedRequestId) return;
 						if (!res.data || res.data.code !== 1) {
-							const message = res.data && res.data.msg ? res.data.msg : '动态加载失败';
-							if (append) this.feedMoreText = '加载失败，点击重试';
-							else this.feedError = message;
+							this.loadFeedFallback(targetPage, append, requestId);
 							return;
 						}
 						const sourceList = Array.isArray(res.data.data) ? res.data.data : [];
@@ -982,11 +981,10 @@
 					},
 					fail: () => {
 						if (requestId !== this.feedRequestId) return;
-						if (append) this.feedMoreText = '加载失败，点击重试';
-						else this.feedError = '动态加载失败';
+						this.loadFeedFallback(targetPage, append, requestId);
 					},
 					complete: () => {
-						if (requestId === this.feedRequestId) {
+						if (requestId === this.feedRequestId && this.feedFallbackRequestId !== requestId) {
 							this.feedLoading = false;
 							this.feedLoadingMore = false;
 						}
@@ -994,13 +992,130 @@
 					}
 				});
 			},
+			loadFeedFallback(targetPage, append, requestId) {
+				if (requestId !== this.feedRequestId || this.feedFallbackRequestId === requestId) return;
+				this.feedFallbackRequestId = requestId;
+				const type = this.feedTypeFilter;
+				const requests = [];
+				if (!type || type === 'space') requests.push({ key: 'space', url: this.$API.spaceList(), limit: 50, data: {
+					limit: 50, page: 1, order: 'created', token: this.token, searchParams: '{}'
+				} });
+				if (!type || type === 'question') requests.push({ key: 'question', url: this.$API.qaQuestionList(), limit: 30, data: { page: 1, limit: 30 } });
+				if (!type || type === 'task') requests.push({ key: 'task', url: this.$API.lostFoundList(), limit: 30, data: { page: 1, limit: 30, state: 0 } });
+				const results = {};
+				const totals = {};
+				let successful = 0;
+				let pending = requests.length;
+				if (!pending) return this.finishFeedFallback(requestId, targetPage, append, [], 0, false);
+				const finish = () => {
+					if (pending !== 0) return;
+					const rows = [];
+					if (results.space) rows.push(...this.normalizeFallbackSpaces(results.space));
+					if (results.question) rows.push(...this.normalizeFallbackQuestions(results.question));
+					if (results.task) rows.push(...this.normalizeFallbackTasks(results.task));
+					rows.sort((left, right) => Number(right.lastActivity || 0) - Number(left.lastActivity || 0) || Number(right.id || 0) - Number(left.id || 0));
+					const total = Object.keys(totals).reduce((sum, key) => sum + totals[key], 0);
+					this.finishFeedFallback(requestId, targetPage, append, rows, total, successful > 0);
+				};
+				const fetchPage = (request, page) => {
+					const data = Object.assign({}, request.data, { page: page });
+					this.$Net.request({
+						url: request.url, data: data, method: 'get', dataType: 'json',
+						success: response => done(request, page, response), fail: () => done(request, page, null)
+					});
+				};
+				const done = (request, page, response) => {
+					const body = response && response.data;
+					if (body && body.code === 1) {
+						successful += 1;
+						const list = Array.isArray(body.data) ? body.data : [];
+						if (!results[request.key]) results[request.key] = [];
+						results[request.key].push(...list);
+						const reportedTotal = Number(body.total || body.count || 0);
+						// Keep the fallback bounded; the unified endpoint has its own merge cap.
+						if (totals[request.key] === undefined) {
+							const inferredTotal = reportedTotal > 0 ? reportedTotal
+								: (list.length === request.limit ? 1000 : results[request.key].length);
+							totals[request.key] = Math.min(inferredTotal, 1000);
+						}
+						const targetCount = Math.min(totals[request.key], targetPage * 12);
+						if (results[request.key].length < targetCount && list.length === request.limit) {
+							return fetchPage(request, page + 1);
+						}
+					}
+					pending -= 1;
+					finish();
+				};
+				requests.forEach(request => fetchPage(request, 1));
+			},
+			finishFeedFallback(requestId, targetPage, append, rows, total, hasSource) {
+				if (requestId !== this.feedRequestId) return;
+				const offset = (targetPage - 1) * 12;
+				const pageRows = rows.slice(offset, offset + 12);
+				this.feedList = append ? this.feedList.concat(pageRows) : pageRows;
+				this.feedPage = targetPage;
+				this.feedTotal = total;
+				this.feedError = hasSource || append ? '' : '动态加载失败，请稍后重试';
+				this.feedMoreText = hasSource
+					? (this.feedList.length < total ? '上滑或点击加载更多' : '已经到底了')
+					: '加载失败，点击重试';
+				this.feedFallbackRequestId = 0;
+				this.feedLoading = false;
+				this.feedLoadingMore = false;
+				this.loadFallbackAnswers(pageRows, requestId);
+			},
+			normalizeFallbackSpaces(list) {
+				return (Array.isArray(list) ? list : []).map(item => ({
+					feedType: 'space', id: Number(item.id || 0), title: '', text: this.feedPreview(item.text),
+					pic: item.pic || '', likes: Number(item.likes || 0), created: Number(item.created || 0),
+					modified: Number(item.modified || 0), lastActivity: Math.max(Number(item.created || 0), Number(item.modified || 0)),
+					userJson: item.userJson || null
+				}));
+			},
+			normalizeFallbackQuestions(list) {
+				return (Array.isArray(list) ? list : []).map(item => ({
+					feedType: 'question', id: Number(item.id || 0), title: item.title || '', description: this.feedPreview(item.description),
+					coverUrl: item.coverUrl || item.cover_url || '', answerCount: Number(item.answerCount || item.answer_count || 0),
+					created: Number(item.created || 0), modified: Number(item.modified || 0), lastActivity: Number(item.modified || item.created || 0),
+					userJson: item.userJson || null
+				}));
+			},
+			normalizeFallbackTasks(list) {
+				return (Array.isArray(list) ? list : []).map(item => ({
+					feedType: 'task', id: Number(item.id || 0), title: item.title || '', description: this.feedPreview(item.description),
+					kind: Number(item.kind || 0), category: Number(item.category || 0), imageUrl: item.imageUrl || item.image_url || '',
+					created: Number(item.created || 0), modified: Number(item.modified || 0), status: Number(item.status || 1),
+					lastActivity: Math.max(Number(item.created || 0), Number(item.modified || 0)), userJson: item.userJson || null
+				}));
+			},
+			feedPreview(value) {
+				return String(value || '').replace(/<[^>]+>/g, '').replace(/\|\|rn\|\|/g, ' ').trim().slice(0, 220);
+			},
+			loadFallbackAnswers(rows, requestId) {
+				rows.filter(item => item.feedType === 'question' && Number(item.answerCount || 0) > 0)
+					.forEach(item => this.$Net.request({
+						url: this.$API.qaAnswerList(),
+						data: { questionId: item.id, page: 1, limit: 1, sort: 'latest' },
+						method: 'get', dataType: 'json',
+						success: response => {
+							if (requestId !== this.feedRequestId) return;
+							const body = response && response.data;
+							const answer = body && body.code === 1 && Array.isArray(body.data) ? body.data[0] : null;
+							if (answer) {
+								this.$set(item, 'latestAnswer', { id: Number(answer.id || 0), text: this.feedPreview(answer.text), created: Number(answer.created || 0) });
+								item.lastActivity = Math.max(Number(item.lastActivity || 0), Number(answer.created || 0));
+								this.feedList.sort((left, right) => Number(right.lastActivity || 0) - Number(left.lastActivity || 0) || Number(right.id || 0) - Number(left.id || 0));
+							}
+						}
+					}));
+			},
 			openFeedItem(item) {
 				if (!item || !item.feedType || !item.id) return;
 				this.rememberSpaceReturn();
 				if (item.feedType === 'space') return uni.navigateTo({ url: '/pages/space/info?id=' + item.id });
 				if (item.feedType === 'question') return uni.navigateTo({ url: '/pages/qa/info?id=' + item.id });
 				if (item.feedType === 'task') return uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + item.id + '&returnTo=mutualAidList' });
-				uni.navigateTo({ url: '/pages/contents/info?cid=' + item.id + '&title=' + encodeURIComponent(item.title || '') });
+				return false;
 			},
 			setFeedType(type) {
 				if (this.feedTypeFilter === type) return;
