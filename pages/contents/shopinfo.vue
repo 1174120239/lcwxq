@@ -4,6 +4,7 @@
 			<view class="cu-bar bg-white" :style="{'height': CustomBar + 'px', 'padding-top': StatusBar + 'px'}">
 				<view class="action" @tap="back"><text class="cuIcon-back"></text></view>
 				<view class="content text-bold" :style="[{top: StatusBar + 'px'}]">互助详情</view>
+				<view class="action" v-if="item" @tap.stop="shareItem"><text class="cuIcon-share"></text></view>
 				<view class="action" v-if="isOwner" @tap="openOwnerActions"><text class="cuIcon-more"></text></view>
 			</view>
 		</view>
@@ -81,14 +82,17 @@
 		</view>
 
 		<view class="loading" v-if="loading"><view class="loading-main"><view class="campus-loader"></view></view></view>
+		<web-install-badge />
 	</view>
 </template>
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { buildContentShareUrl, shareContent, shareSummary } from '@/utils/contentShare.js'
 	import RichContent from '@/components/rich-content/rich-content'
+	import WebInstallBadge from '@/components/web-install-badge/web-install-badge.vue'
 	export default {
-		components: { RichContent },
+		components: { RichContent, WebInstallBadge },
 		data() {
 			return {
 				StatusBar: this.StatusBar, CustomBar: this.CustomBar, NavBar: this.StatusBar + this.CustomBar,
@@ -141,6 +145,14 @@
 			return true
 		},
 		methods: {
+			shareItem() {
+				if (!this.item || !this.item.id) return false;
+				return shareContent({
+					url: buildContentShareUrl(this.$API.GetWebUrl(), '/pages/contents/shopinfo', { id: this.item.id }),
+					title: '互助：' + (this.item.title || '校园互助'),
+					text: shareSummary(this.item.description, 120) || this.item.title || '来看看这条校园互助信息'
+				});
+			},
 			back() {
 				if (this.returnToMutualAidList) {
 					this.returnToMutualAidList = false

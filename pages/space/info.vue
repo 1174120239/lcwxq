@@ -16,6 +16,9 @@
 				<view class="action" v-if="spaceInfo.id" @tap="openSpaceActions">
 					<text class="cuIcon-more"></text>
 				</view>
+				<view class="action" v-if="spaceInfo.id" @tap.stop="shareCurrent">
+					<text class="cuIcon-share"></text>
+				</view>
 				<view class="action" v-else></view>
 			</view>
 		</view>
@@ -237,7 +240,7 @@
 			</block>
 			
 		</view>
-		<view class="space-footer grid " :class="replyType==0?'col-2':'col-2'" v-if="spaceInfo.status==1">
+		<view class="space-footer grid " :class="canReportCurrent ? 'col-3' : 'col-2'" v-if="spaceInfo.status==1">
 			
 			<view class="space-footer-box" @tap="openReplyComposer(spaceInfo)">
 				<text class="cuIcon-message"></text>
@@ -246,6 +249,10 @@
 			<view class="space-footer-box" @tap="toLike(spaceInfo.id)">
 				<text class="cuIcon-appreciate"  :class="spaceInfo.isLikes==1?'text-blue':''"></text>
 				点赞
+			</view>
+			<view class="space-footer-box space-footer-report" v-if="canReportCurrent" @tap="reportCurrentSpace">
+				<text class="cuIcon-warn"></text>
+				举报
 			</view>
 		</view>
 		<view class="reply-composer-mask" v-if="replyComposerVisible" @tap="closeReplyComposer">
@@ -291,6 +298,7 @@
 		<!--加载遮罩结束-->
 		<space-report-sheet :visible="reportVisible" :night="campusNight" :submitting="reportSubmitting"
 			@close="closeCurrentReport" @submit="submitCurrentReport"></space-report-sheet>
+		<web-install-badge />
 	</view>
 </template>
 
@@ -299,10 +307,12 @@
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
 	import { normalizeUser } from '@/utils/avatar.js'
 	import { copyText } from '@/utils/clipboard.js'
+	import { buildContentShareUrl, shareContent, shareSummary } from '@/utils/contentShare.js'
 	import { renderRichContent } from '@/utils/richContent.js'
 	import SpacePoll from '@/components/space-poll/space-poll.vue'
 	import SpaceReportSheet from '@/components/space-report-sheet/space-report-sheet.vue'
 	import RichContent from '@/components/rich-content/rich-content'
+	import WebInstallBadge from '@/components/web-install-badge/web-install-badge.vue'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -313,7 +323,7 @@
 	var owo = [];
 	// #endif
 	export default {
-		components: { SpacePoll, SpaceReportSheet, RichContent },
+		components: { SpacePoll, SpaceReportSheet, RichContent, WebInstallBadge },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -390,6 +400,13 @@
 			},
 			canSubmitReply() {
 				return !this.replySubmitting && this.replyText.trim().length > 0;
+			},
+			canReportCurrent() {
+				if (!this.spaceInfo || !this.spaceInfo.id || Number(this.spaceInfo.type || 0) === 3) return false;
+				var authorUid = this.spaceInfo.userJson ? Number(this.spaceInfo.userJson.uid || 0) : 0;
+				var owner = authorUid > 0 && authorUid === Number(this.uid || 0);
+				var staff = this.group === 'administrator' || this.group === 'editor';
+				return !owner && !staff;
 			}
 		},
 		onPullDownRefresh(){
@@ -481,6 +498,18 @@
 			that.getvideoimg()
 		},
 		methods: {
+			shareCurrent() {
+				if (!this.spaceInfo || !this.spaceInfo.id) return false;
+				var url = buildContentShareUrl(this.$API.GetWebUrl(), '/pages/space/info', {
+					id: this.spaceInfo.id,
+					commentId: this.targetCommentId || undefined
+				});
+				return shareContent({
+					url: url,
+					title: '动态：' + shareSummary(this.spaceInfo.text, 42),
+					text: shareSummary(this.spaceInfo.text, 120) || '来看看这条校园动态'
+				});
+			},
 			copyComment(text){
 				copyText(text, '评论已复制');
 			},

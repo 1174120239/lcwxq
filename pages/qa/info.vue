@@ -4,7 +4,8 @@
 			<view class="qa-nav-bar">
 				<view class="qa-nav-button" @tap="back"><text class="cuIcon-back"></text></view>
 				<text class="qa-nav-title">校园问答</text>
-				<view class="qa-nav-placeholder"></view>
+				<view class="qa-nav-button" v-if="question.id" @tap="shareQuestion"><text class="cuIcon-share"></text></view>
+				<view class="qa-nav-placeholder" v-else></view>
 			</view>
 		</view>
 
@@ -83,16 +84,19 @@
 				</view>
 			</view>
 		</view>
+		<web-install-badge />
 	</view>
 </template>
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { buildContentShareUrl, shareContent, shareSummary } from '@/utils/contentShare.js'
 	import RichContent from '@/components/rich-content/rich-content'
+	import WebInstallBadge from '@/components/web-install-badge/web-install-badge.vue'
 
 	export default {
-		components: { RichContent },
+		components: { RichContent, WebInstallBadge },
 		data() {
 			return {
 				StatusBar: this.StatusBar,
@@ -166,6 +170,14 @@
 			this.loadAnswers(true);
 		},
 		methods: {
+			shareQuestion() {
+				if (!this.question || !this.question.id) return false;
+				return shareContent({
+					url: buildContentShareUrl(this.$API.GetWebUrl(), '/pages/qa/info', { id: this.question.id }),
+					title: '提问：' + (this.question.title || '校园问答'),
+					text: shareSummary(this.question.description, 120) || this.question.title || '来看看这个校园问题'
+				});
+			},
 			previewQuestionImage(url) { uni.previewImage({ urls: this.question.imageUrls || [url], current: url }) },
 			loadTheme() {
 				this.campusThemeMode = getCampusThemeMode();
