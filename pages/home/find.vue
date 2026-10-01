@@ -633,7 +633,7 @@
 				if(data.type=="lostFoundComment" || data.type=="lostFoundContact"){
 					clearInterval(that.chatLoading);
 					that.chatLoading = null;
-					uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + data.value + '&commentId=' + (data.cid || 0) });
+					uni.navigateTo({ url: '/pages/contents/shopinfo?id=' + data.value + '&commentId=' + (data.cid || 0) + '&returnTo=mutualAidList' });
 				}
 				if(data.type=="finance"){
 					clearInterval(that.chatLoading);

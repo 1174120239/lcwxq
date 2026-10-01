@@ -70,6 +70,12 @@
 	function campusHandleBackButton() {
 		const pages = getCurrentPages()
 		const currentRoute = campusCurrentRoute()
+		const currentPage = pages && pages.length ? pages[pages.length - 1] : null
+		const returnTo = currentPage && currentPage.options && currentPage.options.returnTo
+		if (currentRoute === '/pages/journal/article' && returnTo && String(returnTo).indexOf('/pages/') === 0) {
+			uni.redirectTo({ url: decodeURIComponent(returnTo), fail: campusGoBackToJournal })
+			return
+		}
 		if (pages && pages.length > 1) {
 			uni.navigateBack({
 				delta: 1,

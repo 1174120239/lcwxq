@@ -36,7 +36,7 @@ export default {
 		loadArticles() { this.loading = true; this.$Net.request({ url: this.$API.journalArticleList(), data: { journalId: this.id, page: 1, limit: 50, sort: this.sort, token: this.token(), _ts: Date.now() }, method: 'get', dataType: 'json', success: r => { const rows = r.data && r.data.code === 1 && Array.isArray(r.data.data) ? r.data.data : []; this.articles = rows.filter(item => item && item.status === 'published'); this.loading = false }, fail: () => { this.articles = []; this.loading = false } }) },
 		changeSort(v) { if (this.sort !== v) { this.sort = v; this.loadArticles() } },
 		openSubmit() { uni.navigateTo({ url: '/pages/journal/post?journalId=' + this.id + '&journalName=' + encodeURIComponent(this.journal.name || '') }) },
-		openArticle(a) { uni.navigateTo({ url: '/pages/journal/article?id=' + a.id }) },
+		openArticle(a) { uni.navigateTo({ url: '/pages/journal/article?id=' + a.id + '&returnTo=' + encodeURIComponent('/pages/journal/info?id=' + this.id) }) },
 		excerpt(v) { return String(v || '').replace(/[#>*_`\[\]]/g, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().slice(0, 110) },
 		displayDate(v) { let d = new Date(Number(v) > 10000000000 ? Number(v) : Number(v) * 1000); return isNaN(d.getTime()) ? '' : d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0') }
 	}
