@@ -29,12 +29,7 @@ export default {
 	onLoad(q) { this.id = Number(q.id || 0); this.load() },
 	methods: {
 		token() { try { return JSON.parse(localStorage.getItem('userinfo') || '{}').token || '' } catch (e) { return '' } },
-		back() {
-			// App 端页面栈可能被 tab/relaunch 重置，不能依赖 navigateBack。
-			// 文章详情始终回到所属刊物，避免退回论坛主页。
-			if (this.journalId) return uni.redirectTo({ url: '/pages/journal/info?id=' + this.journalId })
-			return uni.redirectTo({ url: '/pages/journal/index' })
-		},
+		back() { uni.navigateBack({ delta: 1 }) },
 		shareArticle() {
 			if (!this.id || !this.title) return false
 			return shareContent({ url: buildContentShareUrl(this.$API.GetWebUrl(), '/pages/journal/article', { id: this.id }), title: '文章：' + this.title, text: shareSummary(this.subtitle || this.body, 120) || this.title })
