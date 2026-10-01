@@ -47,6 +47,26 @@
 		})
 	}
 
+	function campusGoBackToModule(route) {
+		if (route === '/pages/journal/article') return campusGoBackToJournal()
+		const fallbacks = {
+			'/pages/journal/info': '/pages/journal/index',
+			'/pages/journal/post': '/pages/journal/index',
+			'/pages/journal/submissions': '/pages/journal/index',
+			'/pages/qa/info': '/pages/home/square',
+			'/pages/qa/post': '/pages/home/square',
+			'/pages/space/info': '/pages/home/square',
+			'/pages/space/topics': '/pages/home/square',
+			'/pages/space/post': '/pages/home/square',
+			'/pages/contents/shopinfo': '/pages/contents/shop',
+			'/pages/contents/info': '/pages/contents/contentlist',
+			'/pages/contents/videoInfo': '/pages/contents/recommend'
+		}
+		const target = fallbacks[route]
+		if (!target) return campusGoHome()
+		uni.redirectTo({ url: target, fail: campusGoHome })
+	}
+
 	function campusHandleBackButton() {
 		const pages = getCurrentPages()
 		const currentRoute = campusCurrentRoute()
@@ -57,8 +77,8 @@
 			})
 			return
 		}
-		if (currentRoute === '/pages/journal/article') {
-			campusGoBackToJournal()
+		if (currentRoute && currentRoute.indexOf('/pages/') === 0) {
+			campusGoBackToModule(currentRoute)
 			return
 		}
 		if (currentRoute && CAMPUS_TAB_ROUTES.indexOf(currentRoute) === -1) {
