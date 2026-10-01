@@ -38,6 +38,15 @@
 		})
 	}
 
+	function campusGoBackToJournal() {
+		let journalId = 0
+		try { journalId = Number(uni.getStorageSync('journalArticleReturnJournalId') || 0) } catch (e) {}
+		uni.redirectTo({
+			url: journalId > 0 ? '/pages/journal/info?id=' + journalId : '/pages/journal/index',
+			fail: campusGoHome
+		})
+	}
+
 	function campusHandleBackButton() {
 		const pages = getCurrentPages()
 		const currentRoute = campusCurrentRoute()
@@ -46,6 +55,10 @@
 				delta: 1,
 				fail: campusGoHome
 			})
+			return
+		}
+		if (currentRoute === '/pages/journal/article') {
+			campusGoBackToJournal()
 			return
 		}
 		if (currentRoute && CAMPUS_TAB_ROUTES.indexOf(currentRoute) === -1) {
