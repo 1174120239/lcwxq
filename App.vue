@@ -5,100 +5,10 @@
 	import Vue from 'vue'
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
 	import { refreshSession } from '@/utils/session.js'
+	import { handleCampusBackButton, installCampusNavigation } from '@/utils/navigation.js'
 	// #ifdef APP-PLUS
-	const CAMPUS_HOME_TAB = '/pages/home/home'
-	const CAMPUS_TAB_ROUTES = [
-		CAMPUS_HOME_TAB,
-		'/pages/home/square',
-		'/pages/home/find',
-		'/pages/home/user'
-	]
 	let campusBackButtonInstalled = false
 	let campusBackButtonReadyListenerAttached = false
-
-	function campusNormalizeRoute(route) {
-		if (!route) return ''
-		return route.charAt(0) === '/' ? route : '/' + route
-	}
-
-	function campusCurrentRoute() {
-		const pages = getCurrentPages()
-		if (!pages || !pages.length) return ''
-		return campusNormalizeRoute(pages[pages.length - 1].route)
-	}
-
-	function campusGoHome() {
-		uni.switchTab({
-			url: CAMPUS_HOME_TAB,
-			fail() {
-				uni.reLaunch({
-					url: CAMPUS_HOME_TAB
-				})
-			}
-		})
-	}
-
-	function campusGoBackToJournal() {
-		let journalId = 0
-		try { journalId = Number(uni.getStorageSync('journalArticleReturnJournalId') || 0) } catch (e) {}
-		uni.redirectTo({
-			url: journalId > 0 ? '/pages/journal/info?id=' + journalId : '/pages/journal/index',
-			fail: campusGoHome
-		})
-	}
-
-	function campusGoBackToModule(route) {
-		if (route === '/pages/journal/article') return campusGoBackToJournal()
-		const fallbacks = {
-			'/pages/journal/info': '/pages/journal/index',
-			'/pages/journal/post': '/pages/journal/index',
-			'/pages/journal/submissions': '/pages/journal/index',
-			'/pages/qa/info': '/pages/home/square',
-			'/pages/qa/post': '/pages/home/square',
-			'/pages/space/info': '/pages/home/square',
-			'/pages/space/topics': '/pages/home/square',
-			'/pages/space/post': '/pages/home/square',
-			'/pages/contents/shopinfo': '/pages/contents/shop',
-			'/pages/contents/info': '/pages/contents/contentlist',
-			'/pages/contents/videoInfo': '/pages/contents/recommend'
-		}
-		const target = fallbacks[route]
-		if (!target) return campusGoHome()
-		uni.redirectTo({ url: target, fail: campusGoHome })
-	}
-
-	function campusHandleBackButton() {
-		const pages = getCurrentPages()
-		const currentRoute = campusCurrentRoute()
-		const currentPage = pages && pages.length ? pages[pages.length - 1] : null
-		const returnTo = currentPage && currentPage.options && currentPage.options.returnTo
-		if (currentRoute === '/pages/journal/article' && returnTo && String(returnTo).indexOf('/pages/') === 0) {
-			uni.redirectTo({ url: decodeURIComponent(returnTo), fail: campusGoBackToJournal })
-			return
-		}
-		if (pages && pages.length > 1) {
-			uni.navigateBack({
-				delta: 1,
-				fail: campusGoHome
-			})
-			return
-		}
-		if (currentRoute && currentRoute.indexOf('/pages/') === 0) {
-			campusGoBackToModule(currentRoute)
-			return
-		}
-		if (currentRoute && CAMPUS_TAB_ROUTES.indexOf(currentRoute) === -1) {
-			campusGoHome()
-			return
-		}
-		if (currentRoute !== CAMPUS_HOME_TAB) {
-			campusGoHome()
-			return
-		}
-		// Consume the root back action so the native runtime cannot show its
-		// default "press again to exit" prompt or close the app accidentally.
-		return
-	}
 
 	function campusInstallBackButtonHandler() {
 		if (campusBackButtonInstalled) return
@@ -113,7 +23,7 @@
 		if (typeof document !== 'undefined' && campusBackButtonReadyListenerAttached) {
 			document.removeEventListener('plusready', campusInstallBackButtonHandler, false)
 		}
-		plus.key.addEventListener('backbutton', campusHandleBackButton, false)
+		plus.key.addEventListener('backbutton', handleCampusBackButton, false)
 	}
 	// #endif
 	export default {
@@ -121,6 +31,7 @@
 		mixins: [pageAnimation],
 		// #endif
 			onLaunch: function() {
+			installCampusNavigation()
 			applyCampusThemeShell(getCampusThemeMode())
 			refreshSession({ force: true })
 			// #ifdef APP-PLUS
@@ -158,7 +69,7 @@
 					var mutualAidCommentId = parseInt(mutualAidParts[3], 10);
 					if (mutualAidId > 0) {
 						setTimeout(function() {
-							var url = '/pages/contents/shopinfo?id=' + mutualAidId;
+							var url = '/pages/contents/shopinfo?id=' + mutualAidId + '&returnTo=mutualAidList';
 							if (mutualAidCommentId > 0) url += '&commentId=' + mutualAidCommentId;
 							uni.navigateTo({ url: url });
 						}, 1000);

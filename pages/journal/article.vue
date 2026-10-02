@@ -14,6 +14,7 @@
 import mpHtml from '@/components/mp-html/mp-html'
 import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 import { buildContentShareUrl, shareContent, shareSummary } from '@/utils/contentShare.js'
+import { navigateBack } from '@/utils/navigation.js'
 import WebInstallBadge from '@/components/web-install-badge/web-install-badge.vue'
 
 export default {
@@ -26,10 +27,15 @@ export default {
 		articleTagStyle() { const ink = this.articleInk; return { p: `color:${ink} !important`, div: `color:${ink} !important`, span: `color:${ink} !important`, li: `color:${ink} !important`, td: `color:${ink} !important`, th: `color:${ink} !important`, h1: `color:${ink} !important`, h2: `color:${ink} !important`, h3: `color:${ink} !important`, h4: `color:${ink} !important`, h5: `color:${ink} !important`, h6: `color:${ink} !important`, strong: `color:${ink} !important`, em: `color:${ink} !important`, a: `color:${this.theme === 'night' ? '#c9dfd3' : '#315f50'} !important`, blockquote: `color:${this.articleMuted} !important` } },
 		articleContainerStyle() { return `color:${this.articleInk} !important;` }
 	},
-	onLoad(q) { this.id = Number(q.id || 0); this.returnTo = q && q.returnTo ? decodeURIComponent(q.returnTo) : ''; this.load() },
+	onLoad(q) {
+		this.id = Number(q.id || 0)
+		try { this.returnTo = q && q.returnTo ? decodeURIComponent(q.returnTo) : '' } catch (error) { this.returnTo = '' }
+		if (!/^\/pages\/[A-Za-z0-9_/?=&.-]+$/.test(this.returnTo)) this.returnTo = ''
+		this.load()
+	},
 	methods: {
 		token() { try { return JSON.parse(localStorage.getItem('userinfo') || '{}').token || '' } catch (e) { return '' } },
-		back() { if (this.returnTo && this.returnTo.indexOf('/pages/') === 0) return uni.redirectTo({ url: this.returnTo }); uni.navigateBack({ delta: 1, fail: () => uni.redirectTo({ url: this.journalId ? '/pages/journal/info?id=' + this.journalId : '/pages/journal/index' }) }) },
+		back() { if (this.returnTo) return uni.redirectTo({ url: this.returnTo }); navigateBack({ delta: 1, fail: () => uni.redirectTo({ url: this.journalId ? '/pages/journal/info?id=' + this.journalId : '/pages/journal/index' }) }) },
 		shareArticle() {
 			if (!this.id || !this.title) return false
 			return shareContent({ url: buildContentShareUrl(this.$API.GetWebUrl(), '/pages/journal/article', { id: this.id }), title: '文章：' + this.title, text: shareSummary(this.subtitle || this.body, 120) || this.title })

@@ -91,6 +91,7 @@
 	import { buildContentShareUrl, shareContent, shareSummary } from '@/utils/contentShare.js'
 	import RichContent from '@/components/rich-content/rich-content'
 	import WebInstallBadge from '@/components/web-install-badge/web-install-badge.vue'
+	import { navigateBack } from '@/utils/navigation.js'
 	export default {
 		components: { RichContent, WebInstallBadge },
 		data() {
@@ -124,10 +125,13 @@
 			this.NavBar = this.CustomBar
 			// #endif
 			this.id = Number(options.id || 0)
-			this.returnToMutualAidList = options.returnTo === 'mutualAidList' || getCurrentPages().length <= 1
+			// A page-stack length does not identify the real source (tab, message,
+			// push or deep link). Only an explicit source marker changes the route;
+			// the shared navigator handles empty-stack fallback.
+			this.returnToMutualAidList = options.returnTo === 'mutualAidList'
 			if (!this.id) {
 				uni.showToast({ title: options.sid ? '原商城内容已停用' : '互助信息不存在', icon: 'none' })
-				setTimeout(function() { uni.navigateBack({ delta: 1 }) }, 900)
+				setTimeout(function() { navigateBack({ delta: 1 }) }, 900)
 				return
 			}
 			this.readCurrentUser()
@@ -139,11 +143,6 @@
 			if (this.id) this.loadAll()
 		},
 		onPullDownRefresh() { this.loadAll() },
-		onBackPress() {
-			if (!this.returnToMutualAidList) return false
-			this.back()
-			return true
-		},
 		methods: {
 			shareItem() {
 				if (!this.item || !this.item.id) return false;
@@ -159,7 +158,7 @@
 					uni.redirectTo({ url: '/pages/contents/shop' })
 					return
 				}
-				uni.navigateBack({
+				navigateBack({
 					delta: 1,
 					fail: function() { uni.redirectTo({ url: '/pages/contents/shop' }) }
 				})

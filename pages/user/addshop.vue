@@ -102,6 +102,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import RichComposer from '@/components/rich-composer/rich-composer'
+	import { navigateBack } from '@/utils/navigation.js'
 	export default {
 		components: { RichComposer },
 		data() {
@@ -139,11 +140,14 @@
 			}
 			this.editing = options.type === 'edit'
 			this.id = Number(options.id || 0)
-			this.returnToMutualAidList = options.returnTo === 'mutualAidList' || getCurrentPages().length <= 1
+			// The explicit source marker is authoritative. Empty page stacks are
+			// handled by the shared navigation fallback instead of guessing from
+			// stack depth, which differs between tab, push and deep-link launches.
+			this.returnToMutualAidList = options.returnTo === 'mutualAidList'
 			if (this.editing && !this.id) {
 				uni.showToast({ title: '原商城内容已停用', icon: 'none' })
 				this.submitSuccess = true
-				setTimeout(function() { uni.navigateBack({ delta: 1 }) }, 900)
+				setTimeout(function() { navigateBack({ delta: 1 }) }, 900)
 				return
 			}
 			this.checkEligibility()
@@ -157,10 +161,6 @@
 		computed: {
 			canSubmit() { return this.form.title.trim().length >= 4 && this.form.location.trim().length >= 2 && this.form.description.trim().length >= 5 }
 		},
-		onBackPress() {
-			if (this.hasUnsavedChanges()) { this.showExitModal = true; return true }
-			return false
-		},
 		methods: {
 			dateString(date) {
 				var month = ('0' + (date.getMonth() + 1)).slice(-2)
@@ -168,8 +168,8 @@
 				return date.getFullYear() + '-' + month + '-' + day
 			},
 			timeString(date) { return ('0' + date.getHours()).slice(-2) + ':' + ('0' + date.getMinutes()).slice(-2) },
-			handleBack() { if (this.hasUnsavedChanges()) this.showExitModal = true; else uni.navigateBack({ delta: 1 }) },
-			confirmExit() { this.showExitModal = false; uni.navigateBack({ delta: 1 }) },
+			handleBack() { if (this.hasUnsavedChanges()) this.showExitModal = true; else navigateBack({ delta: 1 }) },
+			confirmExit() { this.showExitModal = false; navigateBack({ delta: 1 }) },
 			hasUnsavedChanges() { return !this.submitSuccess && !!(this.form.title || this.form.location || this.form.description || this.form.imageUrl) },
 			selectCategory(value) { this.form.category = value; this.showCategorySheet = false },
 			checkEligibility() {
@@ -180,7 +180,7 @@
 						if (res.data.code === 1 && !res.data.data.eligible) {
 							uni.showToast({ title: res.data.data.enabled ? '达到Lv' + res.data.data.minimumLevel + '后可参与校园互助' : '校园互助暂未开放', icon: 'none' })
 							that.submitSuccess = true
-							setTimeout(function() { uni.navigateBack({ delta: 1 }) }, 900)
+							setTimeout(function() { navigateBack({ delta: 1 }) }, 900)
 						}
 					}
 				})
