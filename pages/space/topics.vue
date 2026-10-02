@@ -69,6 +69,7 @@
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import spaceItem from '@/pages/components/spaceItem.vue'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { navigateBack } from '@/utils/navigation.js'
 
 	export default {
 		components: { spaceItem },
@@ -149,11 +150,7 @@
 			safeDecode(value) {
 				try { return decodeURIComponent(value) } catch (error) { return value }
 			},
-			back() {
-				const pages = getCurrentPages()
-				if (pages.length > 1) uni.navigateBack({ delta: 1 })
-				else uni.reLaunch({ url: '/pages/home/home' })
-			},
+			back() { navigateBack({ delta: 1 }) },
 			setFilter(value) { this.filter = value },
 			queueSearch() {
 				if (this.searchTimer) clearTimeout(this.searchTimer)

@@ -88,6 +88,7 @@
 <script>
 	import mpHtml from '@/components/mp-html/mp-html'
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { navigateBack } from '@/utils/navigation.js'
 	// #ifdef APP-PLUS
 	import owo from '../../static/app-plus/owo/OwO.js'
 	// #endif
@@ -330,19 +331,7 @@
 					url: '/pages/home/home'
 				});
 			},
-			back(){
-				
-				const pages = getCurrentPages()
-				if (pages.length === 1) {
-				  uni.switchTab({
-				  	url: '/pages/home/home'
-				  })
-				} else {
-				  uni.navigateBack({
-				  	delta: 1
-				  });
-				}
-			},
+			back(){ navigateBack({ delta: 1 }) },
 			readCache(key){
 				var value = localStorage.getItem(key);
 				if(!value){
