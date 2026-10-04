@@ -102,6 +102,7 @@
 				comments: [], commentsLoaded: false, commentText: '', commentSending: false, replyTo: null,
 				contactAccess: { received: [], sent: [] }, shareTarget: null,
 				returnToMutualAidList: false,
+				backingOut: false,
 				featureConfig: { enabled: 1, eligible: false, contactEnabled: 1, minimumLevel: 2 },
 				categoryLabels: ['', '失物招领', '物品借用', '学习互助', '校园生活', '其他帮助']
 			}
@@ -153,6 +154,8 @@
 				});
 			},
 			back() {
+				if (this.backingOut) return
+				this.backingOut = true
 				if (this.returnToMutualAidList) {
 					this.returnToMutualAidList = false
 					uni.redirectTo({

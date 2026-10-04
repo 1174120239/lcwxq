@@ -44,6 +44,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { navigateBack } from '@/utils/navigation.js'
 	export default {
 		data() {
 			return {
@@ -63,7 +64,7 @@
 		onShow() { if (this.token()) this.reload() },
 		onReachBottom() { this.loadMore() },
 		methods: {
-			back() { uni.navigateBack({ delta: 1 }) },
+			back() { navigateBack({ delta: 1 }) },
 			publish() { uni.navigateTo({ url: '/pages/user/addshop' }) },
 			setStatus(value) { this.status = value; this.reload() },
 			reload() { this.page = 1; this.hasMore = true; this.fetch(false) },

@@ -67,6 +67,7 @@
 
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
+	import { navigateBack } from '@/utils/navigation.js'
 	export default {
 		data() {
 			return {
@@ -109,7 +110,7 @@
 			this.loadMore()
 		},
 		methods: {
-			back() { uni.navigateBack({ delta: 1 }) },
+			back() { navigateBack({ delta: 1 }) },
 			publish() {
 				if (!this.token()) {
 					uni.showToast({ title: '请先登录', icon: 'none' })

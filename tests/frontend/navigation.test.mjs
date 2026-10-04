@@ -47,6 +47,30 @@ test('physical back delegates to the page business back handler once', () => {
 	assert.deepEqual(calls, ['handleBack'])
 })
 
+test('missing back metadata never becomes an app exit action', () => {
+	const calls = []
+	globalThis.getCurrentPages = () => [page('pages/home/home', {}, {})]
+	globalThis.uni = {
+		showToast(options) { calls.push(options.title) },
+		navigateBack() { calls.push('navigateBack') },
+		switchTab() { calls.push('switchTab') },
+		redirectTo() { calls.push('redirectTo') },
+		reLaunch() { calls.push('reLaunch') }
+	}
+	globalThis.plus = undefined
+	assert.equal(handleCampusBackPress(undefined), false)
+	assert.deepEqual(calls, [])
+})
+
+test('child mixin hooks cannot consume the current page back event', () => {
+	const calls = []
+	const pageVm = { back() { calls.push('pageBack') } }
+	const childVm = { back() { calls.push('childBack') } }
+	globalThis.getCurrentPages = () => [page('pages/contents/shop', {}, pageVm)]
+	assert.equal(handleCampusBackPress(childVm, { from: 'backbutton' }), false)
+	assert.deepEqual(calls, [])
+})
+
 test('programmatic navigateBack is left to uni-app', () => {
 	const vm = { back() { throw new Error('physical handler must not run') } }
 	globalThis.getCurrentPages = () => [page('pages/contents/shopinfo', {}, vm)]
@@ -83,4 +107,28 @@ test('only the home root shows the exit prompt', () => {
 	globalThis.getCurrentPages = () => [page('pages/contents/shop', {}, { back() { calls.push('listBack') } })]
 	assert.equal(handleCampusBackPress(undefined, { from: 'backbutton' }), true)
 	assert.deepEqual(calls, ['再按一次退出应用', 'listBack'])
+})
+
+test('leaving home clears the pending exit press', () => {
+	const calls = []
+	let current = page('pages/home/home', {}, {})
+	globalThis.getCurrentPages = () => [current]
+	globalThis.uni = {
+		showToast(options) { calls.push(options.title) },
+		navigateBack() { calls.push('navigateBack') },
+		switchTab() { calls.push('switchTab') },
+		redirectTo() { calls.push('redirectTo') },
+		reLaunch() { calls.push('reLaunch') }
+	}
+	let quitCount = 0
+	globalThis.plus = { runtime: { quit() { quitCount++ } } }
+
+	handleCampusBackPress(undefined, { from: 'backbutton' })
+	current = page('pages/contents/shop', {}, { back() { calls.push('listBack') } })
+	handleCampusBackPress(undefined, { from: 'backbutton' })
+	current = page('pages/home/home', {}, {})
+	handleCampusBackPress(undefined, { from: 'backbutton' })
+
+	assert.equal(quitCount, 0)
+	assert.deepEqual(calls, ['再按一次退出应用', 'listBack', '再按一次退出应用'])
 })

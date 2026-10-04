@@ -180,7 +180,7 @@ export function navigateBack(options) {
 }
 
 function isPhysicalBack(options) {
-	return !options || !options.from || options.from === 'backbutton'
+	return !!options && options.from === 'backbutton'
 }
 
 function showHomeExitPrompt() {
@@ -189,9 +189,8 @@ function showHomeExitPrompt() {
 		homeExitPromptAt = 0
 		if (typeof plus !== 'undefined' && plus.runtime && typeof plus.runtime.quit === 'function') {
 			plus.runtime.quit()
-			return true
 		}
-		return false
+		return true
 	}
 	homeExitPromptAt = now
 	if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
@@ -210,12 +209,16 @@ function closeOpenPublishPanel(vm) {
 }
 
 export function handleCampusBackPress(vm, options) {
-	if (!isPhysicalBack(options)) return false
-
 	const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
 	const page = pages && pages.length ? pages[pages.length - 1] : null
 	const route = getCurrentRoute(page)
-	const pageVm = vm || (page && page.$vm)
+	const currentVm = page && page.$vm
+	// Vue mixins can be present on child components as well as the page. Only
+	// the actual stack-top page is allowed to consume the physical back event.
+	if (vm && currentVm && vm !== currentVm) return false
+	if (route !== CAMPUS_HOME_TAB) homeExitPromptAt = 0
+	if (!isPhysicalBack(options)) return false
+	const pageVm = currentVm || vm
 
 	if (closeOpenPublishPanel(pageVm)) return true
 
@@ -228,8 +231,7 @@ export function handleCampusBackPress(vm, options) {
 		return true
 	}
 
-	if (route !== CAMPUS_HOME_TAB) homeExitPromptAt = 0
-	if (route === CAMPUS_HOME_TAB && pages.length <= 1) {
+	if (route === CAMPUS_HOME_TAB && pages.length === 1) {
 		return showHomeExitPrompt()
 	}
 
