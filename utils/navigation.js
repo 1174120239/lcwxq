@@ -60,8 +60,8 @@ const FALLBACK_ROUTES = {
 }
 
 let navigateBackInstalled = false
-let nativeBackInFlight = false
 let fallbackInFlight = false
+let homeExitPromptAt = 0
 
 export function normalizeRoute(route) {
 	if (!route) return ''
@@ -179,6 +179,27 @@ export function navigateBack(options) {
 	return uni.navigateBack(config)
 }
 
+function isPhysicalBack(options) {
+	return !options || !options.from || options.from === 'backbutton'
+}
+
+function showHomeExitPrompt() {
+	const now = Date.now()
+	if (homeExitPromptAt && now - homeExitPromptAt < 2000) {
+		homeExitPromptAt = 0
+		if (typeof plus !== 'undefined' && plus.runtime && typeof plus.runtime.quit === 'function') {
+			plus.runtime.quit()
+			return true
+		}
+		return false
+	}
+	homeExitPromptAt = now
+	if (typeof uni !== 'undefined' && typeof uni.showToast === 'function') {
+		uni.showToast({ title: '再按一次退出应用', icon: 'none', duration: 1600 })
+	}
+	return true
+}
+
 function closeOpenPublishPanel(vm) {
 	const refs = vm && vm.$refs ? vm.$refs : {}
 	const panels = [refs.publishPanel, refs.tabbar && refs.tabbar.$refs && refs.tabbar.$refs.publishPanel]
@@ -188,25 +209,28 @@ function closeOpenPublishPanel(vm) {
 	return true
 }
 
-export function handleCampusBackButton() {
-	if (nativeBackInFlight) return true
-	nativeBackInFlight = true
-	setTimeout(() => { nativeBackInFlight = false }, 450)
+export function handleCampusBackPress(vm, options) {
+	if (!isPhysicalBack(options)) return false
 
 	const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
 	const page = pages && pages.length ? pages[pages.length - 1] : null
 	const route = getCurrentRoute(page)
-	const vm = page && page.$vm
+	const pageVm = vm || (page && page.$vm)
 
-	if (closeOpenPublishPanel(vm)) return true
+	if (closeOpenPublishPanel(pageVm)) return true
 
-	if (vm && typeof vm.handleBack === 'function') {
-		vm.handleBack()
+	if (pageVm && typeof pageVm.handleBack === 'function') {
+		pageVm.handleBack()
 		return true
 	}
-	if (vm && typeof vm.back === 'function' && CAMPUS_TAB_ROUTES.indexOf(route) < 0) {
-		vm.back()
+	if (pageVm && typeof pageVm.back === 'function' && CAMPUS_TAB_ROUTES.indexOf(route) < 0) {
+		pageVm.back()
 		return true
+	}
+
+	if (route !== CAMPUS_HOME_TAB) homeExitPromptAt = 0
+	if (route === CAMPUS_HOME_TAB && pages.length <= 1) {
+		return showHomeExitPrompt()
 	}
 
 	if (CAMPUS_TAB_ROUTES.indexOf(route) >= 0 && pages.length <= 1) {

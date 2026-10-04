@@ -6,6 +6,7 @@ import uView from '@/uni_modules/uview-ui'
 Vue.use(uView)
 import App from './App'
 import store from './store/index.js'
+import { handleCampusBackPress } from './utils/navigation.js'
 import {
 	CAMPUS_THEME_EVENT,
 	CAMPUS_THEME_RESOLVED_EVENT,
@@ -14,6 +15,9 @@ import {
 Vue.prototype.$store = store
 
 Vue.mixin({
+	onBackPress(options) {
+		return handleCampusBackPress(this, options)
+	},
 	created() {
 		if (!this.$data || !Object.prototype.hasOwnProperty.call(this.$data, 'campusThemeMode')) return
 		this.campusThemeMode = getCampusThemeMode()

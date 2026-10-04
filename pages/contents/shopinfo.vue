@@ -155,7 +155,10 @@
 			back() {
 				if (this.returnToMutualAidList) {
 					this.returnToMutualAidList = false
-					uni.redirectTo({ url: '/pages/contents/shop' })
+					uni.redirectTo({
+						url: '/pages/contents/shop',
+						fail: function() { uni.reLaunch({ url: '/pages/contents/shop' }) }
+					})
 					return
 				}
 				navigateBack({

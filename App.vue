@@ -5,27 +5,7 @@
 	import Vue from 'vue'
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
 	import { refreshSession } from '@/utils/session.js'
-	import { handleCampusBackButton, installCampusNavigation } from '@/utils/navigation.js'
-	// #ifdef APP-PLUS
-	let campusBackButtonInstalled = false
-	let campusBackButtonReadyListenerAttached = false
-
-	function campusInstallBackButtonHandler() {
-		if (campusBackButtonInstalled) return
-		if (typeof plus === 'undefined' || !plus.key) {
-			if (typeof document !== 'undefined' && !campusBackButtonReadyListenerAttached) {
-				campusBackButtonReadyListenerAttached = true
-				document.addEventListener('plusready', campusInstallBackButtonHandler, false)
-			}
-			return
-		}
-		campusBackButtonInstalled = true
-		if (typeof document !== 'undefined' && campusBackButtonReadyListenerAttached) {
-			document.removeEventListener('plusready', campusInstallBackButtonHandler, false)
-		}
-		plus.key.addEventListener('backbutton', handleCampusBackButton, false)
-	}
-	// #endif
+	import { installCampusNavigation } from '@/utils/navigation.js'
 	export default {
 		// #ifdef H5
 		mixins: [pageAnimation],
@@ -35,8 +15,6 @@
 			applyCampusThemeShell(getCampusThemeMode())
 			refreshSession({ force: true })
 			// #ifdef APP-PLUS
-			campusInstallBackButtonHandler()
-			
 			// UniPush 点击和前台接收统一通知消息中心；payload 允许是字符串或对象。
 			const campusPushPayload = function(msg) {
 				const payload = msg && msg.payload != null ? msg.payload : '';
