@@ -283,6 +283,13 @@ $adminpw = "123456";
                             </a>
                         </li>
                         <li class="side-nav-item right_10">
+                            <a href="<?php echo $ADMIN_PATH;?>/gallery.php" class="side-nav-link">
+                                <i class="dripicons-camera"></i>
+                                <span>图集管理</span>
+                                <span class="menu-arrow"></span>
+                            </a>
+                        </li>
+                        <li class="side-nav-item right_10">
                             <a href="<?php echo $ADMIN_PATH;?>/mutualAid.php" class="side-nav-link">
                                 <i class="dripicons-help"></i>
                                 <span>校园互助</span>

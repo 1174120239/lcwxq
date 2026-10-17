@@ -16,9 +16,10 @@ MIGRATION_014_SHA256=6903ceeb1ba12eca0b87e6cd36bafa6bf884a0e82ed1f95127808e1091d
 MIGRATION_015_SHA256=9334f123e2470f64a20672afed73af1cd1226fcf60effaf827ffe935a0bf21a8
 MIGRATION_016_SHA256=5d346004f56351d23aa8e50cb23182f25d81d32252954544d5be3b926a8161e8
 MIGRATION_017_SHA256=06f485e973a7f2c8840507cdfb3804a2576dce667b287ef2d76528fdff3a9f1d
+MIGRATION_020_SHA256=7951170f27c653ff26b496ab237c2d3c4d6705bc7cda81417fb982aa545e645e
 
 usage() {
-    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015|016|017]"
+    echo "Usage: $0 --archive FILE --expected-sha256 HASH [--remote-root DIR] [--run-migrations --migration 014|015|016|017|020]"
     echo "       $0 --verify --component COMPONENT"
 }
 
@@ -415,6 +416,47 @@ apply_migration_017() {
     echo 'migration_017=applied'; echo "migration_017_backup=$backup_dir"
 }
 
+migration_020_valid() {
+    local count
+    count=$(mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('starfree_gallery_items','starfree_gallery_actions')")
+    [[ "$count" == 2 ]]
+}
+
+backup_migration_020() {
+    local items actions
+    items=$(mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='starfree_gallery_items'")
+    actions=$(mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='starfree_gallery_actions'")
+    if [[ "$items" == 1 || "$actions" == 1 ]]; then
+        local tables=(); [[ "$items" == 1 ]] && tables+=(starfree_gallery_items); [[ "$actions" == 1 ]] && tables+=(starfree_gallery_actions)
+        mysqldump "${MYSQL_BASE_ARGS_017[@]}" --single-transaction --skip-lock-tables "$DB_NAME_017" "${tables[@]}" > "$backup_dir/migration-020-existing-tables.sql"
+        [[ -s "$backup_dir/migration-020-existing-tables.sql" ]] || { echo 'Migration 020 database backup is empty.' >&2; return 2; }
+        sha256sum "$backup_dir/migration-020-existing-tables.sql" > "$backup_dir/migration-020-existing-tables.sql.sha256"
+    else
+        touch "$backup_dir/migration-020.no-existing-tables"
+    fi
+}
+
+rollback_migration_020() {
+    mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" -e 'DROP TABLE IF EXISTS starfree_gallery_actions,starfree_gallery_items'
+    if [[ -s "$backup_dir/migration-020-existing-tables.sql" ]]; then
+        mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" < "$backup_dir/migration-020-existing-tables.sql"
+    fi
+    echo 'migration_020_rollback=success' >&2
+}
+
+apply_migration_020() {
+    local migration_file="$incoming/020_gallery_channel.sql" migration_hash
+    for required in mysql mysqldump sha256sum; do command -v "$required" >/dev/null 2>&1 || { echo "Required migration command not found: $required" >&2; return 2; }; done
+    [[ -r "$migration_file" ]] || { echo 'Migration 020 is missing from the release.' >&2; return 2; }
+    migration_hash=$(sha256sum "$migration_file" | awk '{print $1}')
+    [[ "$migration_hash" == "$MIGRATION_020_SHA256" ]] || { echo 'Migration 020 SHA-256 mismatch.' >&2; return 2; }
+    configure_mysql_017 || return; backup_migration_020 || return
+    if migration_020_valid; then echo 'migration_020=already_present'; echo "migration_020_backup=$backup_dir"; return 0; fi
+    if ! mysql "${MYSQL_BASE_ARGS_017[@]}" "$DB_NAME_017" < "$migration_file"; then rollback_migration_020; return 20; fi
+    if ! migration_020_valid; then rollback_migration_020; return 21; fi
+    echo 'migration_020=applied'; echo "migration_020_backup=$backup_dir"
+}
+
 wait_for_component() {
     local component="$1"
     local timeout_seconds="${2:-180}"
@@ -487,8 +529,8 @@ if [[ "$RUN_MIGRATIONS" == true && "$COMPONENT" != replacement-backend ]]; then
     echo 'Database migrations are only allowed for replacement-backend.' >&2
     exit 30
 fi
-if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 && "$MIGRATION" != 016 && "$MIGRATION" != 017 ]]; then
-    echo 'Run migrations requires --migration 014, 015, 016 or 017.' >&2
+if [[ "$RUN_MIGRATIONS" == true && "$MIGRATION" != 014 && "$MIGRATION" != 015 && "$MIGRATION" != 016 && "$MIGRATION" != 017 && "$MIGRATION" != 020 ]]; then
+    echo 'Run migrations requires --migration 014, 015, 016, 017 or 020.' >&2
     exit 30
 fi
 if [[ "$RUN_MIGRATIONS" == false && -n "$MIGRATION" ]]; then
@@ -508,8 +550,10 @@ if [[ "$RUN_MIGRATIONS" == true ]]; then
         migration_status=apply_migration_015
     elif [[ "$MIGRATION" == 016 ]]; then
         migration_status=apply_migration_016
-    else
+    elif [[ "$MIGRATION" == 017 ]]; then
         migration_status=apply_migration_017
+    else
+        migration_status=apply_migration_020
     fi
     if ! $migration_status; then
         echo "backup=$backup_dir" >&2

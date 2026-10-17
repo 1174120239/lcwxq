@@ -5,7 +5,10 @@
 			<view class="square-mainbar">
 				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toggleSquareMenu"><text class="cuIcon-sort"></text></view>
 				<text class="square-page-title">{{squarePageTitle}}</text>
-				<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toSearch"><text class="cuIcon-search"></text></view>
+				<view class="square-header-actions">
+					<view class="square-gallery-entry" @tap="openGallery"><text class="cuIcon-picfill"></text><text>图集</text></view>
+					<view class="square-tool-button" :class="{'is-placeholder': contentMode==='qa'}" @tap="toSearch"><text class="cuIcon-search"></text></view>
+				</view>
 			</view>
 			<!--
 				动态类型切换暂时隐藏。保留原有 DOM 与 switchContentMode 方法，
@@ -908,6 +911,9 @@
 			rememberSpaceReturn() {
 				this.spaceReturnScrollTop = Number(this.pageScrollTop) || 0;
 				this.spaceReturnPending = true;
+			},
+			openGallery() {
+				uni.navigateTo({ url: '/pages/gallery/index' });
 			},
 			collapseSquareMenu() {
 				if (this.showSquareMenu) this.showSquareMenu = false
@@ -2934,12 +2940,16 @@
 
 	.square-mainbar {
 		display: grid;
-		grid-template-columns: 78rpx 1fr 78rpx;
+		grid-template-columns: 78rpx 1fr auto;
 		align-items: center;
 		height: 96rpx;
 		padding: 0 22rpx;
 		box-sizing: border-box;
 	}
+
+	.square-header-actions { display: flex; align-items: center; gap: 4rpx; }
+	.square-gallery-entry { display: flex; align-items: center; gap: 5rpx; padding: 0 8rpx; height: 70rpx; color: #397b63; font-size: 23rpx; white-space: nowrap; }
+	.square-gallery-entry .cuIcon-picfill { font-size: 31rpx; }
 
 	.square-page-title {
 		font-size: 34rpx;
@@ -3748,7 +3758,7 @@
 	}
 
 	@media (max-width: 360px) {
-		.square-mainbar { grid-template-columns: 72rpx 1fr 72rpx; padding: 0 18rpx; }
+		.square-mainbar { grid-template-columns: 72rpx 1fr auto; padding: 0 18rpx; }
 		.square-filter-menu { right: 18rpx; left: 18rpx; padding: 22rpx; }
 		.square-topic-filter { padding-right: 18rpx; padding-left: 18rpx; }
 		.square-topic-filter-track { gap: 10rpx; padding-right: 10rpx; padding-left: 10rpx; }

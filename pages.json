@@ -48,6 +48,18 @@
 			}
 		},
 		{
+			"path": "pages/gallery/index",
+			"style": { "navigationStyle": "custom", "enablePullDownRefresh": true }
+		},
+		{
+			"path": "pages/gallery/post",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
+			"path": "pages/gallery/info",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
 			"path": "pages/home/tool",
 			"style": {
 				"enablePullDownRefresh": true
