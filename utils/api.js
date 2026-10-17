@@ -686,6 +686,27 @@ module.exports = {
 		return API_URL + 'SFreeChat/groupInfo';
 	},
 	//动态开始
+	galleryList:function(){
+		return API_URL + 'SFreeGallery/galleryList';
+	},
+	galleryTags:function(){
+		return API_URL + 'SFreeGallery/galleryTags';
+	},
+	galleryInfo:function(){
+		return API_URL + 'SFreeGallery/galleryInfo';
+	},
+	gallerySubmit:function(){
+		return API_URL + 'SFreeGallery/gallerySubmit';
+	},
+	galleryManage:function(){
+		return API_URL + 'SFreeGallery/galleryManage';
+	},
+	galleryReview:function(){
+		return API_URL + 'SFreeGallery/galleryReview';
+	},
+	galleryDelete:function(){
+		return API_URL + 'SFreeGallery/galleryDelete';
+	},
 	
 	addSpace:function(){
 		return API_URL + 'SFreeSpace/addSpace';

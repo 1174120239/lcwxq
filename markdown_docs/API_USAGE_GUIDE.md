@@ -288,6 +288,20 @@ article = form_post("SFreeContents/contentsAdd", {
 |---|---|---|---|---|
 | `SFreeFeed/feedList` | GET/POST / 无 | `page,limit,type` | 代码新/公网切流后 | 聚合公开动态、校园问答和校园互助任务，按最后活动时间倒序；`type` 可选 `space/question/task`。问题含最新回答摘要；互助仅含进行中且未过期的信息。点击后分别进入 `SFreeSpace/spaceInfo`、`SFreeQa/questionInfo` 或 `SFreeLostFound/itemInfo` 对应详情页。统一路由不可用时，前端暂时回退读取这三个公开列表。 |
 
+### 5.2 独立图集
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeGallery/galleryList` | GET/POST / 无 | `page,limit,tag` | 新端待精确切流 | 只返回审核通过图集；每页最多 50 条，按标签精确筛选。 |
+| `SFreeGallery/galleryTags` | GET / 无 | 无 | 新端待精确切流 | 返回公开图集使用频率最高的 30 个标签。 |
+| `SFreeGallery/galleryInfo` | GET/POST / 可选 token | `id,token` | 新端待精确切流 | 公开图集会增加浏览量；作者和 staff 可读取本人待审内容。 |
+| `SFreeGallery/gallerySubmit` | POST / token | `params.title,description,imageUrls,imageRatio,tags` | 新端待精确切流 | 独立于动态；1--9 个已上传图片 URL，至少 1 个、最多 10 个标签；普通提交进入待审核状态。 |
+| `SFreeGallery/galleryManage` | GET/POST / staff | `token,page,limit,status,tag` | 新端待精确切流 | staff 审核列表，支持状态和标签筛选。 |
+| `SFreeGallery/galleryReview` | GET/POST / staff | `token,id,status,reason` | 新端待精确切流 | 状态限 `submitted/published/rejected/hidden`；每次改判写入操作审计。 |
+| `SFreeGallery/galleryDelete` | GET/POST / staff | `token,id,reason` | 新端待精确切流 | 软删除并写审计，不删除图片文件或历史记录。 |
+
+图片上传复用现有 `upload/full`；图集使用独立内容表、发布入口、图库和详情页。
+
 ### 5.1 互动日志与奖励
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
