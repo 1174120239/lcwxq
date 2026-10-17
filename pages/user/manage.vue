@@ -146,6 +146,14 @@
 						</view>
 					</waves>
 				</view>
+				<view class="index-sort-box" v-if="group=='administrator'||group=='editor'">
+					<waves itemClass="butclass">
+						<view class="index-sort-main" @tap="toLink('/pages/manage/gallery')">
+							<view class="index-sort-i"><text class="cuIcon-picfill"></text></view>
+							<view class="index-sort-text">图集审核</view>
+						</view>
+					</waves>
+				</view>
 				<view class="index-sort-box">
 					<waves itemClass="butclass">
 						<view class="index-sort-main" @tap="toLink('/pages/manage/shop')">

@@ -467,6 +467,10 @@
 			"style": { "navigationStyle": "custom" }
 		},
 		{
+			"path": "pages/manage/gallery",
+			"style": { "navigationStyle": "custom" }
+		},
+		{
 			"path": "pages/manage/withdraw",
 			"style": {
 				"enablePullDownRefresh": true
