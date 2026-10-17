@@ -58,6 +58,7 @@
 				<rich-composer v-model="form.description" :maxlength="5000" :night="AppStyle === 'campus-night'" :show-status="false" placeholder="说明具体情况、希望获得的帮助或你能提供的帮助。请勿公开QQ号、证件号码等个人信息。" @media="chooseImage"></rich-composer>
 				<view class="description-count">{{ form.description.length }}/5000</view>
 			</view>
+			<view class="review-expectation">{{ auditRequired ? '普通用户提交后进入审核；管理员或编辑可直接发布。' : '提交后会直接发布，其他同学可以看到这条互助信息。' }}</view>
 
 		</view>
 
@@ -75,7 +76,7 @@
 		<view class="editor-bottom-bar">
 			<button class="cu-btn bg-blue editor-submit-bottom" :disabled="submitting || !canSubmit" @tap="submit">
 				<view v-if="submitting" class="button-spinner"></view>
-				<text v-else class="cuIcon-upload"></text>{{ submitting ? '提交中...' : (editing ? '保存修改' : '提交审核') }}
+				<text v-else class="cuIcon-upload"></text>{{ submitting ? '提交中...' : (editing ? '保存修改' : '发布互助信息') }}
 			</button>
 		</view>
 
@@ -116,6 +117,7 @@
 				editing: false,
 				loading: false,
 				submitting: false,
+				auditRequired: true,
 				date: this.dateString(now),
 				time: this.timeString(now),
 				today: this.dateString(now),
@@ -177,6 +179,7 @@
 				that.$Net.request({
 					url: that.$API.lostFoundConfig(), data: { token: that.token() }, method: 'get', dataType: 'json',
 					success: function(res) {
+						if (res.data.code === 1 && res.data.data) that.auditRequired = Number(res.data.data.auditRequired) === 1
 						if (res.data.code === 1 && !res.data.data.eligible) {
 							uni.showToast({ title: res.data.data.enabled ? '达到Lv' + res.data.data.minimumLevel + '后可参与校园互助' : '校园互助暂未开放', icon: 'none' })
 							that.submitSuccess = true
@@ -327,6 +330,7 @@
 	.date-controls { flex: 1; display: flex; justify-content: flex-end; gap: 24rpx; color: #53616a; font-size: 27rpx; }
 	.form-section textarea { width: 100%; height: 310rpx; margin-top: 18rpx; color: #34434b; font-size: 28rpx; line-height: 44rpx; }
 	.description-count { text-align: right; color: #9aa5aa; font-size: 21rpx; }
+	.review-expectation { margin: 4rpx 30rpx 28rpx; color: #72827c; font-size: 22rpx; line-height: 1.5; }
 	.editor-bottom-bar { position: fixed; z-index: 80; left: 0; right: 0; bottom: 0; padding: 18rpx 28rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .96); border-top: 1rpx solid #dfe7e9; }
 	.editor-submit-bottom { width: 100%; height: 86rpx; border-radius: 16rpx; font-size: 29rpx; transition: transform .16s ease, opacity .16s ease; }
 	.editor-submit-bottom:active { transform: scale(.985); }
@@ -370,6 +374,7 @@
 	.campus-night .cover-subtitle,
 	.campus-night .field-count,
 	.campus-night .description-count { color: #a9b5b0; }
+	.campus-night .review-expectation { color: #a2b1ab; }
 	.campus-night .field-row { border-color: #333b3c; }
 	.campus-night .picker-value,
 	.campus-night .date-controls { color: #c6cfcb; }
@@ -396,4 +401,10 @@
 	@keyframes modalIn { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
 	@keyframes hudIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
 	@keyframes spin { to { transform: rotate(360deg); } }
+	@media (prefers-reduced-motion: reduce) {
+		*, *::before, *::after {
+			animation-duration: .01ms !important;
+			transition-duration: .01ms !important;
+		}
+	}
 </style>

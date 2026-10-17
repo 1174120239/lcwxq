@@ -51,13 +51,24 @@
 				</view>
 				<!--  #endif -->
 
-				<view class="anonymous-tip" v-if="anonymousMode">
-					<view class="anonymous-tip-icon"><text class="cuIcon-lock"></text></view>
-					<view class="anonymous-tip-copy">
-						<text class="anonymous-tip-title">匿名发布已开启</text>
-						<text class="anonymous-tip-desc">仅显示匿名身份</text>
+				<view class="identity-section" v-if="postType=='add' && type==0 && anonymousEnabled">
+					<view class="identity-heading">发布身份</view>
+					<view class="identity-options" :class="{'is-anonymous': anonymousMode}">
+						<view class="identity-slider" aria-hidden="true"></view>
+						<view class="identity-option" :class="{'is-selected': !anonymousMode}" @tap="setAnonymousMode(false)">
+							<text class="cuIcon-people"></text><text>本人</text><text v-if="!anonymousMode" class="cuIcon-check identity-check"></text>
+						</view>
+						<view class="identity-option" :class="{'is-selected': anonymousMode}" @tap="setAnonymousMode(true)">
+							<text class="cuIcon-lock"></text><text>匿名</text><text v-if="anonymousMode" class="cuIcon-check identity-check"></text>
+						</view>
 					</view>
-					<text class="anonymous-tip-state">已保护</text>
+					<view class="anonymous-tip" v-if="anonymousMode">
+						<view class="anonymous-tip-icon"><text class="cuIcon-lock"></text></view>
+						<view class="anonymous-tip-copy">
+							<text class="anonymous-tip-title">将以匿名身份展示</text>
+							<text class="anonymous-tip-desc">其他用户看不到你的真实身份；管理员仍可按社区规则处理内容。</text>
+						</view>
+					</view>
 				</view>
 
 				<view class="media-section" v-if="type==0||type==4">
@@ -283,6 +294,7 @@
 				id:0,
 				postType:"add",
 				anonymousMode:false,
+				anonymousEnabled:false,
 				type:0,
 				text:"",
 				maxTextLength:1500,
@@ -475,6 +487,7 @@
 				that.anonymousMode = true;
 				that.postType = "add";
 			}
+			if (that.postType === 'add' && that.type === 0) that.loadAnonymousConfig(Boolean(res.anonymous));
 			if(res.id){
 				that.id = res.id;
 				if(that.postType=='add'){
@@ -487,6 +500,32 @@
 			
 		},
 		methods: {
+			loadAnonymousConfig(requestAnonymous) {
+				this.$Net.request({
+					url: this.$API.anonymousConfig(),
+					method: 'get',
+					dataType: 'json',
+					success: (res) => {
+						const data = res.data && res.data.data
+						this.anonymousEnabled = Boolean(res.data && res.data.code == 1 && data && data.enabled)
+						if (requestAnonymous && !this.anonymousEnabled) {
+							this.anonymousMode = false
+							uni.showToast({ title: '匿名动态暂未开放', icon: 'none' })
+						}
+					},
+					fail: () => {
+						this.anonymousEnabled = false
+						if (requestAnonymous) {
+							this.anonymousMode = false
+							uni.showToast({ title: '暂时无法读取匿名发布状态', icon: 'none' })
+						}
+					}
+				})
+			},
+			setAnonymousMode(enabled) {
+				if (!this.anonymousEnabled || this.postType !== 'add' || this.type !== 0) return
+				this.anonymousMode = Boolean(enabled)
+			},
 			onFormatToggle(open) {
 				if (open) this.closeTransientPanels('format')
 			},
@@ -1961,6 +2000,89 @@
 		width: 100%;
 		max-width: 760px;
 		margin: 0 auto;
+	}
+
+	.identity-section {
+		margin: 18rpx 28rpx 0;
+		padding: 20rpx;
+		border: 1rpx solid #e2eae7;
+		border-radius: 16rpx;
+		background: #fff;
+	}
+
+	.identity-heading {
+		margin-bottom: 14rpx;
+		color: #40504b;
+		font-size: 23rpx;
+		font-weight: 600;
+	}
+
+	.identity-options {
+		position: relative;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12rpx;
+	}
+
+	.identity-slider {
+		position: absolute;
+		z-index: 0;
+		inset: 0 auto 0 0;
+		width: calc(50% - 6rpx);
+		border: 1rpx solid #68a992;
+		border-radius: 12rpx;
+		background: #eef7f3;
+		transition: transform 180ms cubic-bezier(.22, 1, .36, 1), background-color 180ms ease, border-color 180ms ease;
+	}
+
+	.identity-options.is-anonymous .identity-slider {
+		transform: translateX(calc(100% + 12rpx));
+	}
+
+	.identity-option {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		gap: 10rpx;
+		min-height: 68rpx;
+		padding: 0 16rpx;
+		border: 1rpx solid #dfe7e4;
+		border-radius: 12rpx;
+		color: #697873;
+		font-size: 22rpx;
+	}
+
+	.identity-option.is-selected {
+		border-color: transparent;
+		color: #28745e;
+	}
+
+	.identity-check {
+		margin-left: auto;
+	}
+
+	.campus-editor-page.campus-night .identity-section {
+		border-color: #30413a;
+		background: #202a26;
+	}
+
+	.campus-editor-page.campus-night .identity-heading {
+		color: #d3e4dc;
+	}
+
+	.campus-editor-page.campus-night .identity-option {
+		border-color: #394942;
+		color: #a5b7ae;
+	}
+
+	.campus-editor-page.campus-night .identity-option.is-selected {
+		color: #a8d6c1;
+	}
+
+	.campus-editor-page.campus-night .identity-slider {
+		border-color: #57957e;
+		background: #263a32;
 	}
 
 	.anonymous-tip {
@@ -3891,4 +4013,11 @@
 	@keyframes publish-expand-in { from { opacity:0; transform:translateY(-8rpx); } to { opacity:1; transform:translateY(0); } }
 	@keyframes publish-mask-in { from { opacity:0; } to { opacity:1; } }
 	@keyframes publish-sheet-up { from { opacity:0; transform:translateY(100%); } to { opacity:1; transform:translateY(0); } }
+
+	@media (prefers-reduced-motion: reduce) {
+		*, *::before, *::after {
+			animation-duration: .01ms !important;
+			transition-duration: .01ms !important;
+		}
+	}
 </style>

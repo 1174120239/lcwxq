@@ -430,7 +430,7 @@ form_post("SFreeSpace/spaceList", {
 - `fid`：匿名发布账号 UID，`0` 表示未开放匿名动态。
 - `review`：`1` 匿名动态进入待审核，`0` 按全局动态审核规则直接发布。
 
-前端入口：首页发布面板“匿名动态”，复用 `pages/space/post` 发布页（`?anonymous=1`）。
+前端入口：动态发布页按公开配置选择本人或匿名身份；历史 `?anonymous=1` 链接仍受公开配置校验并兼容打开。
 数据库迁移：`backend/database/migrations/005_ng_music_anonymous.sql`。
 
 ### 5.4 广告

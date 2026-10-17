@@ -28,27 +28,23 @@
 							</view>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
-						<view class="publish-option-grid">
-							<view class="publish-option publish-option-secondary" @tap.stop="goPublish('/pages/qa/post')">
-								<view class="publish-option-icon question-icon"><text class="cuIcon-question"></text></view>
+						<view class="publish-option publish-option-secondary" @tap.stop="goPublish('/pages/qa/post')">
+							<view class="publish-option-icon question-icon"><text class="cuIcon-question"></text></view>
+							<view class="publish-option-copy">
 								<text class="publish-option-label">提出问题</text>
-								<text class="publish-option-arrow cuIcon-right"></text>
+								<text class="publish-option-desc">向同学提问，获得经验和建议</text>
 							</view>
-							<view class="publish-option publish-option-secondary" @tap.stop="goPublish('/pages/space/post?anonymous=1')">
-								<view class="publish-option-icon anonymous-icon"><text class="cuIcon-notice"></text></view>
-								<text class="publish-option-label">匿名动态</text>
-								<text class="publish-option-arrow cuIcon-right"></text>
-							</view>
+							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
 						<view class="publish-option publish-option-mutual-aid" @tap.stop="goPublish('/pages/user/addshop?returnTo=mutualAidList')">
 							<view class="publish-option-icon mutual-aid-icon"><text class="cuIcon-friendadd"></text></view>
 							<view class="publish-option-copy">
-								<text class="publish-option-label">发布求助信息</text>
-								<text class="publish-option-desc">寻找帮助，也可以主动提供帮助</text>
+								<text class="publish-option-label">发布校园互助</text>
+								<text class="publish-option-desc">寻求帮助，或为同学提供帮助</text>
 							</view>
 							<text class="publish-option-arrow cuIcon-right"></text>
 						</view>
-						<text class="publish-option-hint">匿名动态不展示真实身份，请遵守社区规范</text>
+						<text class="publish-option-hint">发布动态时可选择是否匿名</text>
 					</view>
 					</view>
 				</scroll-view>
@@ -398,7 +394,7 @@
 		opacity: 0;
 		visibility: hidden;
 		pointer-events: none;
-		transition: opacity 220ms ease, visibility 0s linear 320ms;
+		transition: opacity 180ms ease, visibility 0s linear 260ms;
 		will-change: opacity;
 	}
 
@@ -441,7 +437,7 @@
 		box-shadow: 0 -18rpx 60rpx rgba(39, 59, 66, 0.18);
 		overflow: hidden;
 		transform: translate3d(-50%, 100%, 0);
-		transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition: transform 250ms cubic-bezier(0.22, 1, 0.36, 1);
 		will-change: transform;
 	}
 
@@ -479,7 +475,7 @@
 		margin: 0 auto;
 		opacity: 0;
 		transform: translateY(28rpx);
-		transition: opacity 260ms ease 80ms, transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 80ms;
+		transition: opacity 200ms ease 40ms, transform 240ms cubic-bezier(0.22, 1, 0.36, 1) 40ms;
 	}
 
 	.is-open .publish-announcement {
@@ -517,11 +513,11 @@
 	.publish-actions {
 		width: 100%;
 		max-width: 640rpx;
-		margin: auto auto clamp(56rpx, 5.5vh, 104rpx);
-		padding-top: clamp(72rpx, 6vh, 112rpx);
+		margin: auto auto clamp(36rpx, 4vh, 72rpx);
+		padding-top: clamp(32rpx, 3vh, 56rpx);
 		opacity: 0;
 		transform: translateY(calc(4% + 26rpx));
-		transition: opacity 260ms ease 150ms, transform 360ms cubic-bezier(0.22, 1, 0.36, 1) 150ms;
+		transition: opacity 200ms ease 60ms, transform 240ms cubic-bezier(0.22, 1, 0.36, 1) 60ms;
 	}
 
 	.is-open .publish-actions {
@@ -544,7 +540,7 @@
 		color: #354146;
 		opacity: 0;
 		transform: translateY(18rpx);
-		transition: opacity 280ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease, box-shadow 200ms ease;
+		transition: opacity 200ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease, box-shadow 180ms ease;
 	}
 
 	.publish-option-primary {
@@ -557,7 +553,7 @@
 		border-color: rgba(166, 211, 202, 0.76);
 		background: #edf7f5;
 		box-shadow: 0 18rpx 44rpx rgba(35, 124, 116, 0.13), inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
-		transition-delay: 40ms;
+		transition-delay: 20ms;
 	}
 
 	.publish-option-grid {
@@ -568,14 +564,15 @@
 	}
 
 	.publish-option-secondary {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: 64rpx minmax(0, 1fr) 28rpx;
 		align-items: center;
-		justify-content: center;
+		gap: 18rpx;
 		min-width: 0;
-		min-height: 142rpx;
-		padding: 18rpx 12rpx 16rpx;
-		text-align: center;
+		min-height: 112rpx;
+		margin-top: 14rpx;
+		padding: 16rpx 22rpx 16rpx 18rpx;
+		background: #f5f8fa;
 	}
 
 	.publish-option-mutual-aid {
@@ -588,7 +585,7 @@
 		padding: 16rpx 22rpx 16rpx 18rpx;
 		border-color: rgba(139, 195, 162, 0.7);
 		background: #f1f8f4;
-		transition-delay: 220ms;
+		transition-delay: 60ms;
 	}
 
 	.publish-option-mutual-aid .publish-option-icon {
@@ -597,12 +594,11 @@
 		font-size: 30rpx;
 	}
 
-	.publish-option-grid .publish-option-secondary:first-child {
-		transition-delay: 110ms;
-	}
-
-	.publish-option-grid .publish-option-secondary:last-child {
-		transition-delay: 170ms;
+	.publish-option-secondary .publish-option-icon {
+		width: 64rpx;
+		height: 64rpx;
+		margin: 0;
+		font-size: 30rpx;
 	}
 
 	.publish-option:active {
@@ -664,9 +660,8 @@
 	}
 
 	.publish-option-secondary .publish-option-label {
-		font-size: 28rpx;
-		line-height: 1.3;
-		text-align: center;
+		font-size: 30rpx;
+		text-align: left;
 	}
 
 	.publish-option-desc {
@@ -686,9 +681,7 @@
 	}
 
 	.publish-option-secondary .publish-option-arrow {
-		position: absolute;
-		top: 10rpx;
-		right: 12rpx;
+		position: static;
 		font-size: 22rpx;
 	}
 
@@ -701,6 +694,10 @@
 		color: #9aa5aa;
 		text-align: center;
 		letter-spacing: 0;
+	}
+
+	@media (max-width: 360px) {
+		.publish-option-desc { white-space: normal; }
 	}
 
 
@@ -757,6 +754,10 @@
 	.publish-system.is-night .publish-option-mutual-aid {
 		border-color: rgba(104, 169, 132, 0.28);
 		background: #26352f;
+	}
+
+	.publish-system.is-night .publish-option-secondary {
+		background: #242a2d;
 	}
 
 	.publish-system.is-night .publish-option-icon {

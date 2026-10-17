@@ -498,4 +498,11 @@
 	@keyframes qa-post-spin {
 		to { transform: rotate(360deg); }
 	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*, *::before, *::after {
+			animation-duration: .01ms !important;
+			transition-duration: .01ms !important;
+		}
+	}
 </style>
