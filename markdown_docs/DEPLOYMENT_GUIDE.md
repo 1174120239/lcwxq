@@ -1,6 +1,6 @@
 # 生产部署与回滚手册
 
-> 更新日期：2026-08-21
+> 更新日期：2026-10-18
 >
 > 适用服务：starfree-legacy.service、starfree-replacement.service 和 PHP admin
 
@@ -274,6 +274,10 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 | 014 | 014_lost_and_found.sql | 校园互助信息、评论、QQ 定向授权、审核日志和功能配置 |
 | 015 | 015_publish_rich_media.sql | 为校园问答和互助发布增加有序多图字段，保留首图兼容字段 |
 | 016 | 016_download_site_config.sql | 独立下载/介绍站标题、简介、网页版地址和 CORS 白名单 |
+| 018 | 018_email_broadcast.sql | 管理员邮件群发记录表 |
+| 019 | 019_user_lifecycle_analytics.sql | App 生命周期、首次启动和 App 内下载点击分析字段 |
+| 020 | 020_gallery_channel.sql | 独立图集内容及审核操作审计表 |
+| 021 | 021_ai_vision_moderation.sql | 图集审核开关、视觉审核开关和视觉模型配置字段 |
 
 规则：
 
@@ -282,6 +286,12 @@ Get-FileHash backend/starfree-replacement/target/starfree-replacement-0.1.0-SNAP
 - 先迁移数据库，再部署读取新结构的 JAR。
 - 已执行的迁移先查 information_schema，不要凭感觉重复运行。
 - MyISAM 主表不支持真正事务，跨表修改必须保留补偿和回滚方案。
+
+App 生命周期与下载分析接口 `/SFreeAnalytics/event` 使用 `promote-analytics-route.sh` 单独切流。该脚本只代理 App 事件，网站、H5 和网页版不应调用此接口；发布前先完成迁移 019 和 replacement JAR，发布后验证响应头、健康状态和一条脱敏测试事件。
+
+独立图集首次上线先通过受控发布入口明确执行迁移 020，再发布 replacement-backend 与 admin；精确 API 路由使用 `backend/deploy/production/promote-gallery-routes.sh`，验收 `X-Starfree-Backend: replacement-gallery`。PHP 菜单“图集管理”负责标签筛选、状态审核、隐藏/恢复和软删除；后台审核记录保留管理账号名。
+
+018、019、021 是纯增量结构，受控发布入口尚未内置这三个迁移，需在发布 JAR 前通过受控 MySQL 会话依次执行：018 只新建 `starfree_email_broadcast`，019 为 `starfree_activity_events` 增加平台、版本、来源、匿名访客和两个索引，021 为 `starfree_ai_moderation_config` 增加 `gallery_enabled`、`vision_enabled`、`vision_model`。执行前分别备份 `starfree_activity_events` 和 `starfree_ai_moderation_config`；执行后核对字段与索引，失败时只删除本次新增的表或列。021 未执行时，新 JAR 的 AI 审核配置查询会失败，必须保证迁移先于 JAR。
 
 004 会新增 `starfree_identity_options`，并修改 `starfree_users`。执行前必须定向备份
 `starfree_users`，确认 001-003 已完成，再执行一次 004；执行后检查两个新增索引、四个种子选项

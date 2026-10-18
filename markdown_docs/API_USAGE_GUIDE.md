@@ -135,6 +135,8 @@ const requestId = API.createRequestId('shop');
 
 ## 3. 系统、账号和通知
 
+管理员专用 `SFreeUsers/sendBroadcastEmail` 支持版本公告群发。请求使用 `token`、`requestId`、`subject`、`body`；先省略 `confirm` 或传 `confirm=false` 预览有效收件人数，只有确认收件人数无误后传 `confirm=true` 才实际发送。`requestId` 必须唯一，重复请求会被拒绝；只向未注销/未封禁且绑定有效邮箱的用户发送，返回成功和失败计数。群发记录写入 `starfree_email_broadcast`，SMTP 未配置时不会发送。
+
 ### 3.1 系统
 
 | 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
@@ -216,6 +218,12 @@ form_post("SFreeUsers/userRegister", {
 | `SFreeInvitation/config` | GET/POST / 无 | 可选 `inviteCode` | 公网新 | 返回 `enabled/rewardPoints/rewardExperience/androidDownloadUrl/iosDownloadUrl`；传有效邀请码时附邀请人公开资料。 |
 | `downloadSiteConfig` | GET / 无 | 无 | 公网旧 PHP | 返回独立下载/介绍站的 `heroKicker/heroTitle/heroIntro/webUrl`；CORS 来源由后台下载页设置维护。 |
 | `SFreeInvitation/me` | GET/POST / token | `token` | 公网新 | 返回当前用户唯一邀请码、成功邀请数、积分/经验累计值和最近记录；服务端从 token 得到 UID。 |
+
+### 3.5 App 生命周期与下载分析
+
+| 路径 | 方法/鉴权 | 参数 | 路由 | 调用与注意点 |
+|---|---|---|---|---|
+| `SFreeAnalytics/event` | GET/POST / 可选 token | `eventType,platform,appVersion,source,visitorId,token` | 公网新 | 仅接受白名单 App 事件：启动、前台、更新检查/下载/安装、首次启动和 App 内下载点击。`visitorId` 只能是客户端随机值，不得传设备号、IP、Cookie 或 token 内容；网站、H5、网页版事件不应上报。分析表不可用时不影响主业务请求。 |
 
 轻量邀请只奖励邀请人的积分和经验，不产生提现或多级返佣。注册时的 `params.inviteCode` 可以是用户邀请码；奖励记录按被邀请人 UID 幂等。
 

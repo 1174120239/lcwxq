@@ -156,6 +156,10 @@ mvn -f backend/starfree-replacement/pom.xml clean package
 | 013_ai_moderation_complete.sql | 统一动态/提问/评论 AI 审核历史、人工改判日志、每日评论巡检配置和总结 |
 | 014_lost_and_found.sql | 校园互助信息、公开评论、QQ 定向授权、审核日志和管理配置 |
 | 016_download_site_config.sql | 独立下载/介绍站标题、简介、网页版地址和 CORS 白名单 |
+| 018_email_broadcast.sql | 管理员邮件群发记录表 |
+| 019_user_lifecycle_analytics.sql | App 生命周期、首次启动和 App 内下载点击分析字段 |
+| 020_gallery_channel.sql | 独立图集内容及审核操作审计表 |
+| 021_ai_vision_moderation.sql | 图集审核开关、视觉审核开关和视觉模型配置字段 |
 
 ## 5. 请求和响应约定
 
