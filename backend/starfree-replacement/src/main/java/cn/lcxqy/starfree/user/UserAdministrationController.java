@@ -188,6 +188,12 @@ public class UserAdministrationController {
                 : ApiResponse.failure("发送失败");
     }
 
+    /** Administrator-only broadcast email. Omit confirm/ use confirm=false to preview recipients. */
+    @RequestMapping(value = "/sendBroadcastEmail", method = {RequestMethod.GET, RequestMethod.POST})
+    public ApiResponse sendBroadcastEmail(@RequestParam Map<String, String> request) {
+        return ApiResponse.success("群发处理完成", service.sendBroadcastEmail(request));
+    }
+
     /**
      * GET/POST {@code /SFreeUsers/banUser}: staff temporarily bans one account.
      *

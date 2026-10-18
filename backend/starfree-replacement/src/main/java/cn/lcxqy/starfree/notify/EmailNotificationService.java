@@ -55,6 +55,24 @@ public class EmailNotificationService {
         }
     }
 
+    /** Sends one administrator-approved broadcast message and reports delivery failure. */
+    public void sendBroadcast(String toEmail, String title, String text) {
+        if (!configured || blank(toEmail)) {
+            throw new IllegalStateException("邮件服务未配置");
+        }
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
+            helper.setFrom(from);
+            helper.setTo(toEmail);
+            helper.setSubject(title == null ? "" : title);
+            helper.setText(text == null ? "" : text);
+            mailSender.send(message);
+        } catch (Exception error) {
+            throw new IllegalStateException("邮件发送失败", error);
+        }
+    }
+
     private boolean blank(String value) {
         return value == null || value.trim().isEmpty();
     }

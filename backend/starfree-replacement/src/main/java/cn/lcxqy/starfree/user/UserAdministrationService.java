@@ -10,6 +10,7 @@ import cn.lcxqy.starfree.security.PhpassPasswordVerifier;
 import cn.lcxqy.starfree.security.PasswordPolicy;
 import cn.lcxqy.starfree.security.SessionTokenGenerator;
 import cn.lcxqy.starfree.security.StaffAccess;
+import cn.lcxqy.starfree.notify.EmailNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -62,6 +63,7 @@ public class UserAdministrationService {
     private final EconomyLockExecutor economyLock;
     private final ObjectMapper mapper;
     private final LegacyProjectionCacheInvalidator caches;
+    private final EmailNotificationService email;
     private final SecureRandom random = new SecureRandom();
 
     public UserAdministrationService(
@@ -75,7 +77,8 @@ public class UserAdministrationService {
             PhpassPasswordVerifier passwords,
             EconomyLockExecutor economyLock,
             ObjectMapper mapper,
-            LegacyProjectionCacheInvalidator caches) {
+            LegacyProjectionCacheInvalidator caches,
+            EmailNotificationService email) {
         this.jdbc = jdbc;
         this.tokens = tokens;
         this.access = access;
@@ -87,6 +90,18 @@ public class UserAdministrationService {
         this.economyLock = economyLock;
         this.mapper = mapper;
         this.caches = caches;
+        this.email = email;
+    }
+
+    /** Compatibility constructor for isolated service tests and integrations. */
+    public UserAdministrationService(
+            JdbcTemplate jdbc, LegacyTokenService tokens, StaffAccess access,
+            LegacySessionBridge sessions, LegacyRegistrationRedis verificationCodes,
+            LegacyRedisKeyStore redisKeys, SessionTokenGenerator tokenGenerator,
+            PhpassPasswordVerifier passwords, EconomyLockExecutor economyLock,
+            ObjectMapper mapper, LegacyProjectionCacheInvalidator caches) {
+        this(jdbc, tokens, access, sessions, verificationCodes, redisKeys, tokenGenerator,
+                passwords, economyLock, mapper, caches, null);
     }
 
     /**
@@ -467,6 +482,60 @@ public class UserAdministrationService {
                 "INSERT INTO starfree_inbox(type,uid,text,touid,isread,value,created,cid) "
                         + "VALUES('system',?,?,?,0,0,?,0)",
                 actor.getUid(), message, targetUid, Instant.now().getEpochSecond());
+    }
+
+    /** Administrator-only, explicit-confirmation broadcast to valid bound mailboxes. */
+    public Map<String, Object> sendBroadcastEmail(Map<String, String> request) {
+        access.requireAdministrator(RequestValues.text(request, "token"));
+        String requestId = RequestValues.text(request, "requestId").trim();
+        String subject = RequestValues.text(request, "subject").trim();
+        String body = RequestValues.text(request, "body").trim();
+        boolean confirm = "true".equalsIgnoreCase(RequestValues.text(request, "confirm"))
+                || "1".equals(RequestValues.text(request, "confirm"));
+        if (requestId.length() < 16 || requestId.length() > 100
+                || !requestId.matches("[A-Za-z0-9._:-]+")) {
+            throw new IllegalArgumentException("requestId必须为16-100位安全字符");
+        }
+        if (subject.isEmpty() || subject.length() > 200 || body.isEmpty() || body.length() > 10000) {
+            throw new IllegalArgumentException("主题或正文长度不符合要求");
+        }
+        Integer previous = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM starfree_email_broadcast WHERE request_id=?", Integer.class, requestId);
+        if (previous != null && previous > 0) {
+            throw new IllegalArgumentException("该requestId已经使用过，禁止重复群发");
+        }
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT DISTINCT LOWER(TRIM(mail)) AS mail FROM starfree_users "
+                        + "WHERE mail IS NOT NULL AND TRIM(mail)<>'' AND (bantime=0 OR bantime IS NULL) "
+                        + "AND (mail REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}$')");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("requestId", requestId);
+        result.put("recipients", rows.size());
+        if (!confirm) {
+            result.put("preview", true);
+            return result;
+        }
+        if (email == null) {
+            throw new IllegalStateException("邮件服务未配置");
+        }
+        jdbc.update("INSERT INTO starfree_email_broadcast(request_id,subject,body,created,status,total,success,failed) "
+                        + "VALUES(?,?,?,?,?,?,0,0)", requestId, subject, body, Instant.now().getEpochSecond(), "sending", rows.size());
+        int success = 0;
+        int failed = 0;
+        for (Map<String, Object> row : rows) {
+            try {
+                email.sendBroadcast(String.valueOf(row.get("mail")), subject, body);
+                success++;
+            } catch (RuntimeException error) {
+                failed++;
+            }
+        }
+        jdbc.update("UPDATE starfree_email_broadcast SET status=?,success=?,failed=? WHERE request_id=?",
+                failed == 0 ? "completed" : "completed_with_errors", success, failed, requestId);
+        result.put("preview", false);
+        result.put("success", success);
+        result.put("failed", failed);
+        return result;
     }
 
     /** Staff ban with an immutable violation audit row and immediate session revocation. */
