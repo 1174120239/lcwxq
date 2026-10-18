@@ -12,6 +12,7 @@ import cn.lcxqy.starfree.security.SessionTokenGenerator;
 import cn.lcxqy.starfree.security.StaffAccess;
 import cn.lcxqy.starfree.notify.EmailNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -66,6 +67,7 @@ public class UserAdministrationService {
     private final EmailNotificationService email;
     private final SecureRandom random = new SecureRandom();
 
+    @Autowired
     public UserAdministrationService(
             JdbcTemplate jdbc,
             LegacyTokenService tokens,
