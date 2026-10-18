@@ -50,4 +50,13 @@ public class WebConfig implements WebMvcConfigurer {
         requests.setReadTimeout(10000);
         return new RestTemplate(requests);
     }
+
+    /** Vision moderation can take much longer than a plain read; runs on the async executor. */
+    @Bean("aiModerationRestTemplate")
+    public RestTemplate aiModerationRestTemplate() {
+        SimpleClientHttpRequestFactory requests = new SimpleClientHttpRequestFactory();
+        requests.setConnectTimeout(5000);
+        requests.setReadTimeout(60000);
+        return new RestTemplate(requests);
+    }
 }

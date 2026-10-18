@@ -12,17 +12,20 @@ function ai_short($value, $length) {
 }
 function ai_type_label($value) {
     $labels = array('space'=>'动态','question'=>'提问','space_comment'=>'动态评论',
-        'qa_answer'=>'问答回答','qa_comment'=>'问答评论');
+        'qa_answer'=>'问答回答','qa_comment'=>'问答评论','gallery'=>'图集');
     return isset($labels[$value]) ? $labels[$value] : $value;
 }
 function ai_decision_label($value) {
-    $labels = array('approved'=>'通过','rejected'=>'拒绝','locked'=>'锁定','error'=>'异常','disabled'=>'未执行');
+    $labels = array('approved'=>'通过','rejected'=>'拒绝','locked'=>'锁定','error'=>'异常',
+        'disabled'=>'未执行','pending'=>'待审');
     return isset($labels[$value]) ? $labels[$value] : $value;
 }
 
 $config = array('enabled'=>0,'space_enabled'=>1,'question_enabled'=>1,'comment_enabled'=>0,
+    'gallery_enabled'=>1,'vision_enabled'=>1,
     'comment_review_time'=>'03:30','comment_action'=>'hide','provider'=>'deepseek',
     'api_url'=>'https://api.deepseek.com/chat/completions','api_key'=>'','model'=>'deepseek-chat',
+    'vision_model'=>'deepseek-flash',
     'custom_prompt'=>'','last_comment_review_date'=>'','last_comment_review_started'=>0,
     'last_comment_review_finished'=>0,'last_comment_review_error'=>'');
 $globalAudit = 0;
@@ -31,14 +34,15 @@ if ($globalResult && ($globalRow = mysqli_fetch_assoc($globalResult))) {
     $globalAudit = intval($globalRow['spaceAudit']);
 }
 $configResult = mysqli_query($connect, "SELECT enabled,space_enabled,question_enabled,comment_enabled,"
-    ."comment_review_time,comment_action,provider,api_url,api_key,model,custom_prompt,"
+    ."gallery_enabled,vision_enabled,"
+    ."comment_review_time,comment_action,provider,api_url,api_key,model,vision_model,custom_prompt,"
     ."last_comment_review_date,last_comment_review_started,last_comment_review_finished,"
     ."last_comment_review_error FROM starfree_ai_moderation_config WHERE id=1 LIMIT 1");
 if ($configResult && ($configRow = mysqli_fetch_assoc($configResult))) {
     $config = array_merge($config, $configRow);
 }
 
-$allowedTypes = array('','space','question','space_comment','qa_answer','qa_comment');
+$allowedTypes = array('','space','question','space_comment','qa_answer','qa_comment','gallery');
 $allowedDecisions = array('','approved','rejected','error');
 $filterType = isset($_GET['content_type']) && in_array($_GET['content_type'], $allowedTypes, true)
     ? $_GET['content_type'] : '';
@@ -78,18 +82,20 @@ if ($actionResult) while ($row = mysqli_fetch_assoc($actionResult)) $actions[] =
 </style>
 <div class="row"><div class="col-lg-12">
 <div class="card"><div class="card-body">
-<div class="d-flex justify-content-between align-items-center mb-3"><div><h4 class="header-title mb-1">AI 风险审核</h4><div class="text-muted">动态、提问实时审核；动态评论、问答回答和问答评论按日巡检。图片和视频仅审核附带文字。</div></div><span class="badge badge-<?php echo $globalAudit===1?'success':'secondary';?> p-2">审核总开关：<?php echo $globalAudit===1?'已开启':'已关闭';?></span></div>
+<div class="d-flex justify-content-between align-items-center mb-3"><div><h4 class="header-title mb-1">AI 风险审核</h4><div class="text-muted">动态、图集实时审核，带图内容会调用视觉模型；动态评论、问答回答和问答评论按日巡检。视频不做视觉识别。</div></div><span class="badge badge-<?php echo $globalAudit===1?'success':'secondary';?> p-2">审核总开关：<?php echo $globalAudit===1?'已开启':'已关闭';?></span></div>
 <?php if ($globalAudit !== 1): ?><div class="alert alert-warning">请先在“审核设置”开启“动态审核”。当前 AI 配置和历史不会被删除，但所有 AI 审核任务均停止。</div><?php endif; ?>
 <form action="aiModerationPost.php" method="post">
 <input type="hidden" name="csrf" value="<?php echo ai_h($_SESSION['ai_moderation_csrf']);?>"><input type="hidden" name="action" value="config">
 <fieldset class="<?php echo $globalAudit===1?'':'ai-config-disabled';?>" <?php echo $globalAudit===1?'':'disabled';?>>
 <div class="form-row">
-<div class="form-group col-md-3"><label>AI 审核总开关</label><div><input type="checkbox" name="enabled" id="ai_enabled" value="1" data-switch="success" <?php echo intval($config['enabled'])===1?'checked':'';?>><label style="display:block" for="ai_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
-<div class="form-group col-md-3"><label>动态实时审核</label><div><input type="checkbox" name="space_enabled" id="space_enabled" value="1" data-switch="success" <?php echo intval($config['space_enabled'])===1?'checked':'';?>><label style="display:block" for="space_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
-<div class="form-group col-md-3"><label>提问实时审核</label><div><input type="checkbox" name="question_enabled" id="question_enabled" value="1" data-switch="success" <?php echo intval($config['question_enabled'])===1?'checked':'';?>><label style="display:block" for="question_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
-<div class="form-group col-md-3"><label>每日评论巡检</label><div><input type="checkbox" name="comment_enabled" id="comment_enabled" value="1" data-switch="success" <?php echo intval($config['comment_enabled'])===1?'checked':'';?>><label style="display:block" for="comment_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>AI 审核总开关</label><div><input type="checkbox" name="enabled" id="ai_enabled" value="1" data-switch="success" <?php echo intval($config['enabled'])===1?'checked':'';?>><label style="display:block" for="ai_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>动态实时审核</label><div><input type="checkbox" name="space_enabled" id="space_enabled" value="1" data-switch="success" <?php echo intval($config['space_enabled'])===1?'checked':'';?>><label style="display:block" for="space_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>图集实时审核</label><div><input type="checkbox" name="gallery_enabled" id="gallery_enabled" value="1" data-switch="success" <?php echo intval($config['gallery_enabled'])===1?'checked':'';?>><label style="display:block" for="gallery_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>图片视觉审核</label><div><input type="checkbox" name="vision_enabled" id="vision_enabled" value="1" data-switch="success" <?php echo intval($config['vision_enabled'])===1?'checked':'';?>><label style="display:block" for="vision_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>提问实时审核</label><div><input type="checkbox" name="question_enabled" id="question_enabled" value="1" data-switch="success" <?php echo intval($config['question_enabled'])===1?'checked':'';?>><label style="display:block" for="question_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
+<div class="form-group col-md-2"><label>每日评论巡检</label><div><input type="checkbox" name="comment_enabled" id="comment_enabled" value="1" data-switch="success" <?php echo intval($config['comment_enabled'])===1?'checked':'';?>><label style="display:block" for="comment_enabled" data-on-label="开启" data-off-label="关闭"></label></div></div>
 </div>
-<div class="form-row"><div class="form-group col-md-4"><label>模型</label><input class="form-control" name="model" maxlength="80" required value="<?php echo ai_h($config['model']);?>"></div><div class="form-group col-md-4"><label>每日巡检时间（北京时间）</label><input class="form-control" type="time" name="comment_review_time" required value="<?php echo ai_h($config['comment_review_time']);?>"></div><div class="form-group col-md-4"><label>风险评论处理</label><select class="form-control" name="comment_action"><option value="hide" <?php echo $config['comment_action']==='hide'?'selected':'';?>>自动隐藏</option><option value="record" <?php echo $config['comment_action']==='record'?'selected':'';?>>只记录，不隐藏</option></select></div></div>
+<div class="form-row"><div class="form-group col-md-3"><label>文字模型</label><input class="form-control" name="model" maxlength="80" required value="<?php echo ai_h($config['model']);?>"></div><div class="form-group col-md-3"><label>视觉模型</label><input class="form-control" name="vision_model" maxlength="80" required value="<?php echo ai_h($config['vision_model']);?>"><small class="form-text text-muted">用于带图动态和图集。</small></div><div class="form-group col-md-3"><label>每日巡检时间（北京时间）</label><input class="form-control" type="time" name="comment_review_time" required value="<?php echo ai_h($config['comment_review_time']);?>"></div><div class="form-group col-md-3"><label>风险评论处理</label><select class="form-control" name="comment_action"><option value="hide" <?php echo $config['comment_action']==='hide'?'selected':'';?>>自动隐藏</option><option value="record" <?php echo $config['comment_action']==='record'?'selected':'';?>>只记录，不隐藏</option></select></div></div>
 <div class="form-group"><label>API Key</label><input class="form-control" type="password" name="api_key" maxlength="512" autocomplete="new-password" placeholder="留空保持不变"><small class="form-text text-muted">当前：<?php echo $config['api_key']===''?'未配置':'已配置';?>。密钥不会回显，关闭配置也不会清空。</small></div>
 <div class="form-group"><label>补充审核规则</label><textarea class="form-control" name="custom_prompt" maxlength="2000" rows="5" placeholder="只能补充更严格的校园社区规则"><?php echo ai_h($config['custom_prompt']);?></textarea></div>
 <button class="btn btn-primary" type="submit">保存 AI 审核设置</button>
@@ -98,11 +104,11 @@ if ($actionResult) while ($row = mysqli_fetch_assoc($actionResult)) $actions[] =
 </div></div>
 
 <div class="card"><div class="card-body"><h4 class="header-title mb-3">审核记录</h4>
-<form method="get" class="form-inline mb-3"><select name="content_type" class="form-control mr-2"><option value="">全部类型</option><?php foreach(array('space','question','space_comment','qa_answer','qa_comment') as $type):?><option value="<?php echo ai_h($type);?>" <?php echo $filterType===$type?'selected':'';?>><?php echo ai_h(ai_type_label($type));?></option><?php endforeach;?></select><select name="decision" class="form-control mr-2"><option value="">全部结论</option><?php foreach(array('approved','rejected','error') as $decision):?><option value="<?php echo ai_h($decision);?>" <?php echo $filterDecision===$decision?'selected':'';?>><?php echo ai_h(ai_decision_label($decision));?></option><?php endforeach;?></select><button class="btn btn-secondary" type="submit">筛选</button></form>
+<form method="get" class="form-inline mb-3"><select name="content_type" class="form-control mr-2"><option value="">全部类型</option><?php foreach(array('space','question','space_comment','qa_answer','qa_comment','gallery') as $type):?><option value="<?php echo ai_h($type);?>" <?php echo $filterType===$type?'selected':'';?>><?php echo ai_h(ai_type_label($type));?></option><?php endforeach;?></select><select name="decision" class="form-control mr-2"><option value="">全部结论</option><?php foreach(array('approved','rejected','error') as $decision):?><option value="<?php echo ai_h($decision);?>" <?php echo $filterDecision===$decision?'selected':'';?>><?php echo ai_h(ai_decision_label($decision));?></option><?php endforeach;?></select><button class="btn btn-secondary" type="submit">筛选</button></form>
 <div class="table-responsive"><table class="table table-sm ai-table"><thead><tr><th>时间/类型</th><th>内容快照</th><th>AI 结论</th><th>当前状态</th><th>人工改判</th></tr></thead><tbody>
 <?php if (empty($records)):?><tr><td colspan="5" class="text-center text-muted">暂无审核记录</td></tr><?php endif;?>
 <?php foreach($records as $record):?><tr><td><?php echo ai_h(ai_time($record['created']));?><br><span class="badge badge-light"><?php echo ai_h(ai_type_label($record['content_type']));?> #<?php echo intval($record['content_id']);?></span><br><small>UID <?php echo intval($record['author_uid']);?> · <?php echo ai_h($record['review_source']);?></small></td><td class="ai-record-text"><?php echo nl2br(ai_h(ai_short($record['content_snapshot'],260)));?><?php if($record['attachment_summary']!==''):?><div class="ai-muted mt-1"><?php echo ai_h($record['attachment_summary']);?></div><?php endif;?></td><td><strong class="<?php echo $record['ai_decision']==='approved'?'ai-ok':'ai-reason';?>"><?php echo ai_h(ai_decision_label($record['ai_decision']));?></strong><br><?php echo ai_h($record['risk_category']);?><div class="ai-record-text"><?php echo ai_h($record['reason']);?></div></td><td><?php echo intval($record['content_status'])===1?'公开':(intval($record['content_status'])===2?'锁定':'隐藏');?><?php if($record['human_decision']!==''):?><br><small>人工：<?php echo ai_h(ai_decision_label($record['human_decision']));?><br><?php echo ai_h($record['review_note']);?></small><?php endif;?></td><td>
-<form action="aiModerationPost.php" method="post"><input type="hidden" name="csrf" value="<?php echo ai_h($_SESSION['ai_moderation_csrf']);?>"><input type="hidden" name="action" value="status"><input type="hidden" name="review_id" value="<?php echo intval($record['id']);?>"><select class="form-control form-control-sm mb-1" name="target_status"><?php if($record['content_type']==='space'):?><option value="2">锁定</option><?php endif;?><option value="1">公开</option><option value="0">隐藏</option></select><input class="form-control form-control-sm mb-1" name="note" maxlength="1000" placeholder="改判说明"><button class="btn btn-sm btn-outline-primary" type="submit">保存状态</button></form>
+<?php if($record['content_type']==='gallery'):?><a class="btn btn-sm btn-outline-primary" href="gallery.php?status=submitted">去图集管理处理</a><?php else:?><form action="aiModerationPost.php" method="post"><input type="hidden" name="csrf" value="<?php echo ai_h($_SESSION['ai_moderation_csrf']);?>"><input type="hidden" name="action" value="status"><input type="hidden" name="review_id" value="<?php echo intval($record['id']);?>"><select class="form-control form-control-sm mb-1" name="target_status"><?php if($record['content_type']==='space'):?><option value="2">锁定</option><?php endif;?><option value="1">公开</option><option value="0">隐藏</option></select><input class="form-control form-control-sm mb-1" name="note" maxlength="1000" placeholder="改判说明"><button class="btn btn-sm btn-outline-primary" type="submit">保存状态</button></form><?php endif;?>
 </td></tr><?php endforeach;?></tbody></table></div>
 <?php $pageCount=max(1,intval(ceil($recordTotal/$recordLimit))); if($pageCount>1):?><nav><ul class="pagination pagination-sm"><?php for($i=1;$i<=$pageCount;$i++):?><li class="page-item <?php echo $i===$recordPage?'active':'';?>"><a class="page-link" href="?content_type=<?php echo urlencode($filterType);?>&decision=<?php echo urlencode($filterDecision);?>&page=<?php echo $i;?>"><?php echo $i;?></a></li><?php endfor;?></ul></nav><?php endif;?>
 </div></div>

@@ -6,6 +6,7 @@ import cn.lcxqy.starfree.push.UniPushService;
 import cn.lcxqy.starfree.notify.EmailNotificationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -73,6 +74,7 @@ public class SpaceService {
     private final EmailNotificationService email;
     private SpacePollService polls;
     private AiModerationService aiModeration;
+    private ApplicationEventPublisher events;
 
     public SpaceService(JdbcTemplate jdbc, ObjectMapper mapper, LegacyTokenService tokens,
                         LegacySpaceAbuseGuard abuseGuard) {
@@ -100,6 +102,11 @@ public class SpaceService {
     @Autowired
     void setAiModeration(AiModerationService aiModeration) {
         this.aiModeration = aiModeration;
+    }
+
+    @Autowired
+    void setEvents(ApplicationEventPublisher events) {
+        this.events = events;
     }
 
     public boolean add(Map<String, String> request, String ip) {
@@ -253,9 +260,7 @@ public class SpaceService {
 
         if (aiEnabled) {
             if (spaceId > 0) {
-                AiModerationService.Decision decision = aiModeration.reviewSpace(
-                        spaceId, viewer.uid, text, pic);
-                status = applyAiSpaceDecision(spaceId, decision);
+                publishAiReview(spaceId, viewer.uid, type, text, pic, now);
             } else {
                 status = 0;
                 sendSystemNotice(0, viewer.uid, "\u4f60\u7684\u52a8\u6001\u6b63\u5728\u4eba\u5de5\u5ba1\u6838\uff1a\u5ba1\u6838\u8bb0\u5f55\u6682\u65f6\u65e0\u6cd5\u5efa\u7acb");
@@ -405,10 +410,8 @@ public class SpaceService {
             LOG.error("Anonymous space {} was published but owner mapping could not be saved for uid {}",
                     spaceId, viewer.uid, error);
         }
-        if (aiEnabled) {
-            AiModerationService.Decision decision = aiModeration.reviewSpace(
-                    spaceId, viewer.uid, text, pic);
-            status = applyAiSpaceDecision(spaceId, decision);
+        if (aiEnabled && spaceId > 0) {
+            publishAiReview(spaceId, viewer.uid, type, text, pic, now);
         }
         try {
             jdbc.update("UPDATE starfree_users SET posttime = ?,ip = ? WHERE uid = ?",
@@ -420,25 +423,16 @@ public class SpaceService {
         return status == 0;
     }
 
-    private int applyAiSpaceDecision(long spaceId, AiModerationService.Decision decision) {
-        if (!decision.isEvaluated() || !decision.isSafe()) {
-            if (aiModeration != null) {
-                aiModeration.markContentStatus(decision.getReviewId(), 0);
-            }
-            return 0;
+    private void publishAiReview(long spaceId, long authorUid, int type, String text,
+                                 String pic, long modified) {
+        if (events == null || aiModeration == null || spaceId <= 0) {
+            return;
         }
-        try {
-            int changed = jdbc.update(
-                    "UPDATE starfree_space SET status=1 WHERE id=? AND status=0", spaceId);
-            if (changed == 1) {
-                aiModeration.markContentStatus(decision.getReviewId(), 1);
-                return 1;
-            }
-        } catch (DataAccessException error) {
-            LOG.error("Could not publish AI-approved space {}", spaceId, error);
-        }
-        aiModeration.markContentStatus(decision.getReviewId(), 0);
-        return 0;
+        List<String> images = type == 4
+                ? Collections.<String>emptyList()
+                : AiModerationService.imageUrls(pic);
+        events.publishEvent(new AiModerationRequest(AiModerationService.TYPE_SPACE, spaceId,
+                authorUid, text.replace("||rn||", "\r\n"), pic, images, modified));
     }
 
     private void restoreSpaceStatusBestEffort(long spaceId, int status) {
@@ -521,8 +515,7 @@ public class SpaceService {
             clearPresentationBestEffort(id);
         }
         if (aiEnabled) {
-            applyAiSpaceDecision(id, aiModeration.reviewSpace(
-                    id, number(get(existing, "uid")), text, pic));
+            publishAiReview(id, number(get(existing, "uid")), currentType, text, pic, now);
         }
         return changed;
     }

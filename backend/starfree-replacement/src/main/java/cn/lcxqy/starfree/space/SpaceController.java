@@ -35,7 +35,8 @@ public class SpaceController {
      * {@code text/pic/toid/onlyMe}。type 允许 0..5，除 0/4 外必须提供目标 toid；onlyMe 只能 0/1；
      * 正文最大 1500 字，type=6 插件动态拒绝。
      * 服务检查禁言、防机器人时间窗、24 小时发布上限、最低经验、违禁词和目标可见/锁定状态。
-     * spaceAudit 开启时写 status=0 并返回待审提示；公开成功后经验最多按日记三次。主动态写入
+     * spaceAudit 开启时写 status=0 并返回审核中提示，AI 在事务提交后异步判定并自动发布安全内容；
+     * 公开成功后经验最多按日记三次。主动态写入
      * 后，用户活动字段和经验是尽力更新，失败不会让客户端误重试产生重复 MyISAM 记录。
      */
     @RequestMapping("/addSpace")
@@ -43,7 +44,7 @@ public class SpaceController {
                            HttpServletRequest request) {
         boolean pending = spaces.add(params, clientIp(request));
         return ApiResponse.success(pending
-                ? "\u53d1\u5e03\u6210\u529f\uff0c\u8bf7\u7b49\u5f85\u7ba1\u7406\u5458\u5ba1\u6838"
+                ? "\u53d1\u5e03\u6210\u529f\uff0c\u6b63\u5728\u5ba1\u6838"
                 : "\u53d1\u5e03\u6210\u529f", null);
     }
 

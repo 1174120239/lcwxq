@@ -2,8 +2,14 @@ package cn.lcxqy.starfree.gallery;
 
 import cn.lcxqy.starfree.api.RequestValues;
 import cn.lcxqy.starfree.security.StaffAccess;
+import cn.lcxqy.starfree.space.AiModerationRequest;
+import cn.lcxqy.starfree.space.AiModerationService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -20,15 +26,28 @@ import java.util.Map;
 
 @Service
 public class GalleryService {
+    private static final Logger LOG = LoggerFactory.getLogger(GalleryService.class);
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<List<String>>() {};
     private final JdbcTemplate jdbc;
     private final StaffAccess access;
     private final ObjectMapper mapper;
+    private AiModerationService moderation;
+    private ApplicationEventPublisher events;
 
     public GalleryService(JdbcTemplate jdbc, StaffAccess access, ObjectMapper mapper) {
         this.jdbc = jdbc;
         this.access = access;
         this.mapper = mapper;
+    }
+
+    @Autowired(required = false)
+    void setAiModeration(AiModerationService moderation) {
+        this.moderation = moderation;
+    }
+
+    @Autowired(required = false)
+    void setEvents(ApplicationEventPublisher events) {
+        this.events = events;
     }
 
     public Page galleryList(Map<String, String> request) {
@@ -87,6 +106,7 @@ public class GalleryService {
         catch (Exception e) { throw new IllegalStateException("图片列表保存失败"); }
         long id = insertKey("INSERT INTO starfree_gallery_items(author_uid,title,description,image_urls,image_ratio,tags,status,created,modified) VALUES(?,?,?,?,?,?,'submitted',?,?)",
                 actor.getUid(), title, description, imagesJson, ratio, String.join(",", tags), now, now);
+        publishAiReview(id, actor.getUid(), title, description, tags, images, now);
         return managed(id);
     }
 
@@ -111,6 +131,7 @@ public class GalleryService {
                 status, optional(reason, 500), now, "published".equals(status) ? (number(old.get("published_at")) > 0 ? number(old.get("published_at")) : now) : 0, id);
         if (changed != 1) throw new IllegalArgumentException("图集不存在或已删除");
         audit(id, actor.getUid(), actor.getName(), previous, status, "review", reason, now);
+        recordAiHumanAction(id, previous, status, actor.getUid(), reason);
         return managed(id);
     }
 
@@ -121,7 +142,30 @@ public class GalleryService {
         long now = Instant.now().getEpochSecond();
         jdbc.update("UPDATE starfree_gallery_items SET status='deleted',review_reason=?,modified=?,published_at=0 WHERE id=?", optional(reason, 500), now, id);
         audit(id, actor.getUid(), actor.getName(), previous, "deleted", "delete", reason, now);
+        recordAiHumanAction(id, previous, "deleted", actor.getUid(), reason);
         return managed(id);
+    }
+
+    private void publishAiReview(long id, long uid, String title, String description,
+                                 List<String> tags, List<String> images, long modified) {
+        if (events == null || moderation == null || !moderation.enabledForGallery()) {
+            return;
+        }
+        String text = "图集标题：" + title + "\n图集描述：" + description
+                + "\n图集标签：" + String.join("、", tags);
+        events.publishEvent(new AiModerationRequest(AiModerationService.TYPE_GALLERY, id, uid,
+                text, "", images, modified));
+    }
+
+    private void recordAiHumanAction(long id, String from, String to, long uid, String reason) {
+        if (moderation == null) {
+            return;
+        }
+        try {
+            moderation.recordGalleryAction(id, from, to, uid, reason);
+        } catch (RuntimeException error) {
+            LOG.warn("Could not record AI human action for gallery {}", id);
+        }
     }
 
     private void audit(long id, long uid, String operatorName, String from, String to, String action, String reason, long now) {

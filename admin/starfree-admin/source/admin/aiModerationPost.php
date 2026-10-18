@@ -27,32 +27,38 @@ if ($action === 'config') {
     $spaceEnabled = isset($_POST['space_enabled']) && $_POST['space_enabled']==='1' ? 1 : 0;
     $questionEnabled = isset($_POST['question_enabled']) && $_POST['question_enabled']==='1' ? 1 : 0;
     $commentEnabled = isset($_POST['comment_enabled']) && $_POST['comment_enabled']==='1' ? 1 : 0;
+    $galleryEnabled = isset($_POST['gallery_enabled']) && $_POST['gallery_enabled']==='1' ? 1 : 0;
+    $visionEnabled = isset($_POST['vision_enabled']) && $_POST['vision_enabled']==='1' ? 1 : 0;
     $reviewTime = trim(isset($_POST['comment_review_time']) ? $_POST['comment_review_time'] : '03:30');
     $commentAction = isset($_POST['comment_action']) && $_POST['comment_action']==='record' ? 'record' : 'hide';
     $model = trim(isset($_POST['model']) ? $_POST['model'] : 'deepseek-chat');
+    $visionModel = trim(isset($_POST['vision_model']) ? $_POST['vision_model'] : 'deepseek-flash');
     $apiUrl = 'https://api.deepseek.com/chat/completions';
     $apiKey = trim(isset($_POST['api_key']) ? $_POST['api_key'] : '');
     $prompt = trim(isset($_POST['custom_prompt']) ? $_POST['custom_prompt'] : '');
     if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $reviewTime)
-        || $model==='' || strlen($model)>80 || strlen($apiKey)>512
-        || mb_strlen($prompt,'UTF-8')>2000) ai_post_fail('配置格式不正确');
+        || $model==='' || strlen($model)>80 || $visionModel==='' || strlen($visionModel)>80
+        || strlen($apiKey)>512 || mb_strlen($prompt,'UTF-8')>2000) ai_post_fail('配置格式不正确');
     $currentKey = '';
     $result = mysqli_query($connect, "SELECT api_key FROM starfree_ai_moderation_config WHERE id=1 LIMIT 1");
     if ($result && ($row=mysqli_fetch_assoc($result))) $currentKey=$row['api_key'];
     if ($apiKey==='') $apiKey=$currentKey;
     if ($enabled===1 && $apiKey==='') ai_post_fail('开启 AI 审核前必须配置 API Key');
     $stmt=$connect->prepare("INSERT INTO starfree_ai_moderation_config"
-        ."(id,enabled,space_enabled,question_enabled,comment_enabled,comment_review_time,comment_action,"
-        ."provider,api_url,api_key,model,custom_prompt,modified_by,modified) "
-        ."VALUES(1,?,?,?,?,?,?,'deepseek',?,?,?,?,0,?) ON DUPLICATE KEY UPDATE "
+        ."(id,enabled,space_enabled,question_enabled,comment_enabled,gallery_enabled,vision_enabled,"
+        ."comment_review_time,comment_action,provider,api_url,api_key,model,vision_model,custom_prompt,"
+        ."modified_by,modified) VALUES(1,?,?,?,?,?,?,?,?,'deepseek',?,?,?,?,?,0,?) ON DUPLICATE KEY UPDATE "
         ."enabled=VALUES(enabled),space_enabled=VALUES(space_enabled),question_enabled=VALUES(question_enabled),"
-        ."comment_enabled=VALUES(comment_enabled),comment_review_time=VALUES(comment_review_time),"
+        ."comment_enabled=VALUES(comment_enabled),gallery_enabled=VALUES(gallery_enabled),"
+        ."vision_enabled=VALUES(vision_enabled),comment_review_time=VALUES(comment_review_time),"
         ."comment_action=VALUES(comment_action),provider=VALUES(provider),api_url=VALUES(api_url),"
-        ."api_key=VALUES(api_key),model=VALUES(model),custom_prompt=VALUES(custom_prompt),modified=VALUES(modified)");
+        ."api_key=VALUES(api_key),model=VALUES(model),vision_model=VALUES(vision_model),"
+        ."custom_prompt=VALUES(custom_prompt),modified=VALUES(modified)");
     if (!$stmt) ai_post_fail('保存失败');
     $now=time();
-    $stmt->bind_param('iiiissssssi',$enabled,$spaceEnabled,$questionEnabled,$commentEnabled,
-        $reviewTime,$commentAction,$apiUrl,$apiKey,$model,$prompt,$now);
+    $stmt->bind_param('iiiiiisssssssi',$enabled,$spaceEnabled,$questionEnabled,$commentEnabled,
+        $galleryEnabled,$visionEnabled,$reviewTime,$commentAction,$apiUrl,$apiKey,$model,
+        $visionModel,$prompt,$now);
     if (!$stmt->execute()) ai_post_fail('保存失败');
     ai_post_ok('AI 审核设置已保存');
 }
