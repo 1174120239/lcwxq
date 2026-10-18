@@ -247,6 +247,9 @@ module.exports = {
 	invitationMe:function(){
 		return API_URL + 'SFreeInvitation/me';
 	},
+	analyticsEvent:function(){
+		return API_URL + 'SFreeAnalytics/event';
+	},
 	setClientId:function(){
 		return API_URL + 'SFreeUsers/setClientId';
 	},

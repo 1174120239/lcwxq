@@ -13,6 +13,9 @@ $anonymousReady = da_table_exists($connect, 'starfree_anonymous_posts');
 $pollReady = da_table_exists($connect, 'starfree_space_polls');
 $aiReady = da_table_exists($connect, 'starfree_space_ai_reviews');
 $reportsReady = da_table_exists($connect, 'starfree_space_reports');
+$analyticsReady = da_table_exists($connect, 'starfree_activity_events')
+    && da_column_exists($connect, 'starfree_activity_events', 'platform')
+    && da_column_exists($connect, 'starfree_activity_events', 'visitor_id');
 
 $allUsers = intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_users"));
 $newUsers30 = intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_users WHERE created>=$day30"));
@@ -63,6 +66,24 @@ $aiApproved = $aiReady ? intval(da_scalar($connect, "SELECT COUNT(*) FROM starfr
 $aiApprovalRate = $aiReady ? da_percent($aiApproved, $aiTotal) : null;
 $polls = $pollReady ? intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_space_polls")) : null;
 $pollVotes = $pollReady ? intval(da_scalar($connect, "SELECT COALESCE(SUM(total_votes),0) FROM starfree_space_polls")) : null;
+
+// Lifecycle retention is based on explicit app/page activity, never inferred from logged.
+$retentionD1 = $retentionD7 = null;
+$downloadClickUsers30 = $downloadLaunchUsers30 = $downloadFirstLaunchUsers30 = null;
+$downloadInstallRate30 = null;
+if ($analyticsReady) {
+    $retentionCohortStart = $today - 30 * 86400;
+    $retentionCohortEnd = $today - 8 * 86400;
+    $retentionUsers = intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_users WHERE created>=$retentionCohortStart AND created<$retentionCohortEnd"));
+    $retentionD1Users = intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_users u WHERE u.created>=$retentionCohortStart AND u.created<$retentionCohortEnd AND EXISTS (SELECT 1 FROM starfree_activity_events e WHERE e.uid=u.uid AND e.created>=u.created+86400 AND e.created<u.created+172800)"));
+    $retentionD7Users = intval(da_scalar($connect, "SELECT COUNT(*) FROM starfree_users u WHERE u.created>=$retentionCohortStart AND u.created<$retentionCohortEnd AND EXISTS (SELECT 1 FROM starfree_activity_events e WHERE e.uid=u.uid AND e.created>=u.created+604800 AND e.created<u.created+691200)"));
+    $retentionD1 = da_percent($retentionD1Users, $retentionUsers);
+    $retentionD7 = da_percent($retentionD7Users, $retentionUsers);
+    $downloadClickUsers30 = intval(da_scalar($connect, "SELECT COUNT(DISTINCT NULLIF(visitor_id,'')) FROM starfree_activity_events WHERE event_type='app_download_click' AND created>=$day30"));
+    $downloadLaunchUsers30 = intval(da_scalar($connect, "SELECT COUNT(DISTINCT NULLIF(visitor_id,'')) FROM starfree_activity_events WHERE event_type='app_launch' AND platform IN ('android','app') AND created>=$day30"));
+    $downloadFirstLaunchUsers30 = intval(da_scalar($connect, "SELECT COUNT(DISTINCT NULLIF(visitor_id,'')) FROM starfree_activity_events WHERE event_type='app_first_launch' AND platform IN ('android','app') AND created>=$day30"));
+    $downloadInstallRate30 = da_percent($downloadFirstLaunchUsers30, $downloadClickUsers30);
+}
 
 $dailyUsers = da_map(da_rows($connect, "SELECT DATE(FROM_UNIXTIME(created)) d,COUNT(*) c FROM starfree_users WHERE created>=$day30 GROUP BY d"), 'd', 'c');
 $dailyPosts = da_map(da_rows($connect, "SELECT DATE(FROM_UNIXTIME(created)) d,COUNT(*) c FROM starfree_space WHERE type<>3 AND status=1 AND onlyMe=0 AND created>=$day30 GROUP BY d"), 'd', 'c');
@@ -128,7 +149,11 @@ $cards = array(
     array('待审核动态', da_number($pendingSpaces), 'AI待人工 '.($aiPending===null?'--':da_number($aiPending))),
     array('举报处理率', da_percent_text($reportResolutionRate), $reportsReady?'已处理 '.$reportResolved.'/'.$reportTotal:'举报表不可用'),
     array('AI自动通过率', da_percent_text($aiApprovalRate), $aiReady?'自动通过 '.$aiApproved.'/'.$aiTotal:'AI审核表不可用'),
-    array('投票参与', $pollVotes===null?'--':da_number($pollVotes), '投票数 '.($polls===null?'--':da_number($polls)))
+    array('投票参与', $pollVotes===null?'--':da_number($pollVotes), '投票数 '.($polls===null?'--':da_number($polls))),
+    array('D1 留存', da_percent_text($retentionD1), '按注册后明确活动计算'),
+    array('D7 留存', da_percent_text($retentionD7), '已观察满7天用户 cohort'),
+    array('App 下载点击用户', $downloadClickUsers30===null?'--':da_number($downloadClickUsers30), '近30天 App 内下载意向'),
+    array('App 首次启动率', da_percent_text($downloadInstallRate30), '首次启动 / 下载点击；仅为可观测代理')
 );
 foreach($cards as $card){?>
 <div class="col-xl-3 col-md-6"><div class="card da-metric"><div class="card-body"><div class="da-note"><?php echo da_h($card[0]);?></div><div class="da-value mt-1"><?php echo da_h($card[1]);?></div><div class="da-note mt-2"><?php echo da_h($card[2]);?></div></div></div></div>
@@ -136,6 +161,8 @@ foreach($cards as $card){?>
 </div>
 
 <div class="row"><div class="col-xl-8"><div class="card"><div class="card-body"><h4 class="header-title">注册、动态与回复趋势（30天）</h4><div id="growth-trend" class="da-chart"></div></div></div></div><div class="col-xl-4"><div class="card"><div class="card-body"><h4 class="header-title">用户转化漏斗</h4><div id="user-funnel" class="da-chart"></div><p class="da-note">累计发帖/回复用户按历史行为去重；注册后7天发帖率使用已观察满7天的新用户 cohort。</p></div></div></div></div>
+
+<div class="row"><div class="col-xl-7"><div class="card"><div class="card-body"><h4 class="header-title">用户生命周期留存</h4><div id="retention-funnel" class="da-chart"></div><p class="da-note">仅统计迁移后写入的明确活动事件；未部署迁移或没有事件时显示 --，不把登录时间当作留存。</p></div></div></div><div class="col-xl-5"><div class="card"><div class="card-body"><h4 class="header-title">App 下载与首次启动（近30天）</h4><div id="download-funnel" class="da-chart"></div><p class="da-note">只统计 App 内的下载点击与 App 首次启动，不记录网站或网页版访问。首次启动是安装成功的可观测代理。</p></div></div></div></div>
 
 <div class="row"><div class="col-xl-7"><div class="card"><div class="card-body"><h4 class="header-title">动态回复率趋势（按发布日期）</h4><div id="reply-rate-trend" class="da-chart"></div><p class="da-note">某日公开主动态中，当前至少有一条公开回复的动态占比。近期数据会随后续回复继续变化。</p></div></div></div><div class="col-xl-5"><div class="card"><div class="card-body"><h4 class="header-title">回复质量概览（30天）</h4><div id="reply-quality" class="da-chart"></div><div class="row text-center"><div class="col-4"><div class="da-value"><?php echo da_number($repliers30);?></div><div class="da-note">回复用户</div></div><div class="col-4"><div class="da-value"><?php echo da_percent_text($zeroReplyRate30);?></div><div class="da-note">零回复率</div></div><div class="col-4"><div class="da-value"><?php echo $reportedPending===null?'--':da_number($reportedPending);?></div><div class="da-note">待处理举报</div></div></div></div></div></div></div>
 
@@ -152,6 +179,8 @@ new ApexCharts(document.querySelector('#user-funnel'),{chart:{type:'bar',height:
 new ApexCharts(document.querySelector('#reply-rate-trend'),{chart:{type:'line',height:310,toolbar:{show:false}},series:[{name:'回复率',data:<?php echo json_encode($replyRateTrend);?>}],xaxis:{categories:<?php echo json_encode($labels);?>,tickAmount:7},yaxis:{min:0,max:100,labels:{formatter:function(v){return Math.round(v)+'%';}}},colors:['#d28b3f'],stroke:{curve:'smooth',width:3},dataLabels:{enabled:false},tooltip:{y:{formatter:function(v){return v.toFixed(1)+'%';}}}}).render();
 new ApexCharts(document.querySelector('#reply-quality'),{chart:{type:'donut',height:255},series:[<?php echo $publicPosts30>0?$repliedPosts30.','.max(0,$publicPosts30-$repliedPosts30):'0,1';?>],labels:<?php echo $publicPosts30>0?"['已有回复','尚无回复']":"['暂无动态','']";?>,colors:['#168573','#d7ddda'],legend:{position:'bottom'},dataLabels:{enabled:<?php echo $publicPosts30>0?'true':'false';?>,formatter:function(v){return v.toFixed(1)+'%';}}}).render();
 new ApexCharts(document.querySelector('#active-content'),{chart:{type:'bar',height:310,toolbar:{show:false}},series:[{name:'数量',data:[<?php echo $dau.','.$wau.','.$active30.','.intval(isset($types['0'])?$types['0']:0).','.intval(isset($types['4'])?$types['4']:0).','.intval(isset($types['3'])?$types['3']:0);?>]}],xaxis:{categories:['DAU','WAU','MAU','普通动态','视频动态','回复']},colors:['#4d7ea8'],dataLabels:{enabled:true}}).render();
+new ApexCharts(document.querySelector('#retention-funnel'),{chart:{type:'bar',height:310,toolbar:{show:false}},series:[{name:'留存率',data:[<?php echo $retentionD1===null?'0':$retentionD1;?>,<?php echo $retentionD7===null?'0':$retentionD7;?>]}],xaxis:{categories:['D1','D7']},yaxis:{min:0,max:100,labels:{formatter:function(v){return Math.round(v)+'%';}}},colors:['#168573'],dataLabels:{enabled:true,formatter:function(v){return v.toFixed(1)+'%';}}}).render();
+new ApexCharts(document.querySelector('#download-funnel'),{chart:{type:'bar',height:310,toolbar:{show:false}},series:[{name:'用户数',data:[<?php echo $downloadClickUsers30===null?'0':$downloadClickUsers30;?>,<?php echo $downloadFirstLaunchUsers30===null?'0':$downloadFirstLaunchUsers30;?>,<?php echo $downloadLaunchUsers30===null?'0':$downloadLaunchUsers30;?>]}],xaxis:{categories:['App 下载点击用户','首次启动用户','启动用户']},colors:['#d28b3f'],plotOptions:{bar:{horizontal:true,borderRadius:2}},dataLabels:{enabled:true}}).render();
 });
 </script>
 <?php include_once 'Footer.php'; ?>

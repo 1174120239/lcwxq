@@ -1,5 +1,6 @@
 const WGT_MANIFEST_URL = 'https://frp.lcxqy.cn/app-updates/update.json'
 const APP_ID = '__UNI__850911F'
+import { track } from './analytics.js'
 
 function isAndroidApp() {
 	// #ifdef APP-PLUS
@@ -59,6 +60,7 @@ function normalizeManifest(raw) {
 }
 
 export function checkAndroidWgtUpdate() {
+	track('app_update_check', 'settings')
 	return getRuntimeInfo().then((runtime) => {
 		if (!runtime.isAndroid) return { runtime, available: false, update: null }
 		return requestManifest().then((raw) => {
@@ -94,6 +96,7 @@ export function installAndroidWgt(update, onProgress, onStage) {
 			if (typeof onStage === 'function') onStage(stage)
 		}
 		reportStage('downloading')
+		track('app_update_download', 'settings', { appVersion: String(update.versionCode || '') })
 		const task = uni.downloadFile({
 			url: update.wgtUrl,
 			timeout: 120000,
@@ -105,6 +108,7 @@ export function installAndroidWgt(update, onProgress, onStage) {
 				reportProgress(100, true)
 				reportStage('installing')
 				plus.runtime.install(res.tempFilePath, { force: false }, () => {
+					track('app_update_install', 'settings', { appVersion: String(update.versionCode || '') })
 					resolve()
 					setTimeout(() => plus.runtime.restart(), 420)
 				}, (error) => {

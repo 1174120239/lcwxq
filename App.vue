@@ -6,11 +6,14 @@
 	import { applyCampusThemeShell, getCampusThemeMode } from '@/utils/campusTheme.js'
 	import { refreshSession } from '@/utils/session.js'
 	import { installCampusNavigation } from '@/utils/navigation.js'
+	import { track, trackFirstAppLaunch } from '@/utils/analytics.js'
 	export default {
 		// #ifdef H5
 		mixins: [pageAnimation],
 		// #endif
 			onLaunch: function() {
+			track('app_launch', 'app')
+			trackFirstAppLaunch('app')
 			installCampusNavigation()
 			applyCampusThemeShell(getCampusThemeMode())
 			refreshSession({ force: true })
@@ -205,6 +208,7 @@
 
 		},
 		onShow: function() {
+			track('app_foreground', 'app')
 			applyCampusThemeShell(getCampusThemeMode())
 			refreshSession()
 			console.log('App Show')

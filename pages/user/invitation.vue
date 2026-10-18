@@ -70,6 +70,7 @@
 <script>
 	import { localStorage } from '../../js_sdk/mp-storage/mp-storage/index.js'
 	import { applyCampusThemeShell, getCampusThemeMode, isDongchangfuNight, resolveCampusNight } from '@/utils/campusTheme.js'
+	import { trackDownload } from '@/utils/analytics.js'
 	var API = require('../../utils/api')
 	export default {
 		data() {
@@ -165,6 +166,7 @@
 			},
 			openDownload(url) {
 				if (!url) return
+				if (url !== this.webUrl) trackDownload('download', 'invitation')
 				// #ifdef APP-PLUS
 				plus.runtime.openURL(url)
 				// #endif
