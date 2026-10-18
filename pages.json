@@ -2,6 +2,7 @@
 	"easycom": {
 		"^tn-(.*)": "@/uni_modules/tuniao-ui/components/tn-$1/tn-$1.vue",
 		"^u-(.*)": "@/uni_modules/uview-ui/components/u-$1/u-$1.vue",
+		"^gallery-focus$": "@/components/gallery-focus/gallery-focus.vue",
 		"^campus-avatar$": "@/components/campus-avatar/campus-avatar.vue",
 		"^space-reply-thread$": "@/components/space-reply-thread/space-reply-thread.vue",
 		"^qa-question-card$": "@/components/qa-question-card/qa-question-card.vue",
