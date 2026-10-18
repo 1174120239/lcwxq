@@ -77,6 +77,11 @@
 			<template v-if="hasMore">加载更多</template>
 			<template v-else>已经到底了</template>
 		</view>
+
+		<view class="g-fab" @tap="openPost">
+			<text class="cuIcon-add"></text>
+			<text>发布图集</text>
+		</view>
 	</view>
 </template>
 
@@ -419,7 +424,7 @@ export default {
 	min-height: 100vh;
 	background: radial-gradient(130% 55% at 50% 0%, #fffdf8 0%, #faf7f2 72%);
 	color: var(--g-ink);
-	padding-bottom: 40px;
+	padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 .gallery-page.night {
 	background: #0a0e0c;
@@ -537,6 +542,30 @@ export default {
 .g-empty-cta:active { opacity: 0.85; }
 .g-more { display: table; margin: 10px auto 0; height: 34px; line-height: 34px; padding: 0 22px; border: 1px solid var(--g-line); border-radius: 17px; color: var(--g-muted); font-size: 12px; }
 .g-more:active { background: var(--g-chip); }
+
+/* floating publish */
+.g-fab {
+	position: fixed;
+	right: 20px;
+	bottom: calc(24px + env(safe-area-inset-bottom));
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	height: 50px;
+	padding: 0 20px 0 18px;
+	border-radius: 25px;
+	background: var(--g-primary);
+	color: var(--g-on-primary);
+	font-size: 14px;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	box-shadow: 0 10px 26px rgba(35, 124, 116, 0.38);
+	transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.g-fab .cuIcon-add { font-size: 18px; }
+.g-fab:active { transform: scale(0.96); opacity: 0.9; }
+.night .g-fab { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55); }
 
 @media (min-width: 700px) {
 	.g-tags-track { padding-left: max(22px, calc((100vw - 1080px) / 2)); padding-right: max(22px, calc((100vw - 1080px) / 2)); }

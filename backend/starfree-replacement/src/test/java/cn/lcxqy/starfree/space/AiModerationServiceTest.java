@@ -91,6 +91,38 @@ class AiModerationServiceTest {
     }
 
     @Test
+    void galleryVisionInlinesDownloadedPublicImagesForTheProvider() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        RestTemplate http = mock(RestTemplate.class);
+        AiModerationService service = new AiModerationService(jdbc, new ObjectMapper(), http);
+        Map<String, Object> config = config(1);
+        config.put("vision_enabled", 1);
+        when(jdbc.queryForList(startsWith("SELECT c.enabled")))
+                .thenReturn(Collections.singletonList(config));
+        when(http.getForObject(eq("https://frp.lcxqy.cn/uploads/demo.png"), eq(byte[].class)))
+                .thenReturn(pngBytes());
+        when(http.postForObject(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn("{\"choices\":[{\"message\":{\"content\":\"{\\\"safe\\\":true,"
+                        + "\\\"category\\\":\\\"正常\\\",\\\"reason\\\":\\\"图片正常\\\"}\"}}]}");
+        when(jdbc.queryForObject(startsWith("SELECT id FROM starfree_ai_moderation_reviews"),
+                eq(Long.class), eq("gallery"), eq(43L), anyString())).thenReturn(100L);
+
+        AiModerationService.Decision decision = service.reviewGallery(43L, 7L,
+                "图集标题：测试", Collections.singletonList("https://frp.lcxqy.cn/uploads/demo.png"));
+
+        assertThat(decision.isSafe()).isTrue();
+        ArgumentCaptor<HttpEntity> request = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(http).postForObject(eq("https://api.deepseek.com/chat/completions"),
+                request.capture(), eq(String.class));
+        Map<?, ?> body = (Map<?, ?>) request.getValue().getBody();
+        List<?> messages = (List<?>) body.get("messages");
+        List<?> content = (List<?>) ((Map<?, ?>) messages.get(1)).get("content");
+        Map<?, ?> imageUrl = (Map<?, ?>) ((Map<?, ?>) content.get(1)).get("image_url");
+        assertThat(String.valueOf(imageUrl.get("url")))
+                .startsWith("data:image/jpeg;base64,");
+    }
+
+    @Test
     void galleryScopeRequiresItsOwnSwitch() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         RestTemplate http = mock(RestTemplate.class);
@@ -116,6 +148,14 @@ class AiModerationServiceTest {
         assertThat(service.enabledForQuestion()).isFalse();
         assertThat(service.enabledForComments()).isFalse();
         verify(http, never()).postForObject(anyString(), any(HttpEntity.class), eq(String.class));
+    }
+
+    private byte[] pngBytes() throws Exception {
+        java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(
+                20, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(image, "png", out);
+        return out.toByteArray();
     }
 
     private Map<String, Object> config(int globalAudit) {

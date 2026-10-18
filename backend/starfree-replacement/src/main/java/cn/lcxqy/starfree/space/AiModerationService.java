@@ -17,6 +17,18 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.client.RestTemplate;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +55,10 @@ public class AiModerationService {
     private static final Logger LOG = LoggerFactory.getLogger(AiModerationService.class);
     private static final String DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
     private static final int MAX_IMAGES = 9;
+    private static final int MAX_INLINE_IMAGE_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_INLINE_IMAGE_DIMENSION = 1280;
+    private static final int MAX_INLINE_PAYLOAD_BYTES = 2 * 1024 * 1024;
+    private static final String[] INLINE_IMAGE_HOST_SUFFIXES = {".lcxqy.cn", ".lcyz.site"};
     private static final String SYSTEM_PROMPT = "你是校园社区内容安全审核员。必须严格审查挑起群体或地域对立、"
             + "暴露学生姓名、学号、班级、宿舍、联系方式等个人信息、违法犯罪、威胁辱骂、色情低俗、"
             + "广告垃圾、自伤或伤害他人的风险，以及其他可能伤害学生的内容。只审核提供的文字，不要"
@@ -253,6 +270,9 @@ public class AiModerationService {
         Decision decision = reviewSpace(request.getContentId(), request.getAuthorUid(),
                 request.getText(), request.getAttachment(), request.getImages());
         if (!decision.isEvaluated()) {
+            if (spaceStatus(request.getContentId()) == 0 && spaceExists(request.getContentId())) {
+                notifyPending(request.getAuthorUid(), request.getContentId(), "动态");
+            }
             return;
         }
         int current = spaceStatus(request.getContentId());
@@ -276,11 +296,17 @@ public class AiModerationService {
     private void applyGalleryDecision(AiModerationRequest request) {
         Decision decision = reviewGallery(request.getContentId(), request.getAuthorUid(),
                 request.getText(), request.getImages());
-        if (!decision.isEvaluated()) {
-            return;
-        }
         String current = galleryStatus(request.getContentId());
         long now = Instant.now().getEpochSecond();
+        if (!decision.isEvaluated()) {
+            if ("submitted".equals(current)) {
+                jdbc.update("UPDATE starfree_gallery_items SET review_reason=?,modified=? "
+                                + "WHERE id=? AND status='submitted'",
+                        truncate(decision.getReason(), 500), now, request.getContentId());
+                notifyPending(request.getAuthorUid(), request.getContentId(), "图集");
+            }
+            return;
+        }
         if (decision.isSafe()) {
             int changed = jdbc.update("UPDATE starfree_gallery_items SET status='published',"
                             + "review_reason='',published_at=?,modified=? "
@@ -572,14 +598,127 @@ public class AiModerationService {
         textPart.put("text", text);
         content.add(textPart);
         for (String url : images) {
+            // DeepSeek cannot always reach the public image host, so hand it the bytes directly.
+            String payload = imagePayload(url);
             Map<String, Object> imageUrl = new LinkedHashMap<String, Object>();
-            imageUrl.put("url", url);
+            imageUrl.put("url", payload == null ? url : payload);
             Map<String, Object> imagePart = new LinkedHashMap<String, Object>();
             imagePart.put("type", "image_url");
             imagePart.put("image_url", imageUrl);
             content.add(imagePart);
         }
         return content;
+    }
+
+    private String imagePayload(String url) {
+        if (!allowedImageUrl(url)) {
+            return null;
+        }
+        try {
+            byte[] bytes = http.getForObject(url, byte[].class);
+            if (bytes == null || bytes.length == 0 || bytes.length > MAX_INLINE_IMAGE_BYTES) {
+                return null;
+            }
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (image == null) {
+                LOG.warn("Moderation image is not readable, falling back to URL: {}", url);
+                return null;
+            }
+            byte[] jpeg = shrinkImage(image);
+            if (jpeg == null || jpeg.length == 0 || jpeg.length > MAX_INLINE_PAYLOAD_BYTES) {
+                return null;
+            }
+            return "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(jpeg);
+        } catch (Exception error) {
+            LOG.warn("Could not inline moderation image {}, falling back to URL: {}",
+                    url, error.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private boolean allowedImageUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return false;
+            }
+            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+                return false;
+            }
+            String lower = host.toLowerCase(Locale.ROOT);
+            for (String suffix : INLINE_IMAGE_HOST_SUFFIXES) {
+                if (lower.endsWith(suffix) || lower.equals(suffix.substring(1))) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    private byte[] shrinkImage(BufferedImage source) throws Exception {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+        double scale = Math.min(1d,
+                (double) MAX_INLINE_IMAGE_DIMENSION / Math.max(width, height));
+        int targetWidth = Math.max(1, (int) Math.round(width * scale));
+        int targetHeight = Math.max(1, (int) Math.round(height * scale));
+        BufferedImage canvas = new BufferedImage(targetWidth, targetHeight,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = canvas.createGraphics();
+        try {
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, targetWidth, targetHeight);
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                    RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING,
+                    RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(source, 0, 0, targetWidth, targetHeight, null);
+        } finally {
+            graphics.dispose();
+        }
+        float[] qualities = {0.82f, 0.68f, 0.55f};
+        byte[] encoded = null;
+        for (float quality : qualities) {
+            encoded = writeJpeg(canvas, quality);
+            if (encoded.length <= MAX_INLINE_PAYLOAD_BYTES) {
+                break;
+            }
+        }
+        return encoded;
+    }
+
+    private byte[] writeJpeg(BufferedImage image, float quality) throws Exception {
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageOutputStream stream = ImageIO.createImageOutputStream(out);
+        try {
+            writer.setOutput(stream);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            writer.write(null, new IIOImage(image, null, null), param);
+        } finally {
+            stream.close();
+            writer.dispose();
+        }
+        return out.toByteArray();
+    }
+
+    private boolean spaceExists(long spaceId) {
+        try {
+            Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM starfree_space WHERE id=?",
+                    Integer.class, spaceId);
+            return count != null && count > 0;
+        } catch (DataAccessException error) {
+            return false;
+        }
     }
 
     private String moderationContent(String contentType, String text, String attachment,

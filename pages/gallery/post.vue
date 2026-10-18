@@ -65,6 +65,12 @@
 				</view>
 			</view>
 		</scroll-view>
+
+		<view class="editor-footer">
+			<view class="editor-footer-inner">
+				<view class="editor-footer-submit" :class="{ disabled: !canSubmit }" @tap="submit">{{ submitting ? '提交中…' : '发布图集' }}</view>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -277,7 +283,7 @@ export default {
 
 /* form */
 .editor-scroll { height: calc(100vh - env(safe-area-inset-top) - 54px); }
-.editor-form { max-width: 760px; margin: 0 auto; padding: 28px 18px 60px; box-sizing: border-box; }
+.editor-form { max-width: 760px; margin: 0 auto; padding: 28px 18px 120px; box-sizing: border-box; }
 .editor-title { width: 100%; height: 56px; border-bottom: 1px solid var(--e-line); font-family: var(--e-serif); font-size: 22px; font-weight: 700; color: var(--e-title); }
 .editor-ph { color: var(--e-faint); }
 .editor-desc-wrap { position: relative; }
@@ -315,6 +321,14 @@ export default {
 /* note */
 .editor-note { display: flex; gap: 8px; margin-top: 32px; padding: 13px 14px; background: var(--e-primary-soft); color: var(--e-muted); border-radius: 8px; font-size: 11px; line-height: 1.55; }
 .editor-note .cuIcon-info { flex: none; margin-top: 2px; color: var(--e-primary); font-size: 13px; }
+
+/* bottom action */
+.editor-footer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 10px 18px calc(10px + env(safe-area-inset-bottom)); background: var(--e-surface); border-top: 1px solid var(--e-line); }
+.editor-footer-inner { max-width: 760px; margin: 0 auto; }
+.editor-footer-submit { display: flex; align-items: center; justify-content: center; height: 48px; border-radius: 24px; background: var(--e-primary); color: var(--e-on-primary); font-size: 15px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 8px 22px rgba(35, 124, 116, 0.3); transition: transform 0.15s ease, opacity 0.15s ease; }
+.editor-footer-submit:active { transform: scale(0.985); opacity: 0.92; }
+.editor-footer-submit.disabled { opacity: 0.35; box-shadow: none; }
+.night .editor-footer-submit { box-shadow: none; }
 
 @media (min-width: 700px) {
 	.editor-form { padding-top: 40px; }
