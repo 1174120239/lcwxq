@@ -10,6 +10,11 @@ Desktop.ini
 # Local AI-agent state
 .agents/
 .codex/
+.claude/
+
+# Local hand-made deployment bundles
+/QQBot_部署包/
+/QQBot_部署包.zip
 
 # uni-app build output and dependencies
 unpackage/
