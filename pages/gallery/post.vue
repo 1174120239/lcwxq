@@ -61,7 +61,7 @@
 
 				<view class="editor-note">
 					<text class="cuIcon-info"></text>
-					<text>提交后由管理员审核，通过后会展示在图库中。</text>
+					<text>提交后系统会自动审核，通过后立即展示；需人工复核时会通知你。</text>
 				</view>
 			</view>
 		</scroll-view>
@@ -218,7 +218,7 @@ export default {
 					if (r.data && r.data.code === 1) {
 						uni.showModal({
 							title: '图集已提交',
-							content: '审核通过后会在图库公开展示。',
+							content: '系统会自动审核，通过后会在图库公开展示。',
 							showCancel: false,
 							success: () => this.back()
 						})
