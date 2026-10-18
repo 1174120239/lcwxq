@@ -117,344 +117,9 @@
 		<!--  #ifdef H5 -->
 		<PublishPanel ref="publishPanel" :visible="true" :night="weatherTheme.isDark" :auto-intro="false"></PublishPanel>
 		<!--  #endif -->
-		<view v-if="false" class="cu-modal cu-modal2 bottom-modal show2 publish-modal" :class="modalName=='bottomModal'?'show':''" @tap="hideModal">
-			<view class="cu-dialog"><view class="publish-sheet" @tap.stop>
-				<view class="publish-sheet-title">发布到校园</view>
-				<view class="publish-sheet-actions"><view class="publish-action" @tap="postSpace(1)"><image src="../../static/page/square/photo.png" mode="aspectFit"></image><text>发动态</text></view><view class="publish-action" @tap="postSpace(5)"><image src="../../static/page/square/shop.png" mode="aspectFit"></image><text>校园互助</text></view></view>
-			</view></view>
-		</view>
 
 		<QixiEasterEgg :visible="qixiVisible" :night="weatherTheme.isDark" @close="closeQixiEasterEgg"></QixiEasterEgg>
 
-		<view v-if="false" class="header" :style="{overflow: 'hidden', paddingTop: StatusBar + 'px', backgroundColor: 'rgba(244, 248, 248, 0.96)'}">
-
-			<view class="cu-bar bg-white" :style="{'height': 50 + 'px'}">
-
-				<view @click="flag=0" :class="flag==0?'tab-wrap-index square-box':'square-box2'"
-					style="margin: 0upx 30upx 0upx 30upx;">首页</view>
-				<view @click="flag=1" :class="flag==1?'tab-wrap-index square-box':'square-box2'"
-					style="margin: 0px 100upx 0px 20upx;">发现</view>
-				<!--  #ifdef H5 || APP-PLUS -->
-				<view class="search-form radius" style="border-radius: 50%;" @tap="toSearch()">
-					<text class="cuIcon-search"></text>
-					<input type="text" :placeholder="sousuok" confirm-type="search"></input>
-				</view>
-				<view class="cu-avatar round" style="color: #323232;margin: 0px 10px 0px 0upx;" @tap="goUserInfo()"
-					:style="userInfo.style" v-if="token!=''"></view>
-				<view class="cu-avatar round" style="color: #323232;margin: 0px 10px 0px 0upx;" @tap="goUserInfo()"
-					v-else>
-					<text class="home-noLogin">登录</text>
-				</view>
-				<!--  #endif-->
-			</view>
-			<!--  #ifdef H5 -->
-
-			<view class="position-fixed">
-				<view class="round-button" @tap="showModal" data-target="bottomModal">
-					<text class="cuIcon-edit" style="font-size: 18px;"></text>
-				</view>
-			</view>
-			<!--  #endif-->
-			<view class="data-box">
-
-				<view class="cu-modal cu-modal2 bottom-modal show2" :class="modalName=='bottomModal'?'show':''"
-					@tap="hideModal">
-
-					<view class="cu-dialog" style="background-color: rgb(0, 0, 0,0);">
-
-						<view class="position-fixed">
-							<view class="round-button">
-								<text class="cuIcon-close" style="font-size: 18px;"></text>
-							</view>
-						</view>
-						<view class="tabbar-operate-main padding-xl flex justify-center"
-							style="width: 100%;display: flex; justify-content: center; align-items: flex-end;padding: 170rpx;">
-							<view class="text-white tn-flex-1" @tap="postSpace(1)"
-								style="width: 110rpx; height: 110rpx;">
-								<text
-									style="display: inline-block; border-radius: 20rpx;  width: 100rpx;height: 100rpx;">
-									<image src="../../static/page/square/photo.png" mode="widthFix"></image>
-								</text>
-								<view>发帖</view>
-							</view>
-
-
-							<view class="text-white tn-flex-1" @tap="postSpace(5)"
-								style="border-radius: 20rpx; width: 110rpx; height: 110rpx;">
-								<text
-									style="display: inline-block; border-radius: 20rpx;  width: 100rpx;height: 100rpx;">
-									<image src="../../static/page/square/shop.png" mode="widthFix"></image>
-
-								</text>
-								<view>校园互助</view>
-
-
-							</view>
-						</view>
-					</view>
-				</view>
-
-			</view>
-		</view>
-		<view v-if="false && flag==0" class="">
-
-			<view :style="[{padding:NavBar + 25 + 'px 10px 0px 10px'}]"></view>
-			<block>
-				<view class="margin-left-sm margin-right-sm">
-					<swiper v-if="lunbo_of==1" class="screen-swiper swiper-container" style="border-radius: 20upx; "
-						:class="dotStyle?'square-dot':'round-dot'" :indicator-dots="true" :circular="true"
-						:autoplay="true" interval="5000" duration="500">
-						<swiper-item v-for="(item,index) in swiperList" :key="index" @tap="toInfo(item)">
-							<view class="swiper-box" style="border-radius: 20upx; ">
-								<image :src="item.url" mode="aspectFill" v-if="item.type=='image'"></image>
-								<video :src="item.url" autoplay loop muted :show-play-btn="false" :controls="false"
-									objectFit="cover" v-if="item.type=='video'"></video>
-							</view>
-						</swiper-item>
-					</swiper>
-					<view v-if="top_of==1" class="index-sort grid col-4" style="border-radius: 20upx;">
-						<view class="index-sort-box" v-if="!sy_appbox">
-							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="goPage('/pages/contents/blackhouse')">
-									<view class="index-sort-i"
-										style="border-radius: 20upx;background: linear-gradient(to bottom right, #aaff7f, #00ae4b);box-shadow: #55ff0059 0px 3px 5px 0px;">
-										<text class="cuIcon-apps" style="color:  #ffffff;"></text>
-									</view>
-									<view class="index-sort-text">
-										小黑屋
-									</view>
-								</view>
-							</waves>
-						</view>
-						<view class="index-sort-box" v-if="sy_appbox">
-							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="goPage('/pages/plugins/sy_appbox/home',true)">
-									<view class="index-sort-i"
-										style="border-radius: 20upx;background: linear-gradient(to bottom right, #aaff7f, #00ae4b);box-shadow: #55ff0059 0px 3px 5px 0px;">
-										<text class="cuIcon-apps" style="color:  #ffffff;"></text>
-									</view>
-									<view class="index-sort-text">
-										应用
-									</view>
-								</view>
-							</waves>
-						</view>
-						<view class="index-sort-box">
-							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="toShop">
-									<view class="index-sort-i"
-										style="border-radius: 20upx;background: linear-gradient(to bottom right, #aaffff, #89adff);box-shadow: #00aaff59 0px 3px 5px 0px;">
-										<text class="cuIcon-goods" style="color:  #ffffff;"></text>
-									</view>
-									<view class="index-sort-text">
-										校园互助
-									</view>
-								</view>
-							</waves>
-						</view>
-
-						<view class="index-sort-box">
-							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="toLink('/pages/user/invitation')">
-									<view class="index-sort-i"
-										style="border-radius: 20upx;background: linear-gradient(to bottom right, #aaaaff, #811aff);box-shadow: #aa55ff59 0px 3px 5px 0px;">
-										<text class="cuIcon-share" style="color:  #ffffff;"></text>
-									</view>
-									<view class="index-sort-text">
-										分享
-									</view>
-								</view>
-							</waves>
-						</view>
-						<view class="index-sort-box">
-							<waves itemClass="butclass">
-								<view class="index-sort-main" @tap="toUsers">
-									<view class="index-sort-i"
-										style="border-radius: 20upx;background: linear-gradient(to bottom right, #ffd198, #ff5c10);box-shadow: #ffaa0059 0px 3px 5px 0px;">
-										<text class="cuIcon-calendar" style="color:  #ffffff;"></text>
-									</view>
-									<view class="index-sort-text">
-										签到
-									</view>
-								</view>
-							</waves>
-						</view>
-
-					</view>
-					<!-- 滚动通知开头 -->
-					<view v-if="gonggao_of==1" class="tn-notice-bar-class tn-notice-bar"
-						style="display:flex; align-items:center;border-radius: 10px;backgroundColor:#fff;padding: 0px 5px 0px 10px;margin-top: 10px;">
-						<view class="cuIcon-notification"></view>
-						<marquee style="margin: 20rpx 10rpx 20rpx 20rpx;backgroundColor:#fff;"
-							v-if="noticeList.length > 0">{{ noticeList[0] }}</marquee>
-					</view>
-
-					<view class="ads-banner" v-if="bannerAdsInfo!=null">
-						<image :src="bannerAdsInfo.img" mode="widthFix" @tap="goAds(bannerAdsInfo)"></image>
-					</view>
-
-					<view class="all-box" :style="TabCur!=0?'margin-top:0;':''"
-						style="background-color: rgb(0, 0, 0,0);">
-
-						<view v-if="hometop==1">
-							<block v-for="(item,index) in topContents" :key="'top'+index">
-
-
-								<articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem>
-
-
-							</block>
-						</view>
-
-						<view v-if="act_of==1">
-
-							<block v-for="(item,index) in contentsList" :key="item.cid || index" v-if="dataLoad">
-
-								<articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem>
-
-							</block>
-
-							<view class="load-more" @tap="loadMore" v-if="dataLoad">
-
-								<text>{{moreText}}</text>
-
-							</view>
-							<view class="dataLoad" v-if="!dataLoad">
-
-								<view class="campus-loader"></view>
-
-							</view>
-						</view>
-
-					</view>
-
-
-
-
-					<!-- 滚动通知结束 -->
-				</view>
-			</block>
-
-			
-			<!--底下改成滑动形式-->
-
-
-
-		</view>
-
-		<view v-if="false && flag==1" class="">
-			<view :style="[{padding:NavBar + 25 + 'px 10px 0px 10px'}]"></view>
-			<swiper class="screen-swiper swiper-container" style="border-radius: 20upx;margin: 0px 10px 10px 10px;"
-				:class="dotStyle?'square-dot':'round-dot'" :indicator-dots="true" :circular="true" :autoplay="true"
-				interval="5000" duration="500" v-if="bannerswitch==1">
-				<swiper-item v-for="(item,index) in swiperList2" :key="index" v-if="index<adimage_sl" @click="swiperclick(index)">
-					<view class="swiper-box" style="border-radius: 20upx;">
-						<image style="width: 100%; height: 100%;" mode="aspectFill" :src="item.url"/>
-					</view>
-				</swiper-item>
-			</swiper>
-			<view class="margin-left-sm margin-right-sm">
-
-				<view class="all-box" :style="TabCur!=0?'margin-top:0;':''" style="background-color: rgb(0, 0, 0,0);">
-
-					<view v-if="findtop==1">
-
-						<block v-for="(item,index) in topContents" :key="'top'+index">
-
-
-							<articleItem :item="item" :isTop="true" :owoList="owoList" :home-feed="true"></articleItem>
-
-
-						</block>
-
-					</view>
-				</view>
-
-				<view class="data-box" style="border-radius: 10px;margin-top: 0px;">
-					<view class="cu-bar bg-white" style="border-radius: 10px;padding: 15px 5px 0px 5px;">
-						<view class="action data-box-title">
-
-							话题推荐 <text class="cuIcon-titles text-rule"></text>
-
-
-						</view>
-						<view class="action more" @tap="toAlltag">
-							<text>全部话题</text><text class="cuIcon-right"></text>
-						</view>
-					</view>
-					<view class="tags1">
-						<view class="tags">
-
-							<text class="tags-box" v-for="(item,index) in tagList"
-								@tap="toSpaceTopic(item)">
-								{{item.name}}
-							</text>
-
-						</view>
-					</view>
-				</view>
-				<view class="data-box" style="border-radius: 20upx;margin-top:10px">
-
-					<view class="cu-bar bg-white" style="border-radius: 10px;padding: 15px 5px 0px 5px;">
-
-						<view class="action data-box-title">
-
-
-
-							<text class="cuIcon-titles text-rule"></text>上升热点 <image src="/static/rd.png"
-								style="width: 26px; height: 26px;"></image>
-
-						</view>
-
-						<view class="action more" @tap='toTopContents("更多热帖","commentsNum")'>
-
-							<text>更多热帖</text><text class="cuIcon-right"></text>
-
-						</view>
-
-
-
-					</view>
-
-					<view class="top">
-
-						<view class="top-box" v-for="(item,index) in topList" :key="index" @tap="toInfo(item)">
-
-							<text>{{index+1}}</text>{{item.title}}
-
-						</view>
-
-					</view>
-
-				</view>
-
-				<view class="data-box" style="padding: 10px;border-radius: 20upx">
-					<view class="cu-bar bg-white" style="border-radius: 20upx;">
-						<view class="action data-box-title">
-							推荐帖子
-						</view>
-						<view class="action more" @tap="toRecommend">
-							<text>更多推荐</text><text class="cuIcon-right"></text>
-						</view>
-					</view>
-				</view>
-				<view class="padding-xs" style="background-color: #f6f6f6;"></view>
-				<block v-for="(item,index) in recommendList" :key="item.cid || index" v-if="dataLoad">
-
-					<articleItem :item="item" :owoList="owoList" :animation-index="index" :home-feed="true"></articleItem>
-
-				</block>
-
-				<view class="dataLoad" v-if="!dataLoad">
-
-					<view class="campus-loader"></view>
-
-				</view>
-				<view class="padding-xs" style="background-color: #f6f6f6;"></view>
-
-
-			</view>
-		</view>
 
 		<!--加载遮罩-->
 		<view class="loading" v-if="isLoading==0 && contentsList.length===0 && topContents.length===0 && recommendList.length===0 && swiperList.length===0">
@@ -607,6 +272,11 @@
 				themeTransitionTimer: null,
 				themeTransitioning: false,
 				activeAmbientLayer: 0,
+				onShowExtrasTimer: null,
+				lastAdsFetch: 0,
+				lastUserStatusFetch: 0,
+				lastAdimgFetch: 0,
+				lastCidFetch: 0,
 				ambientLayerStyles: [{}, {}],
 				ambientThemeKey: '',
 				cardCur: 0,
@@ -862,8 +532,6 @@
 			// #ifdef APP-PLUS || H5
 
 			that.getAdsCache();
-
-			that.getAds();
 			// #endif
 			// #ifdef APP-PLUS
 
@@ -879,8 +547,6 @@
 			// #endif
 			//获取缓存
 			that.allCache();
-			// 首页问答推荐独立刷新，不受其他首页数据的短时节流影响。
-			that.getQuestionList();
 			// 每次重新显示首页都向服务端校准，后台删除后不再长期停留在旧缓存。
 			that.loading(false);
 			if (localStorage.getItem('token')) {
@@ -888,13 +554,11 @@
 				that.token = localStorage.getItem('token');
 			}
 			that.unreadNum();
-			that.userStatus();
-			// #ifdef APP-PLUS
-			// 已登录用户每次回到首页都向服务端校准推送 clientId，换设备或重装后也能继续收到通知。
-			if (that.token) {
-				that.getCID();
-			}
-			// #endif
+			// 非关键请求延后到页面首帧之后，快速来回切 tab 时不再重复轰炸接口。
+			clearTimeout(that.onShowExtrasTimer);
+			that.onShowExtrasTimer = setTimeout(function() {
+				that.refreshOnShowExtras();
+			}, 80);
 			// #ifdef APP-PLUS
 
 			//外部启动APP处理
@@ -919,9 +583,6 @@
 			}
 
 			// #endif
-			
-			that.getadimg();
-
 
 		},
 			onLoad() {
@@ -977,11 +638,15 @@
 			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopThemeClock();
 			this.resetQixiEasterEgg();
+			clearTimeout(this.onShowExtrasTimer);
+			this.onShowExtrasTimer = null;
 		},
 		onUnload() {
 			uni.$off(CAMPUS_CHROME_EVENT, this.handleChromeVisibility);
 			clearTimeout(this.deferredHomeTimer);
 			this.deferredHomeTimer = null;
+			clearTimeout(this.onShowExtrasTimer);
+			this.onShowExtrasTimer = null;
 			this.stopThemeClock();
 			clearTimeout(this.themeSwapTimer);
 			this.themeSwapTimer = null;
@@ -1246,7 +911,34 @@
 					that.deferredHomeTimer = null;
 				}, 140);
 			},
-			replaceSpecialChar(text) {
+			refreshOnShowExtras() {
+			var that = this;
+			const now = Date.now();
+			// #ifdef APP-PLUS || H5
+			if (!that.lastAdsFetch || now - that.lastAdsFetch > 10000) {
+				that.lastAdsFetch = now;
+				that.getAds();
+			}
+			// #endif
+			if (!that.lastUserStatusFetch || now - that.lastUserStatusFetch > 10000) {
+				that.lastUserStatusFetch = now;
+				that.userStatus();
+			}
+			if (!that.lastAdimgFetch || now - that.lastAdimgFetch > 10000) {
+				that.lastAdimgFetch = now;
+				that.getadimg();
+			}
+			// #ifdef APP-PLUS
+			// 已登录用户向服务端校准推送 clientId，换设备或重装后也能继续收到通知。
+			if (that.token && (!that.lastCidFetch || now - that.lastCidFetch > 10000)) {
+				that.lastCidFetch = now;
+				that.getCID();
+			}
+			// #endif
+			// 问答推荐保留每次校准语义，只延后不节流。
+			that.getQuestionList();
+		},
+		replaceSpecialChar(text) {
 				text = text.replace(/&quot;/g, '"');
 				text = text.replace(/&amp;/g, '&');
 				text = text.replace(/&lt;/g, '<');

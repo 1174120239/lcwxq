@@ -412,6 +412,9 @@
 				showBackToTop: false,
 				spaceReturnScrollTop: 0,
 				spaceReturnPending: false,
+				onShowExtrasTimer: null,
+				lastUserStatusFetch: 0,
+				lastFeedRefreshAt: 0,
 				current: 0,
 				menuHeight: 0,
 				menuItemHeight: 0, 
@@ -735,6 +738,8 @@
 			if (this.$refs.publishPanel && this.$refs.publishPanel.resetPanel) this.$refs.publishPanel.resetPanel();
 			this.stopChatPolling();
 			this.stopCampusThemeClock();
+			clearTimeout(this.onShowExtrasTimer);
+			this.onShowExtrasTimer = null;
 		},
 		onUnload() {
 			clearTimeout(this._scrollFrame)
@@ -800,8 +805,12 @@
 				}
 				// that.chatList = JSON.parse(localStorage.getItem('chatList'));
 			}
-			that.userStatus();
 			that.unreadNum();
+			// 非关键状态请求延后到页面首帧之后，快速来回切 tab 时不再重复轰炸接口。
+			clearTimeout(that.onShowExtrasTimer);
+			that.onShowExtrasTimer = setTimeout(function() {
+				that.refreshOnShowExtras();
+			}, 80);
 			if (restoreSpacePosition) {
 				var restoreTop = Number(that.spaceReturnScrollTop) || 0;
 				that.$nextTick(function() {
@@ -812,9 +821,13 @@
 				if (that.token != "" && that.squareid == 1) that.startChatPolling();
 				return;
 			}
-			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 1 && that.selectedTopics.length === 0) {
+			// 快速来回切 tab 时不整页重拉动态流；下拉刷新不受此节流影响。
+			var feedFresh = that.lastFeedRefreshAt && Date.now() - that.lastFeedRefreshAt < 12000;
+			if (!feedFresh && that.squareid == 0 && that.contentMode === 'space' && that.follow == 1 && that.selectedTopics.length === 0) {
+				that.lastFeedRefreshAt = Date.now();
 				that.loadFeed(false);
-			} else if (that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
+			} else if (!feedFresh && that.squareid == 0 && that.contentMode === 'space' && (that.follow == 0 || that.follow == 1 || that.follow == 4)) {
+				that.lastFeedRefreshAt = Date.now();
 				that.getSpaceList(false);
 			}
 			if (that.squareid == 0 && that.contentMode === 'space' && that.follow == 2) {
@@ -2042,6 +2055,13 @@
 				uni.navigateTo({
 					url: '/pages/contents/contentlist?title=' + title + "&type=" + type + "&id=" + id
 				});
+			},
+			refreshOnShowExtras() {
+				const now = Date.now();
+				if (!this.lastUserStatusFetch || now - this.lastUserStatusFetch > 10000) {
+					this.lastUserStatusFetch = now;
+					this.userStatus();
+				}
 			},
 			userStatus() {
 				var that = this;

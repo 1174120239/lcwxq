@@ -45,7 +45,7 @@
 								<text class="home-article-desc" v-if="item.text.length > 0">{{infotext}}</text>
 							</view>
 							<view class="home-article-thumb" v-if="item.images.length>0">
-								<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]" mode="aspectFill" lazy-load></image>
+								<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]" :class="{ 'is-loaded': loadedIdx[0] }" mode="aspectFill" lazy-load @load="onImgLoad(0)" @error="onImgLoad(0)"></image>
 								<text v-if="item.images.length > 1" class="home-image-count">+{{item.images.length-1}}</text>
 							</view>
 						</view>
@@ -94,35 +94,35 @@
 							<view class="grid flex-sub col-3 grid-square">
 								<block v-if="item.images.length == 1">
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]"
-											mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]" :class="{ 'is-loaded': loadedIdx[0] }"
+											mode="aspectFill" lazy-load @load="onImgLoad(0)" @error="onImgLoad(0)"></image>
 									</view>
 								</block>
 								<block v-if="item.images.length == 2">
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]"
-											mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]" :class="{ 'is-loaded': loadedIdx[0] }"
+											mode="aspectFill" lazy-load @load="onImgLoad(0)" @error="onImgLoad(0)"></image>
 									</view>
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[1]"
-											mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[1]" :class="{ 'is-loaded': loadedIdx[1] }"
+											mode="aspectFill" lazy-load @load="onImgLoad(1)" @error="onImgLoad(1)"></image>
 									</view>
 								</block>
 								<block v-if="item.images.length >= 3">
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]"
-											mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[0]" :class="{ 'is-loaded': loadedIdx[0] }"
+											mode="aspectFill" lazy-load @load="onImgLoad(0)" @error="onImgLoad(0)"></image>
 									</view>
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[1]"
-											mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[1]" :class="{ 'is-loaded': loadedIdx[1] }"
+											mode="aspectFill" lazy-load @load="onImgLoad(1)" @error="onImgLoad(1)"></image>
 									</view>
 									<view class="bg-img">
-										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[2]"
-										mode="aspectFill" lazy-load></image>
+										<image :src="isVipContent ? '../../static/page/vip_img.png' : item.images[2]" :class="{ 'is-loaded': loadedIdx[2] }"
+										mode="aspectFill" lazy-load @load="onImgLoad(2)" @error="onImgLoad(2)"></image>
 										<text v-if="item.images.length > 3" class="extra-count"><view class="cuIcon-add center-add"> {{ item.images.length-3 }}</view></text>
 									</view>
-									
+
 								</block>
 							</view>
 						</view>
@@ -183,7 +183,8 @@
 		name: "articleItem",
 		data() {
 			return {
-				needRefresh: false
+				needRefresh: false,
+				loadedIdx: {}
 			};
 		},
 		computed: {
@@ -217,6 +218,9 @@
 			}
 		},
 		methods: {
+			onImgLoad(index) {
+				this.$set(this.loadedIdx, index, true)
+			},
 			replaceAll(string, search, replace) {
 				return string.split(search).join(replace);
 			},
@@ -711,6 +715,26 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 16rpx;
+	}
+
+	/* 图片加载期间用占位底色兜住空白，加载完成后淡入，避免突然弹出。 */
+	.grid.grid-square .bg-img {
+		background-color: rgba(137, 196, 191, 0.16);
+	}
+
+	.campus-night .grid.grid-square .bg-img {
+		background-color: rgba(110, 186, 174, 0.08);
+	}
+
+	.home-article-thumb image,
+	.grid.grid-square .bg-img image {
+		opacity: 0;
+		transition: opacity 200ms ease;
+	}
+
+	.home-article-thumb image.is-loaded,
+	.grid.grid-square .bg-img image.is-loaded {
+		opacity: 1;
 	}
 
 	.home-image-count {

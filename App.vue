@@ -323,7 +323,6 @@
 		background-color: var(--campus-night-surface) !important;
 		color: var(--campus-night-text) !important;
 		box-shadow: none !important;
-		transition: background-color 220ms ease, border-color 220ms ease, color 160ms ease;
 	}
 
 	html.campus-system-night [style*="background: white"],

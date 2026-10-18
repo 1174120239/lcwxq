@@ -16,6 +16,7 @@
 			},
 
 			"app-plus": {
+				"animationType": "none",
 				"pullToRefresh": {
 					"color": "#169c92",
 					"style": "circle"
@@ -30,6 +31,7 @@
 			},
 
 			"app-plus": {
+				"animationType": "none",
 				"pullToRefresh": {
 					"color": "#169c92",
 					"style": "circle"
@@ -41,6 +43,7 @@
 			"path": "pages/home/square",
 
 			"app-plus": {
+				"animationType": "none",
 				"pullToRefresh": {
 					"color": "#169c92",
 					"style": "circle"
@@ -76,7 +79,10 @@
 		},
 		{
 			"path": "pages/home/user",
-			"style": {}
+			"style": {},
+			"app-plus": {
+				"animationType": "none"
+			}
 		},
 		{
 			"path": "pages/journal/index",

@@ -41,9 +41,16 @@ export function isDongchangfuNight(time) {
 	return hour >= 20 || hour < 5
 }
 
+let lastShellKey = null
+
 export function applyCampusThemeShell(mode, time) {
 	const nextMode = normalizeCampusThemeMode(mode)
 	const night = resolveCampusNight(nextMode, isDongchangfuNight(time))
+	// App.onShow and every page onShow call this on each switch; the shell only
+	// differs by the resolved night state, so skip repeated native work.
+	const shellKey = nextMode + '|' + (night ? 'night' : 'day')
+	if (shellKey === lastShellKey) return night
+	lastShellKey = shellKey
 	const backgroundColor = night ? '#15191b' : '#f5f8f7'
 
 	if (typeof document !== 'undefined') {
@@ -70,6 +77,9 @@ export function applyCampusThemeShell(mode, time) {
 		}
 	}
 
+	// #ifndef APP-PLUS
+	// App hides the native tab bar and renders the custom dock; these IPC calls
+	// would only waste a bridge round-trip per switch.
 	try {
 		uni.setTabBarStyle({
 			color: night ? '#929c99' : '#71817f',
@@ -81,6 +91,7 @@ export function applyCampusThemeShell(mode, time) {
 	} catch (error) {
 		// App uses the custom dock and some subpages do not expose a native tab bar.
 	}
+	// #endif
 
 	if (typeof plus !== 'undefined' && plus.webview) {
 		const webview = plus.webview.currentWebview()
